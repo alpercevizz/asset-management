@@ -121,17 +121,17 @@ flowchart LR
 
 <table>
 <tr>
-<td align="center">
-  <a href="docs/screenshots/insights.png"><img src="docs/screenshots/insights.png" alt="Risk & Öngörü" width="300"/></a>
-  <br/><b>Risk & Öngörü</b><br/>0-100 risk skoru · döviz endeksli bütçe
+<td align="center" width="33%">
+  <a href="docs/screenshots/risk-scores.png"><img src="docs/screenshots/risk-scores.png" alt="Risk skoru tablosu" width="300"/></a>
+  <br/><b>Risk Skorları</b><br/>Çok-kaynaklı sinyallerden 0-100 puan, MFA bypass etiketi
 </td>
-<td align="center">
-  <a href="docs/screenshots/alerts.png"><img src="docs/screenshots/alerts.png" alt="Uyarılar" width="300"/></a>
-  <br/><b>Uyarılar</b><br/>6 kategori · canlı ağ alarmı
+<td align="center" width="33%">
+  <a href="docs/screenshots/forecast.png"><img src="docs/screenshots/forecast.png" alt="Döviz endeksli FinOps bütçe" width="300"/></a>
+  <br/><b>Döviz Endeksli Bütçe</b><br/>Canlı USD/EUR parite · 12 aylık yenileme planı
 </td>
-<td align="center">
-  <a href="docs/screenshots/dashboard.png"><img src="docs/screenshots/dashboard.png" alt="Dashboard" width="300"/></a>
-  <br/><b>Dashboard</b><br/>Envanter özeti · grafikler
+<td align="center" width="33%">
+  <a href="docs/screenshots/alerts.png"><img src="docs/screenshots/alerts.png" alt="Uyarılar paneli" width="300"/></a>
+  <br/><b>Uyarılar</b><br/>EOL · Düşük RAM/Disk · Uzun Uptime · Lisans · Shadow IT
 </td>
 </tr>
 </table>

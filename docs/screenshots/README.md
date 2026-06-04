@@ -4,10 +4,10 @@ Bu klasör README'deki ekran görüntülerini barındırır. İdeal boyut **1600
 
 | Dosya | Hangi panel | İçerik notu |
 |---|---|---|
-| `hero-lifecycle.png` | Yaşam Döngüsü | timeline + sign-off mührü (kilit/uyarı ikonları) + zincir bütünlüğü kartı |
-| `insights.png` | Risk & Öngörü | risk skor tablosu + canlı kur (💱) + bütçe kartları |
-| `alerts.png` | Uyarılar | 6 özet kart + bir tablo (örn. EOL veya Garanti) |
-| `dashboard.png` | Dashboard | envanter özeti + grafikler |
+| `hero-lifecycle.png` | Yaşam Döngüsü | timeline + sign-off mührü + zincir bütünlüğü kartı (İHLAL VAR! + canlı ağ alarmı en şovluk) |
+| `risk-scores.png` | Risk & Öngörü (üst) | 4 özet kart + risk skor tablosu (kritik cihazlar listelenmiş hâliyle) |
+| `forecast.png` | Risk & Öngörü (alt) | 💱 kur satırı + 12 aylık tahmini bütçe + yenileme planı tablosu |
+| `alerts.png` | Uyarılar | EOL · Düşük RAM/Disk · Uzun uptime · Lisans tabloları |
 
 ## Nasıl alınır?
 
