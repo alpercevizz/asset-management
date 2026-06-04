@@ -1,0 +1,18 @@
+{
+  "location_id":    "istanbul-merkez",
+  "location_name":  "İstanbul Merkez",
+  "server_url":     "http://localhost:3000/api/webhook",
+  "location_token": "loc-token-buraya-yaz",
+
+  "network": {
+    "range":           "192.168.1.0/24",
+    "snmp_community":  "public",
+    "snmp_timeout_ms": 3000
+  },
+
+  "intervals": {
+    "discovery_hours": 24,
+    "snmp_poll_minutes": 60,
+    "ping_minutes": 5
+  }
+}

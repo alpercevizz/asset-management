@@ -1,0 +1,34 @@
+node_modules/
+.env
+.env.local
+*.log
+npm-debug.log*
+
+# Hassas / runtime veri — ASLA commit edilmez
+data/users.json
+data/os-agents.json
+data/lifecycle-log.json
+data/notify-state.json
+data/discovery-state.json
+data/worm-repository/
+cookies.txt
+*.tmp.json
+*.tmp
+
+# Claude Code personal/local ayarları (kişisel allow-list, geçmiş komutlar)
+.claude/
+
+# n8n workflow export'larında gömülü gerçek credential olabiliyor — paylaşmadan önce temizle
+n8n/ollama-chat-workflow.json
+
+# Yardımcı script'lerde hardcoded admin token (sahibi temizleyene kadar repo dışı)
+scripts/create-baserow-fields.ps1
+
+# Location-agent gerçek konfigi (.example.json paylaşılır, gerçeği değil)
+location-agent/config.json
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

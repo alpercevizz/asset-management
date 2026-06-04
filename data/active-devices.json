@@ -1,0 +1,22 @@
+{
+  "_comment": "Ağdan gelen anlık aktif cihaz listesi (ÖRNEK besleme — Sophos/Zabbix/arp export). Gerçekte getActiveNetworkDevices() canlı poller'a bağlanır. 'vlan' = segment; 'spoof:true' = OS Agent handshake'i kasıtlı BAŞARISIZ olan klon (MAC doğru, token yok). Tamamen yerel.",
+  "source": "sample-feed",
+  "captured_at": "2026-06-03T09:00:00.000Z",
+  "devices": [
+    { "vlan": 10, "ip": "10.0.1.10", "mac": "B0:7B:25:3A:1C:01", "hostname": "DC-SRV-01", "vendor": "Dell Inc." },
+    { "vlan": 10, "ip": "10.0.1.11", "mac": "94:18:82:5B:2D:02", "hostname": "FILE-SRV-01", "vendor": "HPE" },
+    { "vlan": 10, "ip": "10.0.1.20", "mac": "B0:7B:25:3A:1C:20", "hostname": "VMHOST-01", "vendor": "Dell Inc." },
+    { "vlan": 10, "ip": "10.0.1.32", "mac": "7C:D3:0A:8F:4E:30", "hostname": "DB-SRV-01", "vendor": "Lenovo" },
+
+    { "vlan": 20, "ip": "10.0.2.41", "mac": "A4:C3:F0:12:34:11", "hostname": "DELL-IT-01", "vendor": "Dell Inc." },
+
+    { "vlan": 20, "ip": "10.0.1.99", "mac": "AA:BB:CC:11:22:33", "hostname": "UNKNOWN-LAPTOP", "vendor": "Intel Corporate" },
+    { "vlan": 20, "ip": "10.0.1.150", "mac": "5C:CF:7F:0A:1B:2C", "hostname": null, "vendor": "Espressif (IoT)" },
+    { "vlan": 20, "ip": "10.0.2.50", "mac": "DC:A6:32:AA:BB:CC", "hostname": "raspberrypi", "vendor": "Raspberry Pi Foundation" },
+    { "vlan": 20, "ip": "10.0.1.88", "mac": "00:1A:2B:3C:4D:5E", "hostname": "TL-WR841N", "vendor": "TP-Link" },
+    { "vlan": 30, "ip": "10.0.1.77", "mac": "F0:9F:C2:55:66:77", "hostname": null, "vendor": "Ubiquiti Networks" },
+    { "vlan": 50, "ip": "192.168.50.10", "mac": "48:2C:A0:12:34:56", "hostname": "iPhone-Bilinmeyen", "vendor": "Apple, Inc." },
+
+    { "vlan": 30, "ip": "10.0.3.66", "mac": "D0:39:57:70:64:EB", "hostname": "ALPER-PC", "vendor": "Lenovo", "spoof": true, "_note": "ALPER-PC'nin MAC'ini taklit eden KLON — OS Agent token'ı yok/uyuşmaz" }
+  ]
+}

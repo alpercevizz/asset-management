@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Giriş — AssetMan</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #0d0f18; color: #e2e8f0; min-height: 100vh; font-size: 15px; line-height: 1.5;
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+    }
+    .card {
+      width: 100%; max-width: 380px; background: #13161f; border: 1px solid #252840;
+      border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,0.45); overflow: hidden;
+    }
+    .top { padding: 30px 28px 22px; text-align: center; border-bottom: 1px solid #252840; }
+    .brand { display: inline-flex; align-items: center; gap: 11px; }
+    .brand-icon { width: 40px; height: 40px; background: linear-gradient(135deg, #6366f1, #a855f7); border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+    .brand-icon svg { width: 22px; height: 22px; stroke: #fff; fill: none; stroke-width: 2; }
+    .brand-name { font-size: 20px; font-weight: 700; background: linear-gradient(135deg, #818cf8, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .top-sub { font-size: 12.5px; color: #64748b; margin-top: 14px; }
+    form { padding: 24px 28px 28px; display: flex; flex-direction: column; gap: 16px; }
+    .field { display: flex; flex-direction: column; gap: 7px; }
+    .field label { font-size: 12px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.03em; }
+    input {
+      width: 100%; background: #0d0f18; border: 1px solid #252840; color: #e2e8f0;
+      border-radius: 9px; padding: 12px 14px; font-size: 15px; outline: none; transition: border-color 0.15s;
+    }
+    input:focus { border-color: #6366f1; }
+    .btn {
+      background: linear-gradient(135deg, #6366f1, #a855f7); color: #fff; border: none;
+      border-radius: 9px; padding: 13px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 4px;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.9; }
+    .btn:disabled { opacity: 0.6; cursor: default; }
+    .err-box {
+      display: none; background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3);
+      color: #fca5a5; padding: 10px 13px; border-radius: 9px; font-size: 13px;
+    }
+    .foot { padding: 0 28px 24px; text-align: center; font-size: 11px; color: #475569; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="top">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
+        </div>
+        <div class="brand-name">AssetMan</div>
+      </div>
+      <div class="top-sub">Devam etmek için giriş yapın</div>
+    </div>
+
+    <form id="loginForm">
+      <div class="err-box" id="errBox"></div>
+      <div class="field">
+        <label for="username">Kullanıcı Adı</label>
+        <input type="text" id="username" autocomplete="username" autofocus required />
+      </div>
+      <div class="field">
+        <label for="password">Parola</label>
+        <input type="password" id="password" autocomplete="current-password" required />
+      </div>
+      <button type="submit" class="btn" id="submitBtn">Giriş Yap</button>
+    </form>
+    <div class="foot">IT Asset Management</div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    $('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = $('submitBtn');
+      const err = $('errBox');
+      err.style.display = 'none';
+      btn.disabled = true;
+      btn.textContent = 'Giriş yapılıyor...';
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: $('username').value, password: $('password').value }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Giriş başarısız');
+        // ?next= varsa oraya dön (örn. onay linki), yoksa panele git
+        const params = new URLSearchParams(location.search);
+        const next = params.get('next');
+        window.location.href = (next && next.startsWith('/')) ? next : '/';
+      } catch (ex) {
+        err.textContent = ex.message;
+        err.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Giriş Yap';
+      }
+    });
+  </script>
+</body>
+</html>

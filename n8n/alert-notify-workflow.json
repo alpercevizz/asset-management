@@ -1,0 +1,166 @@
+{
+  "name": "AI Asset Management - Alert Notifier",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "asset-alerts",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook",
+      "name": "Webhook (asset-alerts)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [180, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "IT_EMAIL_TO",
+              "value": "it-departmani@sirket.local"
+            },
+            {
+              "name": "IT_EMAIL_FROM",
+              "value": "assetman@sirket.local"
+            },
+            {
+              "name": "TELEGRAM_CHAT_ID",
+              "value": "BURAYA_TELEGRAM_CHAT_ID_YAZ"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-config",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.body.summary.total }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "node-if",
+      "name": "Uyari Var mi?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [620, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Sunucudan gelen digest'i mail/Telegram icin biçimlendir.\n// (Sunucu zaten dedup yapar; bu node yalnız subject + HTML üretir.)\nconst d = $node['Webhook (asset-alerts)'].json.body;\nconst s = d.summary || {};\nconst text = d.message || 'IT uyarı özeti';\n\nconst subject = `[AssetMan] ${s.total} aktif uyarı — IT Bildirimi`;\n\n// Basit HTML (mail için). message satırlarını <br> ile çevir.\nconst esc = (x) => String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');\nconst html = `<div style=\"font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#1e293b\">`\n  + `<h2 style=\"color:#dc2626;margin:0 0 8px\">IT Varlık Yönetimi — Uyarı Özeti</h2>`\n  + `<p style=\"margin:0 0 12px;color:#64748b\">Toplam ${s.total} uyarı &middot; Anomali: ${s.total_anomalies} &middot; Çevrimdışı: ${s.offline_alerts} &middot; Lisans: ${s.license_issues} &middot; Shadow IT: ${s.shadow_it}</p>`\n  + `<pre style=\"background:#f1f5f9;padding:14px;border-radius:8px;white-space:pre-wrap;font-family:Consolas,monospace;font-size:13px\">${esc(text)}</pre>`\n  + `<p style=\"color:#94a3b8;font-size:12px\">Bu e-posta AssetMan tarafından otomatik gönderildi.</p>`\n  + `</div>`;\n\nreturn [{ json: { subject, text, html, summary: s } }];"
+      },
+      "id": "node-format",
+      "name": "Bildirimi Biçimlendir",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [840, 220]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $node['Config'].json['IT_EMAIL_FROM'] }}",
+        "toEmail": "={{ $node['Config'].json['IT_EMAIL_TO'] }}",
+        "subject": "={{ $json.subject }}",
+        "text": "={{ $json.text }}",
+        "html": "={{ $json.html }}",
+        "options": { "appendAttribution": false }
+      },
+      "id": "node-email",
+      "name": "E-posta Gönder (SMTP)",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [1080, 140],
+      "credentials": {
+        "smtp": {
+          "id": "REPLACE_WITH_SMTP_CRED_ID",
+          "name": "Kurum SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $node['Config'].json['TELEGRAM_CHAT_ID'] }}",
+        "text": "={{ $node['Bildirimi Biçimlendir'].json.text }}",
+        "additionalFields": { "appendAttribution": false }
+      },
+      "id": "node-telegram",
+      "name": "Telegram Gönder",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1080, 320],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_TELEGRAM_CRED_ID",
+          "name": "AssetMan Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, notified: true, total: $node['Webhook (asset-alerts)'].json.body.summary.total }) }}",
+        "options": { "responseCode": 200 }
+      },
+      "id": "node-respond-ok",
+      "name": "Yanıt (Gönderildi)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1340, 220]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, notified: false, reason: 'no-alerts' }) }}",
+        "options": { "responseCode": 200 }
+      },
+      "id": "node-respond-skip",
+      "name": "Yanıt (Uyarı Yok)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [840, 440]
+    }
+  ],
+  "connections": {
+    "Webhook (asset-alerts)": {
+      "main": [[{ "node": "Config", "type": "main", "index": 0 }]]
+    },
+    "Config": {
+      "main": [[{ "node": "Uyari Var mi?", "type": "main", "index": 0 }]]
+    },
+    "Uyari Var mi?": {
+      "main": [
+        [{ "node": "Bildirimi Biçimlendir", "type": "main", "index": 0 }],
+        [{ "node": "Yanıt (Uyarı Yok)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Bildirimi Biçimlendir": {
+      "main": [[
+        { "node": "E-posta Gönder (SMTP)", "type": "main", "index": 0 },
+        { "node": "Telegram Gönder", "type": "main", "index": 0 }
+      ]]
+    },
+    "E-posta Gönder (SMTP)": {
+      "main": [[{ "node": "Yanıt (Gönderildi)", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "tags": ["asset-management", "notifications"]
+}

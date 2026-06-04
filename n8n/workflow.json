@@ -1,0 +1,226 @@
+{
+  "name": "AI Asset Management - Asset Collector",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "asset-collector",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [180, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "BASEROW_URL",
+              "value": "https://api.baserow.io"
+            },
+            {
+              "name": "BASEROW_TOKEN",
+              "value": "BURAYA_BASEROW_TOKEN_YAZI"
+            },
+            {
+              "name": "BASEROW_TABLE",
+              "value": "BURAYA_TABLE_ID_YAZ"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-config",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\n\nif (!data.serial_number && !data.hostname) {\n  throw new Error('serial_number or hostname zorunludur');\n}\n\nconst brandMap = {\n  'LENOVO': 'Lenovo', 'lenovo': 'Lenovo',\n  'DELL INC.': 'Dell', 'DELL': 'Dell', 'Dell Inc.': 'Dell',\n  'HP': 'HP', 'HEWLETT-PACKARD': 'HP', 'Hewlett-Packard': 'HP',\n  'APPLE INC.': 'Apple', 'Apple Inc.': 'Apple',\n  'MICROSOFT CORPORATION': 'Microsoft', 'Microsoft Corporation': 'Microsoft',\n  'ASUS': 'Asus', 'ASUSTeK COMPUTER INC.': 'Asus',\n  'ACER': 'Acer'\n};\n\nconst brand = (data.brand || '').trim();\nconst normalizedBrand = brandMap[brand] || brand;\n\nreturn [{\n  json: {\n    ...data,\n    brand: normalizedBrand,\n    last_seen: data.last_seen || new Date().toISOString(),\n    status: 'online',\n    _serial: data.serial_number || data.hostname\n  }\n}];"
+      },
+      "id": "node-validate",
+      "name": "Validate & Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [620, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $node['Config'].json['BASEROW_URL'] + '/api/database/rows/table/' + $node['Config'].json['BASEROW_TABLE'] + '/' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Token ' + $node['Config'].json['BASEROW_TOKEN'] }}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "user_field_names", "value": "true" },
+            { "name": "filter__field_serial_number__equal", "value": "={{ $json['_serial'] }}" },
+            { "name": "size", "value": "1" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-check",
+      "name": "Check Exists",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [840, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json['count'] }}",
+              "operation": "largerEqual",
+              "value2": 1
+            }
+          ]
+        }
+      },
+      "id": "node-if",
+      "name": "Asset Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1060, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// PATCH için: _serial ve iç alanları temizle, row ID'yi al\nconst normalized = $node['Validate & Normalize'].json;\nconst existingRow = $node['Check Exists'].json.results[0];\n\nconst payload = Object.fromEntries(\n  Object.entries(normalized).filter(([k]) => !k.startsWith('_'))\n);\n\nreturn [{ json: { _rowId: existingRow.id, _payload: payload } }];"
+      },
+      "id": "node-prep-update",
+      "name": "Prepare Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1280, 180]
+    },
+    {
+      "parameters": {
+        "url": "={{ $node['Config'].json['BASEROW_URL'] + '/api/database/rows/table/' + $node['Config'].json['BASEROW_TABLE'] + '/' + $json['_rowId'] + '/?user_field_names=true' }}",
+        "requestMethod": "PATCH",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "={{ 'Token ' + $node['Config'].json['BASEROW_TOKEN'] }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyContentType": "raw",
+        "body": "={{ JSON.stringify($json['_payload']) }}",
+        "options": {}
+      },
+      "id": "node-update",
+      "name": "Update Asset",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1500, 180]
+    },
+    {
+      "parameters": {
+        "jsCode": "const normalized = $node['Validate & Normalize'].json;\n\nconst payload = Object.fromEntries(\n  Object.entries(normalized).filter(([k]) => !k.startsWith('_'))\n);\n\nreturn [{ json: payload }];"
+      },
+      "id": "node-prep-create",
+      "name": "Prepare Create",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1280, 420]
+    },
+    {
+      "parameters": {
+        "url": "={{ $node['Config'].json['BASEROW_URL'] + '/api/database/rows/table/' + $node['Config'].json['BASEROW_TABLE'] + '/?user_field_names=true' }}",
+        "requestMethod": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "={{ 'Token ' + $node['Config'].json['BASEROW_TOKEN'] }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyContentType": "raw",
+        "body": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "node-create",
+      "name": "Create Asset",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1500, 420]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, action: 'updated', id: $json['id'] }) }}",
+        "options": { "responseCode": 200 }
+      },
+      "id": "node-respond-update",
+      "name": "Respond (Updated)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1720, 180]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, action: 'created', id: $json['id'] }) }}",
+        "options": { "responseCode": 201 }
+      },
+      "id": "node-respond-create",
+      "name": "Respond (Created)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1720, 420]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Config", "type": "main", "index": 0 }]]
+    },
+    "Config": {
+      "main": [[{ "node": "Validate & Normalize", "type": "main", "index": 0 }]]
+    },
+    "Validate & Normalize": {
+      "main": [[{ "node": "Check Exists", "type": "main", "index": 0 }]]
+    },
+    "Check Exists": {
+      "main": [[{ "node": "Asset Exists?", "type": "main", "index": 0 }]]
+    },
+    "Asset Exists?": {
+      "main": [
+        [{ "node": "Prepare Update", "type": "main", "index": 0 }],
+        [{ "node": "Prepare Create", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare Update": {
+      "main": [[{ "node": "Update Asset", "type": "main", "index": 0 }]]
+    },
+    "Update Asset": {
+      "main": [[{ "node": "Respond (Updated)", "type": "main", "index": 0 }]]
+    },
+    "Prepare Create": {
+      "main": [[{ "node": "Create Asset", "type": "main", "index": 0 }]]
+    },
+    "Create Asset": {
+      "main": [[{ "node": "Respond (Created)", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "tags": ["asset-management"]
+}
