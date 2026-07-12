@@ -1,4 +1,8 @@
 require('dotenv').config({ override: true });
+// Setup wizard: env boşsa data/secrets.json'a KALICI güçlü sırlar üretir/yükler.
+// Modüller require edilmeden ÖNCE çalışmalı ki lifecycle-tools/worm doğru CHAIN/WORM_SECRET'ı görsün.
+require('./auth/setup').bootstrapSecrets();
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -19,6 +23,46 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use((req, res, next) => { res.setTimeout(360000); next(); }); // 6 dk Express timeout
+
+// ── Güvenlik başlıkları (Helmet yerine minimal, dış bağımlılık yok) ──────────
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.removeHeader('X-Powered-By');
+  if (req.secure || req.headers['x-forwarded-proto'] === 'https') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  next();
+});
+
+// ── Login rate limit: IP başına 15 dakikada 10 deneme (brute-force koruması) ─
+const loginAttempts = new Map(); // ip → { count, resetAt }
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX = 10;
+function loginRateLimit(req, res, next) {
+  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  const now = Date.now();
+  let rec = loginAttempts.get(ip);
+  if (!rec || rec.resetAt < now) rec = { count: 0, resetAt: now + LOGIN_WINDOW_MS };
+  rec.count++;
+  loginAttempts.set(ip, rec);
+  // Basit kova periyodik temizlik
+  if (loginAttempts.size > 5000) {
+    for (const [k, v] of loginAttempts) if (v.resetAt < now) loginAttempts.delete(k);
+  }
+  if (rec.count > LOGIN_MAX) {
+    const retryAfter = Math.ceil((rec.resetAt - now) / 1000);
+    res.setHeader('Retry-After', String(retryAfter));
+    return res.status(429).json({ error: 'Çok fazla deneme. Lütfen daha sonra tekrar deneyin.', retry_after: retryAfter });
+  }
+  next();
+}
+// Test veya localhost dev için kapatılabilir
+if (process.env.DISABLE_LOGIN_RATE_LIMIT !== 'true') {
+  app.use('/api/login', loginRateLimit);
+}
 
 // In-memory conversation store (keyed by session id)
 const sessions = {};

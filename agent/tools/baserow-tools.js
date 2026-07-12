@@ -11,12 +11,36 @@ const baserowClient = axios.create({
 const TABLE_ID = process.env.BASEROW_TABLE_ID;
 
 // ── Her sorguya org_id filtresi eklenir (multi-tenancy) ───────────────────────
+// Baserow tek sayfada max 200 kayıt döner. size>200 istenirse İÇ DÖNGÜ ile
+// sayfalanır ve tüm sonuçlar tek dizide birleştirilir → binlerce cihaz destek.
+// Güvenlik tavanı: MAX_PAGES (varsayılan 50 → 10.000 kayıt) sonsuz döngüyü önler.
+const BASEROW_PAGE_MAX = 200;
 async function getAllAssets({ orgId, page = 1, size = 200, filterField, filterValue } = {}) {
-  const params = { page, size, user_field_names: true };
-  if (orgId) params['filter__field_org_id__equal'] = orgId;
-  if (filterField && filterValue) params[`filter__${filterField}__contains`] = filterValue;
-  const res = await baserowClient.get(`/api/database/rows/table/${TABLE_ID}/`, { params });
-  return res.data;
+  const need = Math.max(1, Number(size) || BASEROW_PAGE_MAX);
+  // Tek sayfa yeter → mevcut hızlı yol
+  if (need <= BASEROW_PAGE_MAX) {
+    const params = { page, size: need, user_field_names: true };
+    if (orgId) params['filter__field_org_id__equal'] = orgId;
+    if (filterField && filterValue) params[`filter__${filterField}__contains`] = filterValue;
+    const res = await baserowClient.get(`/api/database/rows/table/${TABLE_ID}/`, { params });
+    return res.data;
+  }
+  // Çok sayfa → hepsini topla
+  const MAX_PAGES = Number(process.env.BASEROW_MAX_PAGES) || 50;
+  const wanted = Math.min(need, MAX_PAGES * BASEROW_PAGE_MAX);
+  const results = [];
+  let count = 0;
+  for (let p = 1; results.length < wanted && p <= MAX_PAGES; p++) {
+    const params = { page: p, size: BASEROW_PAGE_MAX, user_field_names: true };
+    if (orgId) params['filter__field_org_id__equal'] = orgId;
+    if (filterField && filterValue) params[`filter__${filterField}__contains`] = filterValue;
+    const res = await baserowClient.get(`/api/database/rows/table/${TABLE_ID}/`, { params });
+    count = res.data.count || 0;
+    const rows = res.data.results || [];
+    results.push(...rows);
+    if (rows.length < BASEROW_PAGE_MAX) break; // son sayfa
+  }
+  return { count, results: results.slice(0, wanted), next: null, previous: null };
 }
 
 async function searchAssets({ orgId, query }) {

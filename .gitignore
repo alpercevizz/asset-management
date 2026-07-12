@@ -7,6 +7,7 @@ npm-debug.log*
 # Hassas / runtime veri — ASLA commit edilmez
 data/users.json
 data/os-agents.json
+data/secrets.json
 data/lifecycle-log.json
 data/notify-state.json
 data/discovery-state.json
@@ -14,6 +15,7 @@ data/worm-repository/
 cookies.txt
 *.tmp.json
 *.tmp
+push-screenshots.bat
 
 # Claude Code personal/local ayarları (kişisel allow-list, geçmiş komutlar)
 .claude/

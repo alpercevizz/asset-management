@@ -1,0 +1,65 @@
+# AssetMan — production docker-compose
+# Kurulum: `docker compose up -d`  (Docker 20.10+ ve compose plugin gerekir)
+#
+# ÜÇ SERVIS:
+#   caddy     → 80/443 reverse proxy, otomatik Let's Encrypt (ASSETMAN_HOST domain)
+#   app       → Node.js server (dahili 3000, Caddy'den erişilir, dışarı kapalı)
+#   backup    → günlük WORM off-site kopyası için opsiyonel (yorumlu)
+
+services:
+  app:
+    build: .
+    image: assetman:latest
+    container_name: assetman-app
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+    volumes:
+      - assetman-data:/app/data
+      # WORM ayrı volume: erişim alanı ayrılabilir, ideali farklı host'a mount
+      - assetman-worm:/app/data/worm-repository
+    # Dışarıya port AÇMAYIN — Caddy proxy'ler.
+    expose:
+      - "3000"
+    networks:
+      - assetman
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: assetman-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data     # otomatik cert store (Let's Encrypt)
+      - caddy-config:/config
+    environment:
+      # .env'ye ASSETMAN_HOST=envanter.sirket.com ekleyin (Let's Encrypt için)
+      # ASSETMAN_HOST boşsa Caddy :80'de HTTP servis eder (dev/lokal test).
+      ASSETMAN_HOST: ${ASSETMAN_HOST:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - assetman
+
+networks:
+  assetman:
+    driver: bridge
+
+volumes:
+  assetman-data:
+  assetman-worm:
+  caddy-data:
+  caddy-config:

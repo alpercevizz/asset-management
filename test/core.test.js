@@ -24,6 +24,8 @@ process.env.USER_PW_AHMET_SAHIN      = 'Ahmet.2024!';
 process.env.USER_PW_ZEYNEP_KORKMAZ   = 'Zeynep.2024!';
 process.env.USER_PW_MURAT_DEMIR      = 'Murat.2024!';
 process.env.SUPPRESS_PASSWORD_LOG    = '1'; // test çıktısını kirletmesin
+process.env.SECRETS_FILE             = path.join(TMP, 'secrets.json');
+process.env.DISABLE_LOGIN_RATE_LIMIT = 'true';
 
 const { test, beforeEach } = require('node:test');
 const assert = require('node:assert');
@@ -185,6 +187,36 @@ test('vlanOf: IP/subnet → VLAN segment', () => {
   assert.equal(vlanOf('10.0.2.41'), 20);
   assert.equal(vlanOf('192.168.50.10'), 50);
   assert.equal(vlanOf('172.16.0.1'), 0); // bilinmeyen → segmentsiz
+});
+
+// ── Setup wizard: sır üretimi + kalıcılık ──────────────────────────────────────
+test('setup: env boşsa güçlü sırlar üretir, tekrar okur (kalıcılık)', () => {
+  const fs = require('fs');
+  const tmpSecretsFile = path.join(TMP, 'secrets-test.json');
+  // Temiz durum
+  try { fs.unlinkSync(tmpSecretsFile); } catch {}
+  const originals = { s: process.env.SESSION_SECRET, c: process.env.CHAIN_SECRET, w: process.env.WORM_SECRET };
+  delete process.env.SESSION_SECRET; delete process.env.CHAIN_SECRET; delete process.env.WORM_SECRET;
+  process.env.SECRETS_FILE = tmpSecretsFile;
+  // İlk çağrı → üretir + yazar
+  delete require.cache[require.resolve('../auth/setup')];
+  require('../auth/setup').bootstrapSecrets();
+  const s1 = process.env.SESSION_SECRET, c1 = process.env.CHAIN_SECRET, w1 = process.env.WORM_SECRET;
+  assert.ok(s1 && s1.length >= 32, 'SESSION_SECRET üretildi ve güçlü');
+  assert.ok(c1 && c1.length >= 32);
+  assert.ok(w1 && w1.length >= 32);
+  assert.notEqual(s1, c1, 'sırlar birbirinden farklı');
+  assert.ok(fs.existsSync(tmpSecretsFile), 'secrets.json diske yazıldı');
+  // İkinci çağrı → dosyadan yükler (aynı değerler)
+  delete process.env.SESSION_SECRET; delete process.env.CHAIN_SECRET; delete process.env.WORM_SECRET;
+  delete require.cache[require.resolve('../auth/setup')];
+  require('../auth/setup').bootstrapSecrets();
+  assert.equal(process.env.SESSION_SECRET, s1, 'kalıcılık: aynı SESSION_SECRET yüklendi');
+  assert.equal(process.env.CHAIN_SECRET, c1);
+  assert.equal(process.env.WORM_SECRET, w1);
+  // Orijinal test değerlerini geri yükle
+  process.env.SESSION_SECRET = originals.s; process.env.CHAIN_SECRET = originals.c; process.env.WORM_SECRET = originals.w;
+  process.env.SECRETS_FILE = path.join(TMP, 'secrets.json');
 });
 
 // ── T3: Dinamik FinOps döviz dönüşümü ──────────────────────────────────────────

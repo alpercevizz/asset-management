@@ -106,8 +106,8 @@ async function scanSegment(seg, activeByMac, activeByIp) {
 
 // ── Ana tarama: segmentlere ayır → kuyruğa al → sınırlı eşzamanlılıkla asenkron tara ──
 async function scanNetwork(orgId) {
-  // Baserow sayfa limiti 200; gerçek binlerce cihazda sayfalama döngüsü eklenir (mimari hazır).
-  const data = await getAllAssets({ orgId, size: 200 });
+  // Baserow tek sayfa 200 döner; getAllAssets iç sayfalama ile binleri toplar (max BASEROW_MAX_PAGES).
+  const data = await getAllAssets({ orgId, size: 2000 });
   const assets = data.results || [];
   const feed = getActiveNetworkDevices();
 

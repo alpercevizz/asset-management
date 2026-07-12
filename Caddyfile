@@ -1,0 +1,41 @@
+# AssetMan — Caddy reverse proxy
+# ASSETMAN_HOST tanımlıysa: HTTPS + otomatik Let's Encrypt cert.
+# Boşsa: :80 HTTP (dev/lokal test, LAN kurulumları).
+
+{$ASSETMAN_HOST:localhost} {
+    encode gzip zstd
+
+    # ASSETMAN_HOST domain ise Caddy otomatik cert alır (Let's Encrypt).
+    # localhost için self-signed cert üretir.
+    tls {$ADMIN_EMAIL} {
+        # LAN kurulumu (public domain yoksa): tls internal
+        # Bunun için Caddyfile'ı elle düzenleyin.
+    }
+
+    # Güvenlik başlıkları — uygulama tarafında da var ama proxy katmanında da uygulayalım
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        -Server
+    }
+
+    # Uygulamaya proxy
+    reverse_proxy app:3000 {
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        # WebSocket / long-poll gerekirse otomatik geçer
+        transport http {
+            read_timeout 6m
+        }
+    }
+
+    # Erişim logu (Caddy'nin kendi log dizini)
+    log {
+        output stdout
+        format json
+    }
+}
