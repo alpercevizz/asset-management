@@ -1,10 +1,13 @@
 # AssetMan — production docker-compose
-# Kurulum: `docker compose up -d`  (Docker 20.10+ ve compose plugin gerekir)
+# Kurulum:
+#   SQLite (varsayılan, tek servis app+caddy):
+#     docker compose up -d
+#   PostgreSQL (Pro/Enterprise, ekstra db servisi):
+#     docker compose --profile postgres up -d
 #
-# ÜÇ SERVIS:
-#   caddy     → 80/443 reverse proxy, otomatik Let's Encrypt (ASSETMAN_HOST domain)
-#   app       → Node.js server (dahili 3000, Caddy'den erişilir, dışarı kapalı)
-#   backup    → günlük WORM off-site kopyası için opsiyonel (yorumlu)
+# DATABASE_URL .env'de tanımlanır:
+#   sqlite:./data/assetman.db              (varsayılan — postgres profile'ı çalıştırmayın)
+#   postgres://assetman:${DB_PASSWORD}@db:5432/assetman   (postgres profile ile)
 
 services:
   app:
@@ -31,6 +34,12 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+    # Postgres profili aktifse DB hazır olmadan başlama.
+    # SQLite modunda db servisi hiç oluşmaz — required:false ile bu bağımlılık atlanır (Compose v2.20+).
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false
 
   caddy:
     image: caddy:2-alpine
@@ -54,6 +63,31 @@ services:
     networks:
       - assetman
 
+  # ── PostgreSQL (opsiyonel — profil ile açılır) ──────────────────────────────
+  # `docker compose --profile postgres up -d` ile aktifleşir.
+  # .env'de DATABASE_URL=postgres://assetman:${DB_PASSWORD}@db:5432/assetman olmalı.
+  # Portal DIŞARIYA açık DEĞİL — sadece uygulama container'ından erişilir.
+  db:
+    image: postgres:16-alpine
+    container_name: assetman-db
+    restart: unless-stopped
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-assetman}
+      POSTGRES_USER: ${POSTGRES_USER:-assetman}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD .env'de tanımlı olmalı}
+    volumes:
+      - assetman-db:/var/lib/postgresql/data
+    expose:
+      - "5432"
+    networks:
+      - assetman
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-assetman} -d ${POSTGRES_DB:-assetman}"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
 networks:
   assetman:
     driver: bridge
@@ -61,5 +95,6 @@ networks:
 volumes:
   assetman-data:
   assetman-worm:
+  assetman-db:      # Postgres profili ile kullanılır
   caddy-data:
   caddy-config:

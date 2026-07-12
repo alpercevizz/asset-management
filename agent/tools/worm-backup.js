@@ -119,13 +119,13 @@ function getBackupStatus({ localEvents = [], localValid = { valid: true }, hashE
   };
 }
 
-// Yerel log'u WORM yedeğinden yeniden inşa et (kurtarma).
-function restoreFromBackup(writeLog) {
+// Yerel log'u WORM yedeğinden yeniden inşa et (kurtarma). writeLog SYNC veya ASYNC olabilir.
+async function restoreFromBackup(writeLog) {
   const backup = readBackupEvents();
   if (!backup.length) throw new Error('Yedek depo boş — geri yüklenecek halka yok.');
   // backup metasını temizleyip saf event olarak yaz
   const clean = backup.map(({ _backed_up_at, ...e }) => e);
-  writeLog(clean);
+  await writeLog(clean);
   return { restored: clean.length, last_hash: clean[clean.length - 1].hash };
 }
 

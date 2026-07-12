@@ -3,6 +3,19 @@ require('dotenv').config({ override: true });
 // Modüller require edilmeden ÖNCE çalışmalı ki lifecycle-tools/worm doğru CHAIN/WORM_SECRET'ı görsün.
 require('./auth/setup').bootstrapSecrets();
 
+// ── DB katmanı (SQLite | PostgreSQL) — boot'ta migrate + users cache ─────────
+const dbLayer = require('./db');
+const usersModule = require('./auth/users');
+const osAgentModule = require('./agent/tools/os-agent');
+const lifecycleModule = require('./agent/tools/lifecycle-tools');
+async function initDataLayer() {
+  await dbLayer.migrate();
+  await usersModule.init();
+  if (osAgentModule.init) await osAgentModule.init();
+  await lifecycleModule.init();
+  console.log('[db] Katman hazır — driver:', dbLayer.driver(), '| kullanıcı:', usersModule.all().length);
+}
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -480,7 +493,7 @@ app.post('/api/lifecycle/event', requireRole('it', 'admin'), async (req, res) =>
     if (!to_status) return res.status(400).json({ error: 'to_status (yeni durum) zorunlu' });
     // Actor = GERÇEK oturum kullanıcısı; IP/MAC kimliği users tablosundan; MFA durumu istekten.
     const me = currentUser(req);
-    const result = submitChange({
+    const result = await submitChange({
       asset_id, hostname, serial_number, to_status, note,
       actor: me.username, approver: approver || null,
       mfa_verified: mfa_verified !== false, // false → MFA bypass simülasyonu (demo)
@@ -514,7 +527,7 @@ app.post('/api/lifecycle/event', requireRole('it', 'admin'), async (req, res) =>
 
 // Onaylayan linke tıklayınca açılan sayfa. PUBLIC_API'de (guard geçer) AMA içeride
 // GERÇEK oturum + 'approver'/'admin' rolü ZORUNLU — onay artık kişi-bazlı doğrulanır.
-app.get('/api/lifecycle/approve', (req, res) => {
+app.get('/api/lifecycle/approve', async (req, res) => {
   const token = req.query.token;
   const page = (ok, title, msg) => `<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/><title>AssetMan — Dijital Onay</title>
@@ -533,7 +546,7 @@ app.get('/api/lifecycle/approve', (req, res) => {
     return res.status(403).send(page(false, 'Yetkisiz', `Bu işlemi onaylama yetkiniz yok. Onaylayan rolü gerekli (giriş: <b>${me.display || me.username}</b>).`));
   }
   try {
-    const { event } = approveByToken(token, {
+    const { event } = await approveByToken(token, {
       actor: me.username, approver: me.display || me.username, actor_ip: me.ip, mfa_verified: true,
     });
     res.send(page(true, 'Dijital Olarak Onaylandı',
@@ -544,11 +557,11 @@ app.get('/api/lifecycle/approve', (req, res) => {
 });
 
 // Süresi dolmuş/bekleyen talebi yenile (yeni link üretir, eskisi çözülür)
-app.post('/api/lifecycle/renew', requireRole('it', 'admin'), (req, res) => {
+app.post('/api/lifecycle/renew', requireRole('it', 'admin'), async (req, res) => {
   try {
     const { approval_id } = req.body || {};
     if (!approval_id) return res.status(400).json({ error: 'approval_id zorunlu' });
-    const result = renewRequest({ approval_id, actor: currentUser(req).username });
+    const result = await renewRequest({ approval_id, actor: currentUser(req).username });
     const base = `${req.protocol}://${req.get('host')}`;
     res.json({ success: true, approval_id: result.approval_id, approval_link: `${base}/api/lifecycle/approve?token=${result.approval_token}` });
   } catch (err) {
@@ -596,9 +609,9 @@ app.get('/api/backup/status', (req, res) => {
   }
 });
 
-app.post('/api/backup/restore', (req, res) => {
+app.post('/api/backup/restore', async (req, res) => {
   try {
-    res.json({ success: true, ...restoreAuditFromBackup() });
+    res.json({ success: true, ...(await restoreAuditFromBackup()) });
   } catch (err) {
     console.error('[POST /api/backup/restore]', err.message);
     res.status(400).json({ error: 'Geri yükleme hatası', detail: err.message });
@@ -739,16 +752,16 @@ function checkSecrets() {
   }
 }
 
-app.listen(PORT, () => {
+initDataLayer().then(() => app.listen(PORT, () => {
   console.log(`\n  AI Asset Management`);
   console.log(`  Server: http://localhost:${PORT}`);
   console.log(`  API:    http://localhost:${PORT}/api/health\n`);
   checkSecrets();
   startNotifyScheduler();
   // Onay TTL aşımı tarayıcısı: süresi dolan pending talepleri 'expired' (güvenlik ihlali) yapar
-  setInterval(() => {
+  setInterval(async () => {
     try {
-      const expired = expirePendingRequests();
+      const expired = await expirePendingRequests();
       if (expired.length) {
         console.log(`[lifecycle] ${expired.length} onay talebi süresi doldu → güvenlik ihlali`);
         // force:false → dedup'a saygılı (aynı uyarı kümesi tekrar gönderilmez)
@@ -758,4 +771,4 @@ app.listen(PORT, () => {
   }, 60 * 1000); // dakikada bir kontrol
   // Network Discovery Agent: karantina cihazları ağda aktif mi? (canlı tarama + anlık alarm)
   startDiscoveryScheduler(sendDigest, 90 * 1000);
-});
+})).catch(err => { console.error('[boot] initDataLayer başarısız:', err.message); process.exit(1); });

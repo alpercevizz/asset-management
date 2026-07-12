@@ -42,15 +42,43 @@ Zorunlu değerler:
 | `BASEROW_API_TOKEN` | Baserow ayarlarından database token |
 | `BASEROW_TABLE_ID` | Assets tablosunun sayısal ID'si |
 | `BASEROW_LICENSE_TABLE_ID` | Licenses tablosunun ID'si |
+| `DATABASE_URL` | **Veritabanı seçimi** — aşağıya bak |
 | `ASSETMAN_HOST` | `envanter.sirket.com` (HTTPS için) |
 | `ADMIN_EMAIL` | `it@sirket.com` (Let's Encrypt bildirimi için) |
+
+### Veritabanı seçimi (SQLite vs PostgreSQL)
+
+AssetMan **driver seçilebilir**. Aynı kod, iki farklı depoyla çalışır:
+
+**SQLite (varsayılan — Starter/tek sunucu):**
+```
+DATABASE_URL=sqlite:./data/assetman.db
+```
+Sıfır ek servis. `data/assetman.db` dosyası `assetman-data` volume'una yazılır. 50.000 cihaza kadar rahat.
+
+**PostgreSQL (Pro/Enterprise):**
+```
+DATABASE_URL=postgres://assetman:GUCLU-PAROLA@db:5432/assetman
+DB_PASSWORD=GUCLU-PAROLA
+```
+Docker Compose'a Postgres profili ile başlatılır:
+```bash
+docker compose --profile postgres up -d
+```
+`db` servisi kalkar, uygulama `db:5432`'ye bağlanır. Portu dışarıya AÇILMAZ, sadece `assetman` network'ünden erişilir. Ekstra HA/backup için mevcut kurumsal PG cluster'ına da bağlanabilirsiniz — yalnız `DATABASE_URL`'i değiştirin, `db` profilini kullanmayın.
 
 > **Secret'ları elle set etmeyin.** `SESSION_SECRET`, `CHAIN_SECRET`, `WORM_SECRET` — ilk açılışta setup wizard **rastgele üretip** `data/secrets.json`'a yazar (`chmod 600`). Env'de tanımlıysanız o kullanılır (env her zaman önceliklidir).
 
 ## 3. Ayağa kaldır
 
+**SQLite (varsayılan):**
 ```bash
 docker compose up -d
+```
+
+**PostgreSQL:**
+```bash
+docker compose --profile postgres up -d
 ```
 
 Yaklaşık 30 saniye içinde `assetman-app` ve `assetman-caddy` container'ları başlar. Caddy Let's Encrypt cert'ini otomatik alır (`ASSETMAN_HOST` public erişilebilir olmalı).
@@ -125,9 +153,16 @@ ASSET_WEBHOOK_URL="https://envanter.sirket.com/api/webhook" ./collect-assets.sh
 
 | Volume | İçerik | Kritiklik |
 |---|---|---|
-| `assetman-data` | `users.json`, `secrets.json`, `lifecycle-log.json`, `os-agents.json` | 🔴 **Bu volume'u yedekleyin** |
+| `assetman-data` | `secrets.json`, `assetman.db` (SQLite modunda), state dosyaları | 🔴 **Bu volume'u yedekleyin** |
 | `assetman-worm` | Şifreli WORM halkaları (audit yedeği) | 🔴 Ayrı fiziksel diske mount önerilir |
+| `assetman-db` | PostgreSQL data (yalnız `--profile postgres` ile) | 🔴 `pg_dump` ile ayrıca yedekleyin |
 | `caddy-data` | Let's Encrypt cert'leri | 🟡 Kaybederseniz cert yeniden alınır |
+
+**PostgreSQL yedekleme:**
+```bash
+docker compose exec db pg_dump -U assetman assetman > backup-$(date +%F).sql
+# Geri yükle: cat backup-YYYY-MM-DD.sql | docker compose exec -T db psql -U assetman assetman
+```
 
 ---
 
@@ -162,7 +197,7 @@ docker compose down && docker compose up -d
 
 - **Public domain + Let's Encrypt** ile HTTPS (yukarıda anlatıldı)
 - **HR entegrasyonu** (çalışan ayrıldığında otomatik lifecycle event)
-- **SQLite geçişi** (Dalga 1B, JSON dosya limitini kaldırır)
 - **Gerçek OS Agent** (Windows service — Dalga 3)
+- **LDAP/AD gerçek bağlantı** (Dalga 2)
 
 Detaylı yol haritası ana [README](./README.md)'de.
