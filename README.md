@@ -4,11 +4,12 @@
 
 **Kurumsal IT envanteri için AI destekli denetim & güvenlik platformu**
 
-Değiştirilemez audit log · çift dijital onay · canlı ağ savunması · döviz endeksli FinOps
+Değiştirilemez audit log · çift dijital onay · gerçek AD/LDAP girişi · canlı ağ savunması · döviz endeksli FinOps
 
 [![Node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![Express](https://img.shields.io/badge/express-4.x-000000?logo=express&logoColor=white)](https://expressjs.com)
-[![Tests](https://img.shields.io/badge/tests-14%2F14%20passing-22c55e)](#test)
+[![Database](https://img.shields.io/badge/db-SQLite%20%7C%20PostgreSQL-336791?logo=postgresql&logoColor=white)](#kurulum)
+[![Tests](https://img.shields.io/badge/tests-19%2F19%20passing-22c55e)](#test)
 [![License](https://img.shields.io/badge/license-see%20LICENSE-blue)](./LICENSE)
 [![Status](https://img.shields.io/badge/status-active-success)]()
 
@@ -38,10 +39,12 @@ Piyasadaki çoğu envanter aracı (Snipe-IT, Lansweeper, GLPI) cihazın **son du
 ### Envanter & Tespit
 - Otomatik cihaz toplama (Windows/Linux client)
 - Anomali tespiti (RAM/disk/uptime)
-- EOL işletim sistemi taraması
-- Garanti takibi
+- EOL işletim sistemi taraması · Garanti takibi
 - Shadow IT / kayıt dışı cihaz keşfi
 - Lisans uyum denetimi
+- Cihaz detay & yaşam döngüsü geçmişi
+- Zimmet teslim tutanağı (PDF) · Excel/CSV dışa aktarım
+- Lokasyon dağılım analizi
 
 </td>
 <td width="50%" valign="top">
@@ -51,7 +54,8 @@ Piyasadaki çoğu envanter aracı (Snipe-IT, Lansweeper, GLPI) cihazın **son du
 - **Çift onay** (dual-authorization) + tek kullanımlık link
 - **Kişi-bazlı dijital imza** (AD UPN + IP + MFA gömülü)
 - **WORM hardened yedek** (AES-256-GCM, write-once)
-- Çok-kullanıcılı auth (scrypt + roller)
+- **Gerçek AD/LDAP girişi** (`AUTH_PROVIDER=ldap`) — grup→rol eşleme
+- Çok-kullanıcılı auth (scrypt + roller) · SQL katmanı
 - Atomik yazma (çökme dayanıklı)
 
 </td>
@@ -91,18 +95,20 @@ flowchart LR
       API[REST API]
       AI[AI Agent<br/>Ollama / Anthropic]
       DET[Deterministic Tools<br/>anomaly · eol · warranty<br/>shadow-it · lifecycle · risk · fx]
-      AUTH[Auth & Roles<br/>scrypt + HMAC token]
+      AUTH[Auth & Roles<br/>scrypt + HMAC token<br/>local · LDAP/AD]
     end
 
-    subgraph Storage[Local Storage]
-      LOG[lifecycle-log.json<br/>HMAC-SHA256 chain]
-      WORM[(WORM Repository<br/>AES-256-GCM<br/>write-once)]
-      USERS[users.json<br/>scrypt hashes]
+    subgraph SQL[SQL Katmanı — SQLite / PostgreSQL]
+      USERS[(users<br/>scrypt / LDAP sync)]
+      LOG[(lifecycle_events<br/>HMAC-SHA256 chain)]
+      AGENT[(os_agents<br/>spoofing shield)]
     end
 
+    WORM[(WORM Repository<br/>AES-256-GCM<br/>write-once)]
+    LDAP[LDAP / Active Directory]
     BR[(Baserow<br/>Inventory DB)]
     N8N[n8n Webhook<br/>Mail · Telegram]
-    UI[Web Panel<br/>Dark UI]
+    UI[Web Panel<br/>sıcak-modern · light/dark]
 
     PS --> N8N --> BR
     QR --> API
@@ -114,6 +120,8 @@ flowchart LR
     LOG -->|append-only<br/>encrypt| WORM
     API <--> AUTH
     AUTH --> USERS
+    AUTH -.->|AUTH_PROVIDER=ldap| LDAP
+    DET --> AGENT
     DET -->|critical alert| N8N
 ```
 
@@ -155,7 +163,25 @@ npm start
 # Dashboard: http://localhost:3000
 ```
 
-İlk açılışta `data/users.json` tohumlanır. Demo kullanıcı parolaları **rastgele üretilip console'a yazılır** (bir kez gösterilir, kaydedin). Kendi parolanızı belirlemek için `.env`'ye `USER_PW_<USERNAME>=...` ekleyin.
+İlk açılışta `users` tablosu (SQL) tohumlanır. Demo kullanıcı parolaları **rastgele üretilip console'a yazılır** (bir kez gösterilir, kaydedin). Kendi parolanızı belirlemek için `.env`'ye `USER_PW_<USERNAME>=...` ekleyin. Docker + Caddy TLS ile kurumsal kurulum için [DEPLOY.md](./DEPLOY.md)'ye bakın.
+
+### Veritabanı (driver seçilebilir)
+
+Kimlik, audit log ve OS Agent kayıtları **SQL katmanında** tutulur (envanter Baserow'da kalır):
+
+```bash
+DATABASE_URL=sqlite:./data/assetman.db          # varsayılan — sıfır ek servis, tek dosya
+# DATABASE_URL=postgres://assetman:PAROLA@db:5432/assetman   # Pro/Enterprise (Docker profile)
+```
+
+### Kimlik sağlayıcı (local | LDAP/AD)
+
+```bash
+AUTH_PROVIDER=local     # yerel scrypt parola (varsayılan)
+# AUTH_PROVIDER=ldap    # gerçek Active Directory bind — rol AD grup üyeliğinden türetilir
+```
+
+`ldap` modunda kullanıcı ilk girişte dizinden `users` tablosuna senkronlanır; ayrıntılı yapılandırma (`LDAP_URL`, `LDAP_BIND_DN`, `LDAP_GROUP_ROLE_MAP`, `LDAP_MFA_GROUP` …) için [DEPLOY.md §4b](./DEPLOY.md)'ye bakın. Gerektiğinde: `npm install ldapts`.
 
 ### Yapılandırma (.env)
 
@@ -165,6 +191,8 @@ npm start
 | `OLLAMA_URL` / `OLLAMA_MODEL` | Yerel/uzak Ollama uç noktası |
 | `ANTHROPIC_API_KEY` | Claude API anahtarı (anthropic ise) |
 | `BASEROW_API_URL` / `BASEROW_API_TOKEN` / `BASEROW_TABLE_ID` | Baserow erişimi |
+| `DATABASE_URL` | SQL katmanı — `sqlite:...` veya `postgres://...` |
+| `AUTH_PROVIDER` | `local` (scrypt) veya `ldap` (gerçek AD bind) |
 | `SESSION_SECRET` | Oturum cookie HMAC (zorunlu, ≥32 karakter) |
 | `CHAIN_SECRET` | Audit log HMAC zincir sırrı (ayrı tutulması önerilir) |
 | `WORM_SECRET` | WORM AES-256-GCM anahtar türetimi |
@@ -194,13 +222,14 @@ npm test
 Node'un yerleşik test runner'ı (`node:test`) — dış bağımlılık yok. Çekirdek IP'yi kapsar:
 
 - Scrypt parola hash & rol yetkilendirmesi
+- **LDAP/AD bind + grup→rol eşleme + MFA grubu** (sahte client ile, canlı AD gerekmez)
 - HMAC zincir + tamper tespiti
 - Dijital imza & forgery koruması
 - Onay akışı (pending / approve / self-reject / expire / renew)
 - `sameDevice` (asset_id rename dayanıklılığı)
 - WORM yedekleme + AES roundtrip + kurtarma
 - OS Agent handshake (spoofing tespiti)
-- Döviz dönüşümü
+- Döviz dönüşümü · SQL driver seçimi
 
 ## Client Script
 
@@ -256,13 +285,12 @@ Register-ScheduledTask -TaskName "AssetCollector" -Action $action -Trigger $trig
 
 ## Bilinçli Sınırlar (dürüst kapsam)
 
-Demo'dan production'a geçişte canlıya alınması gereken üç entegrasyon dikişi simüle çalışır:
+**AD/LDAP entegrasyonu artık gerçektir** (`AUTH_PROVIDER=ldap` — servis-bind + kullanıcı re-bind + grup→rol). Demo'dan production'a geçişte canlıya alınması gereken **iki** entegrasyon dikişi simüle çalışır:
 
-- **AD/LDAP**: `auth/users.js` ile yerel kullanıcı tablosu — gerçekte LDAP/AD sorgusuyla beslenir
 - **Network Discovery feed**: `data/active-devices.json` örnek besleme — gerçekte Sophos/Zabbix/arp poller
-- **WORM Repository**: yerel şifreli dizin — gerçekte AWS S3 Object Lock (Compliance mode) veya Veeam Hardened Repo
+- **WORM off-site**: yerel şifreli dizin write-once çalışır; off-site ayna gerçekte AWS S3 Object Lock (Compliance mode) veya Veeam Hardened Repo
 
-Mantık ve API sözleşmeleri her üç durumda da birebir aynı kalır.
+Mantık ve API sözleşmeleri her iki durumda da birebir aynı kalır.
 
 ## Lisans
 
