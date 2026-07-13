@@ -5,42 +5,85 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Giriş — AssetMan</title>
   <style>
+    :root {
+      --bg: #faf7f2;
+      --bg-grad-1: #f2ece2;
+      --bg-grad-2: #faf7f2;
+      --card: #ffffff;
+      --border: rgba(24,20,15,0.08);
+      --border-strong: rgba(24,20,15,0.12);
+      --text: #1a1815;
+      --text-dim: #5a544c;
+      --text-muted: #8a8378;
+      --accent: #6b5cff;
+      --field-bg: #faf7f2;
+      --red: #c94a3f;
+      --red-bg: rgba(201,74,63,0.10);
+      --shadow: 0 12px 40px rgba(24,20,15,0.08), 0 2px 8px rgba(24,20,15,0.04);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1a1613;
+        --bg-grad-1: #221d18;
+        --bg-grad-2: #17130f;
+        --card: #221e1a;
+        --border: rgba(255,248,238,0.07);
+        --border-strong: rgba(255,248,238,0.12);
+        --text: #f2ede4;
+        --text-dim: #b3ab9f;
+        --text-muted: #7a7469;
+        --accent: #a99bff;
+        --field-bg: #1a1613;
+        --red: #f87171;
+        --red-bg: rgba(248,113,113,0.12);
+        --shadow: 0 12px 40px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.4);
+      }
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      background: #0d0f18; color: #e2e8f0; min-height: 100vh; font-size: 15px; line-height: 1.5;
+      background: radial-gradient(120% 120% at 50% 0%, var(--bg-grad-1) 0%, var(--bg-grad-2) 60%);
+      color: var(--text); min-height: 100vh; font-size: 15px; line-height: 1.55;
+      letter-spacing: -0.005em;
       display: flex; align-items: center; justify-content: center; padding: 20px;
+      -webkit-font-smoothing: antialiased;
     }
     .card {
-      width: 100%; max-width: 380px; background: #13161f; border: 1px solid #252840;
-      border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,0.45); overflow: hidden;
+      width: 100%; max-width: 400px; background: var(--card); border: 1px solid var(--border);
+      border-radius: 18px; box-shadow: var(--shadow); overflow: hidden;
     }
-    .top { padding: 30px 28px 22px; text-align: center; border-bottom: 1px solid #252840; }
+    .top { padding: 34px 30px 24px; text-align: center; }
     .brand { display: inline-flex; align-items: center; gap: 11px; }
-    .brand-icon { width: 40px; height: 40px; background: linear-gradient(135deg, #6366f1, #a855f7); border-radius: 10px; display: flex; align-items: center; justify-content: center; }
-    .brand-icon svg { width: 22px; height: 22px; stroke: #fff; fill: none; stroke-width: 2; }
-    .brand-name { font-size: 20px; font-weight: 700; background: linear-gradient(135deg, #818cf8, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    .top-sub { font-size: 12.5px; color: #64748b; margin-top: 14px; }
-    form { padding: 24px 28px 28px; display: flex; flex-direction: column; gap: 16px; }
+    .brand-icon {
+      width: 38px; height: 38px;
+      background: linear-gradient(135deg, var(--accent), #8a7dff);
+      border-radius: 10px; display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 12px rgba(107,92,255,0.28);
+    }
+    .brand-icon svg { width: 21px; height: 21px; stroke: #fff; fill: none; stroke-width: 2; }
+    .brand-name { font-size: 20px; font-weight: 600; color: var(--text); letter-spacing: -0.02em; }
+    .top-sub { font-size: 13px; color: var(--text-muted); margin-top: 14px; }
+    form { padding: 8px 30px 30px; display: flex; flex-direction: column; gap: 16px; }
     .field { display: flex; flex-direction: column; gap: 7px; }
-    .field label { font-size: 12px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.03em; }
+    .field label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
     input {
-      width: 100%; background: #0d0f18; border: 1px solid #252840; color: #e2e8f0;
-      border-radius: 9px; padding: 12px 14px; font-size: 15px; outline: none; transition: border-color 0.15s;
+      width: 100%; background: var(--field-bg); border: 1px solid var(--border-strong); color: var(--text);
+      border-radius: 10px; padding: 12px 14px; font-size: 15px; outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s; font-family: inherit;
     }
-    input:focus { border-color: #6366f1; }
+    input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(107,92,255,0.12); }
     .btn {
-      background: linear-gradient(135deg, #6366f1, #a855f7); color: #fff; border: none;
-      border-radius: 9px; padding: 13px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 4px;
-      transition: opacity 0.15s;
+      background: var(--text); color: var(--card); border: none;
+      border-radius: 10px; padding: 13px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 4px;
+      transition: opacity 0.15s; font-family: inherit; letter-spacing: -0.01em;
     }
-    .btn:hover { opacity: 0.9; }
-    .btn:disabled { opacity: 0.6; cursor: default; }
+    .btn:hover { opacity: 0.88; }
+    .btn:disabled { opacity: 0.55; cursor: default; }
     .err-box {
-      display: none; background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3);
-      color: #fca5a5; padding: 10px 13px; border-radius: 9px; font-size: 13px;
+      display: none; background: var(--red-bg); border: 1px solid var(--red-bg);
+      color: var(--red); padding: 10px 13px; border-radius: 10px; font-size: 13px;
     }
-    .foot { padding: 0 28px 24px; text-align: center; font-size: 11px; color: #475569; }
+    .foot { padding: 0 30px 26px; text-align: center; font-size: 11px; color: var(--text-muted); }
   </style>
 </head>
 <body>
@@ -48,7 +91,7 @@
     <div class="top">
       <div class="brand">
         <div class="brand-icon">
-          <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
+          <svg viewBox="0 0 24 24" stroke-linejoin="round"><path d="M12 2l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>
         </div>
         <div class="brand-name">AssetMan</div>
       </div>

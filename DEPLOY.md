@@ -107,6 +107,44 @@ Tarayıcıdan: **https://envanter.sirket.com** (veya `http://SUNUCU-IP` — LAN 
 
 Yerleşik roller: `admin` · `it` · `approver` — Roller & Yetki Modeli için ana README'ye bakın.
 
+## 4b. Kimlik sağlayıcı: LDAP / Active Directory (opsiyonel)
+
+AssetMan **kimlik sağlayıcısı seçilebilir** (`AUTH_PROVIDER`), tıpkı veritabanı gibi:
+
+**local (varsayılan):** Kullanıcılar `users` tablosunda, scrypt parola. Sıfır ek servis, hızlı demo.
+
+**ldap:** Gerçek Active Directory bind. Kullanıcı **ilk girişte** dizinden `users` tablosuna senkronlanır; **rolü AD grup üyeliğinden** türetilir. Audit log imzası, onay akışı ve MFA-bypass tespiti gerçek AD kimliğiyle çalışır.
+
+```bash
+npm install ldapts        # yalnız ldap modunda gerekli (pure-JS, native derleme yok)
+```
+
+`.env`:
+```
+AUTH_PROVIDER=ldap
+LDAP_URL=ldap://dc.sirket.local:389
+LDAP_BIND_DN=CN=svc-assetman,OU=ServiceAccounts,DC=sirket,DC=local
+LDAP_BIND_PASSWORD=servis-hesabi-parolasi
+LDAP_BASE_DN=DC=sirket,DC=local
+LDAP_USER_ATTR=sAMAccountName
+LDAP_GROUP_ROLE_MAP={"Domain Admins":"admin","BT Yönetimi":"admin","Onaylayanlar":"approver","BT Destek":"it"}
+LDAP_DEFAULT_ROLE=it
+LDAP_MFA_GROUP=MFA-Enforced
+```
+
+**Nasıl çalışır (bind akışı):**
+1. Servis hesabıyla bind edilir → kullanıcı `sAMAccountName` ile aranır (DN, displayName, UPN, `memberOf` alınır).
+2. Bulunan **kullanıcı DN'iyle re-bind** yapılır — asıl parola doğrulaması budur (yanlış parola → giriş reddedilir).
+3. `memberOf` grupları `LDAP_GROUP_ROLE_MAP` ile role eşlenir. Kullanıcı birden çok gruptaysa **en yetkili rol kazanır** (admin > approver > it). Hiçbiri eşleşmezse `LDAP_DEFAULT_ROLE`.
+4. **MFA:** `LDAP_MFA_GROUP` üyeliğiyle modellenir (Entra ID / Duo'dan senkronlanan güvenlik grubu). Boş bırakılırsa MFA üst katmanda zorunlu varsayılır. Grupta olmayan kullanıcı için audit log **MFA-bypass** olarak işaretlenir.
+
+> **Güvenlik notu:** LDAP hesaplarının yerel `password` kolonu doğrulanamaz rastgele bir hash'le doldurulur — `AUTH_PROVIDER=local`'a geri dönseniz bile bu hesaplara bilinen parolayla girilemez. LDAPS (636/TLS) için `LDAP_URL=ldaps://...` kullanın.
+
+**LDAP bağlantı testi:**
+```bash
+docker compose exec app node -e "process.env.AUTH_PROVIDER='ldap'; require('./auth/ldap').authenticate('kullanici','parola').then(p=>console.log(p||'BAŞARISIZ')).catch(e=>console.error(e.message))"
+```
+
 ## 5. Baserow tablosunu hazırlayın
 
 Aşağıdaki alanları Baserow assets tablosuna ekleyin (metin/sayı/tarih):
@@ -198,6 +236,6 @@ docker compose down && docker compose up -d
 - **Public domain + Let's Encrypt** ile HTTPS (yukarıda anlatıldı)
 - **HR entegrasyonu** (çalışan ayrıldığında otomatik lifecycle event)
 - **Gerçek OS Agent** (Windows service — Dalga 3)
-- **LDAP/AD gerçek bağlantı** (Dalga 2)
+- **LDAP/AD gerçek bağlantı** — ✅ mevcut (`AUTH_PROVIDER=ldap`, bkz. §4b)
 
 Detaylı yol haritası ana [README](./README.md)'de.

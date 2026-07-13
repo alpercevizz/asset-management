@@ -424,9 +424,33 @@ async function detectLifecycleConflicts(orgId) {
   };
 }
 
+// Demo seed — JSON'dan olayları YENİ CHAIN_SECRET ile yeniden zincirleyerek yükler.
+// Yalnız DB boşsa çalışır; approval field'larını, ip/mac/mfa/timestamp'i JSON'dan aktarır.
+async function seedFromJson(events) {
+  _ensure();
+  if (_cache.length > 0) return { skipped: true, reason: 'not-empty', count: 0 };
+  if (!Array.isArray(events) || !events.length) return { skipped: true, reason: 'no-input', count: 0 };
+  let inserted = 0;
+  for (const e of events) {
+    await recordEvent({
+      asset_id: e.asset_id, hostname: e.hostname, serial_number: e.serial_number,
+      to_status: e.to_status, note: e.note, actor: e.actor || 'system',
+      approver: e.approver, approval_status: e.approval_status || 'n/a',
+      approval_id: e.approval_id, approval_token: e.approval_token,
+      approval_expires_at: e.approval_expires_at, renews: e.renews,
+      security_flag: e.security_flag, _timestamp: e.timestamp,
+      actor_ip: e.actor_ip, actor_mac: e.actor_mac,
+      mfa_verified: e.mfa_verified !== false, mfa_method: e.mfa_method,
+    });
+    inserted++;
+  }
+  return { skipped: false, count: inserted };
+}
+
 module.exports = {
   LIFECYCLE_STATES, ALERT_ON_RECORD, REQUIRES_APPROVAL, APPROVERS, APPROVAL_TTL_MS,
   init, recordEvent, submitChange, approveByToken, renewRequest, expirePendingRequests,
   getRequestLatest, getLog, getDeviceLog, getCurrentStatus, getCurrentStatusForAsset,
   verifyChain, detectLifecycleConflicts, auditBackupStatus, restoreAuditFromBackup,
+  seedFromJson,
 };

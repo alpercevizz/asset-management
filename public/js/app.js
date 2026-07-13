@@ -441,6 +441,7 @@ async function loadDashboard() {
     renderBrandChart(stats.by_brand || {});
     renderCategoryChart(stats.by_category || {});
     renderStatusChart(stats.by_status || {});
+    renderLocationChart(state.assets);
     renderRecentTable(state.assets.slice(0, 10));
   } catch (err) {
     console.error('Dashboard load error:', err);
@@ -533,6 +534,207 @@ function renderStatusChart(byStatus) {
   }, 100);
 }
 
+function renderLocationChart(assets) {
+  const container = $(`#locationBars`);
+  if (!container) return;
+  const counts = {};
+  (assets || []).forEach((a) => {
+    const loc = (a.location || '').trim() || 'Belirtilmemiş';
+    counts[loc] = (counts[loc] || 0) + 1;
+  });
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const max = entries[0]?.[1] || 1;
+  const totalEl = $(`#locationTotal`);
+  if (totalEl) totalEl.textContent = `${entries.length} lokasyon`;
+  container.innerHTML = entries.length ? entries
+    .map(([loc, count]) => `
+      <div class="bar-row">
+        <span class="bar-label" title="${escapeHtml(loc)}">${escapeHtml(loc)}</span>
+        <div class="bar-track"><div class="bar-fill" style="width:0%" data-pct="${Math.round((count/max)*100)}"></div></div>
+        <span class="bar-count">${count}</span>
+      </div>`).join('')
+    : '<p style="color:var(--text-muted);font-size:12px;padding:8px 0">Veri bulunamadı</p>';
+  setTimeout(() => {
+    container.querySelectorAll('.bar-fill').forEach((el) => { el.style.width = el.dataset.pct + '%'; });
+  }, 100);
+}
+
+/* ─── Excel/CSV Export ──────────────────────────────────────────────────────── */
+function exportAssetsCSV() {
+  // Görünen (filtrelenmiş) envanteri dışa aktar
+  let assets = state.assets || [];
+  if (state.categoryFilter) assets = assets.filter((a) => (a.category || '') === state.categoryFilter);
+  if (state.locationFilter)  assets = assets.filter((a) => (a.location  || '') === state.locationFilter);
+  if (!assets.length) { alert('Dışa aktarılacak kayıt yok.'); return; }
+
+  const cols = [
+    ['hostname', 'Hostname'], ['location', 'Lokasyon'], ['category', 'Kategori'],
+    ['brand', 'Marka'], ['model', 'Model'], ['serial_number', 'Seri No'],
+    ['cpu', 'CPU'], ['ram_gb', 'RAM (GB)'], ['storage_gb', 'Disk (GB)'],
+    ['ip_address', 'IP'], ['mac_address', 'MAC'], ['os', 'OS'],
+    ['username', 'Kullanıcı'], ['status', 'Durum'], ['last_seen', 'Son Görülme'],
+  ];
+  const esc = (v) => {
+    const s = (v === null || v === undefined) ? '' : String(v);
+    return /[",;\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const header = cols.map(([, label]) => esc(label)).join(';');
+  const rows = assets.map((a) => cols.map(([key]) => esc(a[key])).join(';'));
+  // BOM + ; ayraç → Excel Türkçe/UTF-8 doğru açar
+  const csv = '﻿' + [header, ...rows].join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0, 10);
+  a.href = url; a.download = `assetman-envanter-${stamp}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/* ─── Cihaz Detay & Geçmiş Modalı ───────────────────────────────────────────── */
+let _deviceModalAsset = null;
+
+function openDeviceModal(asset) {
+  _deviceModalAsset = asset;
+  const overlay = $(`#deviceModalOverlay`);
+  const title = $(`#deviceModalTitle`);
+  const body = $(`#deviceModalBody`);
+  if (!overlay || !body) return;
+  if (title) title.textContent = asset.hostname || asset.serial_number || 'Cihaz Detayı';
+
+  const row = (label, val) => `<div style="display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;">
+      <span style="color:var(--text-muted)">${label}</span>
+      <span style="color:var(--text);font-weight:500;text-align:right">${val}</span></div>`;
+
+  body.innerHTML = `
+    <div style="margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      ${categoryBadge(asset.category)} ${statusBadge(asset.status)}
+      ${asset.location ? `<span class="location-tag">${escapeHtml(asset.location)}</span>` : ''}
+    </div>
+    <div style="margin-bottom:18px">
+      ${row('Marka / Model', `${fmt(asset.brand)} ${fmt(asset.model, '')}`)}
+      ${row('Seri No', `<span class="serial-cell">${fmt(asset.serial_number)}</span>`)}
+      ${row('Zimmetli Kullanıcı', fmt(asset.username, '— (zimmetsiz)'))}
+      ${row('CPU', fmt(asset.cpu))}
+      ${row('RAM / Disk', `${asset.ram_gb ? asset.ram_gb + ' GB' : '—'} / ${asset.storage_gb ? asset.storage_gb + ' GB' : '—'}`)}
+      ${row('IP / MAC', `<span class="serial-cell">${fmt(asset.ip_address)} · ${fmt(asset.mac_address)}</span>`)}
+      ${row('İşletim Sistemi', fmt(asset.os))}
+      ${row('Son Görülme', fmtDate(asset.last_seen))}
+    </div>
+    <h4 style="font-size:13px;font-weight:600;margin:0 0 10px;color:var(--text)">Yaşam Döngüsü Geçmişi</h4>
+    <div id="deviceHistory" style="font-size:12.5px;color:var(--text-muted)">Yükleniyor...</div>`;
+
+  overlay.classList.add('open');
+  loadDeviceHistory(asset);
+}
+
+async function loadDeviceHistory(asset) {
+  const el = $(`#deviceHistory`);
+  if (!el) return;
+  try {
+    const q = asset.serial_number ? `serial=${encodeURIComponent(asset.serial_number)}`
+      : `hostname=${encodeURIComponent(asset.hostname || '')}`;
+    const res = await fetch(`/api/lifecycle/log?${q}`);
+    const data = await res.json();
+    const events = data.events || data || [];
+    if (!Array.isArray(events) || !events.length) {
+      el.innerHTML = '<p style="padding:4px 0">Bu cihaz için kayıtlı yaşam döngüsü olayı yok.</p>';
+      return;
+    }
+    el.innerHTML = events.slice().reverse().map((e) => `
+      <div style="display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+        <div style="width:8px;height:8px;border-radius:50%;background:var(--accent);margin-top:5px;flex-shrink:0"></div>
+        <div style="flex:1">
+          <div style="color:var(--text);font-weight:500">${escapeHtml(e.to_status || '—')}${e.from_status ? ` <span style="color:var(--text-muted);font-weight:400">← ${escapeHtml(e.from_status)}</span>` : ''}</div>
+          <div style="color:var(--text-muted);font-size:11px;margin-top:1px">${fmtDate(e.timestamp)} · ${escapeHtml(e.actor_upn || e.actor || '—')}${e.note ? ` · ${escapeHtml(e.note)}` : ''}</div>
+        </div>
+      </div>`).join('');
+  } catch (err) {
+    el.innerHTML = `<p style="color:var(--red)">Geçmiş yüklenemedi: ${escapeHtml(err.message)}</p>`;
+  }
+}
+
+/* ─── Zimmet Teslim Tutanağı (PDF) ──────────────────────────────────────────── */
+function printHandoverReceipt(asset) {
+  if (!asset) return;
+  const now = new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
+  const g = (v) => (v === null || v === undefined || v === '') ? '—' : String(v);
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"/>
+  <title>Zimmet Tutanağı — ${g(asset.hostname)}</title>
+  <style>
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif; color:#1a1815; font-size:13px; line-height:1.7; padding:0; }
+    .hdr { padding:44px 48px 0; }
+    .hdr-top { display:flex; justify-content:space-between; align-items:center; padding-bottom:22px; border-bottom:1px solid #ece5da; }
+    .brand { display:flex; align-items:center; gap:11px; }
+    .brand-icon { width:34px; height:34px; background:linear-gradient(135deg,#6b5cff,#8a7dff); border-radius:9px; display:flex; align-items:center; justify-content:center; }
+    .brand-icon svg { width:19px; height:19px; stroke:#fff; fill:none; stroke-width:1.8; }
+    .brand-name { font-size:16px; font-weight:600; color:#1a1815; letter-spacing:-.02em; }
+    .brand-sub { font-size:11px; color:#8a8378; }
+    .meta { text-align:right; font-size:11px; color:#8a8378; }
+    .meta strong { color:#1a1815; }
+    .title-block { padding:30px 0 4px; }
+    .chip { display:inline-flex; align-items:center; gap:6px; background:#eeecff; color:#6b5cff; font-size:10.5px; font-weight:600; padding:4px 11px; border-radius:999px; margin-bottom:14px; }
+    .chip::before { content:''; width:5px; height:5px; border-radius:50%; background:#6b5cff; }
+    .title { font-size:27px; font-weight:600; letter-spacing:-.03em; color:#1a1815; }
+    .subtitle { font-size:12.5px; color:#8a8378; margin-top:6px; }
+    .body { padding:26px 48px 44px; }
+    .sec { font-size:11px; font-weight:600; color:#8a8378; text-transform:uppercase; letter-spacing:.06em; margin:22px 0 8px; }
+    table { width:100%; border-collapse:collapse; font-size:12.5px; }
+    td { padding:9px 0; border-bottom:1px solid #f0e9de; color:#5a544c; vertical-align:top; }
+    td.k { color:#8a8378; width:38%; }
+    td.v { color:#1a1815; font-weight:500; }
+    .statement { margin:24px 0; padding:16px 18px; background:#f7f2ea; border-radius:12px; font-size:12.5px; color:#5a544c; line-height:1.75; }
+    .sign-row { display:flex; gap:40px; margin-top:52px; }
+    .sign { flex:1; }
+    .sign-line { border-top:1px solid #1a1815; padding-top:8px; font-size:12px; color:#5a544c; }
+    .sign-line strong { display:block; color:#1a1815; font-size:13px; margin-bottom:2px; }
+    .footer { margin:0 48px; padding:16px 0; border-top:1px solid #ece5da; font-size:10.5px; color:#b3a89a; text-align:center; }
+    @media print { @page { margin:0; size:A4; } body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } .brand-icon,.chip,.statement{ -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
+  </style></head><body>
+  <div class="hdr">
+    <div class="hdr-top">
+      <div class="brand">
+        <div class="brand-icon"><svg viewBox="0 0 24 24" stroke-linejoin="round"><path d="M12 2l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg></div>
+        <div><div class="brand-name">AssetMan</div><div class="brand-sub">IT Varlık Yönetimi</div></div>
+      </div>
+      <div class="meta"><div>Düzenlenme Tarihi</div><div><strong>${now}</strong></div></div>
+    </div>
+    <div class="title-block">
+      <div class="chip">Resmi Belge</div>
+      <div class="title">Zimmet Teslim Tutanağı</div>
+      <div class="subtitle">Cihaz teslim / iade kaydı</div>
+    </div>
+  </div>
+  <div class="body">
+    <div class="sec">Cihaz Bilgileri</div>
+    <table>
+      <tr><td class="k">Cihaz Adı (Hostname)</td><td class="v">${g(asset.hostname)}</td></tr>
+      <tr><td class="k">Kategori</td><td class="v">${g(asset.category)}</td></tr>
+      <tr><td class="k">Marka / Model</td><td class="v">${g(asset.brand)} ${g(asset.model)}</td></tr>
+      <tr><td class="k">Seri Numarası</td><td class="v">${g(asset.serial_number)}</td></tr>
+      <tr><td class="k">Teknik Özellik</td><td class="v">${g(asset.cpu)}${asset.ram_gb ? ' · ' + asset.ram_gb + ' GB RAM' : ''}${asset.storage_gb ? ' · ' + asset.storage_gb + ' GB Disk' : ''}</td></tr>
+      <tr><td class="k">İşletim Sistemi</td><td class="v">${g(asset.os)}</td></tr>
+    </table>
+    <div class="sec">Zimmet Bilgileri</div>
+    <table>
+      <tr><td class="k">Teslim Alan Personel</td><td class="v">${g(asset.username)}</td></tr>
+      <tr><td class="k">Lokasyon / Departman</td><td class="v">${g(asset.location)}</td></tr>
+      <tr><td class="k">Teslim Tarihi</td><td class="v">${now}</td></tr>
+    </table>
+    <div class="statement">Yukarıda özellikleri belirtilen cihaz, çalışır ve eksiksiz durumda tarafıma teslim edilmiştir. Cihazı kurumsal kullanım politikalarına uygun kullanacağımı, hasar/kayıp durumunda bilgi vereceğimi ve görevimden ayrılmam halinde eksiksiz iade edeceğimi kabul ederim.</div>
+    <div class="sign-row">
+      <div class="sign"><div class="sign-line"><strong>Teslim Eden (IT)</strong>Ad Soyad · İmza · Tarih</div></div>
+      <div class="sign"><div class="sign-line"><strong>Teslim Alan (Personel)</strong>${g(asset.username)} · İmza · Tarih</div></div>
+    </div>
+  </div>
+  <div class="footer">AssetMan — Bu belge sistem tarafından otomatik oluşturulmuştur.</div>
+  <script>window.onload=()=>window.print();<\/script>
+  </body></html>`);
+  win.document.close();
+}
+
 function renderRecentTable(assets) {
   const tbody = $(`#recentBody`);
   if (!tbody) return;
@@ -585,14 +787,15 @@ async function renderAssetsTable() {
     if (state.locationFilter)  assets = assets.filter((a) => (a.location  || '') === state.locationFilter);
 
     if (countEl) countEl.textContent = `${assets.length} cihaz bulundu`;
+    state.renderedAssets = assets;
 
     if (!assets.length) {
       tbody.innerHTML = `<tr><td colspan="13" class="loading-cell">Kayıt bulunamadı</td></tr>`;
       return;
     }
 
-    tbody.innerHTML = assets.map((a) => `
-      <tr>
+    tbody.innerHTML = assets.map((a, i) => `
+      <tr class="asset-row" data-idx="${i}" style="cursor:pointer">
         <td class="hostname-cell">${fmt(a.hostname)}</td>
         <td><span class="location-tag">${fmt(a.location, '—')}</span></td>
         <td>${categoryBadge(a.category)}</td>
@@ -607,6 +810,14 @@ async function renderAssetsTable() {
         <td>${statusBadge(a.status)}</td>
         <td>${fmtDate(a.last_seen)}</td>
       </tr>`).join('');
+
+    tbody.querySelectorAll('.asset-row').forEach((tr) => {
+      tr.addEventListener('click', () => {
+        const idx = Number(tr.dataset.idx);
+        const asset = (state.renderedAssets || [])[idx];
+        if (asset) openDeviceModal(asset);
+      });
+    });
   } catch (err) {
     if (tbody) tbody.innerHTML = `<tr><td colspan="13" class="loading-cell" style="color:#ef4444">${err.message}</td></tr>`;
   }
@@ -1586,55 +1797,54 @@ function printReport() {
   <title>${title} — AssetMan</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #1e293b; background: #fff; font-size: 13px; line-height: 1.7; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #1a1815; background: #fff; font-size: 13px; line-height: 1.7; -webkit-font-smoothing: antialiased; letter-spacing: -0.005em; }
 
-    /* ── Header ── */
-    .pdf-header { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: #fff; padding: 32px 40px 28px; }
-    .pdf-header-top { display: flex; justify-content: space-between; align-items: flex-start; }
-    .pdf-brand { display: flex; align-items: center; gap: 10px; }
-    .pdf-brand-icon { width: 36px; height: 36px; background: rgba(255,255,255,0.15); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
-    .pdf-brand-icon svg { width: 20px; height: 20px; stroke: #fff; fill: none; stroke-width: 2; }
-    .pdf-brand-name { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
-    .pdf-brand-sub  { font-size: 11px; opacity: 0.75; margin-top: 1px; }
-    .pdf-meta { text-align: right; font-size: 11px; opacity: 0.8; line-height: 1.5; }
-    .pdf-title-block { margin-top: 20px; }
-    .pdf-title { font-size: 22px; font-weight: 700; letter-spacing: -0.4px; }
-    .pdf-subtitle { font-size: 12px; opacity: 0.75; margin-top: 4px; }
+    /* ── Header (editoryal, açık zemin) ── */
+    .pdf-header { padding: 44px 48px 0; }
+    .pdf-header-top { display: flex; justify-content: space-between; align-items: center; padding-bottom: 22px; border-bottom: 1px solid #ece5da; }
+    .pdf-brand { display: flex; align-items: center; gap: 11px; }
+    .pdf-brand-icon { width: 34px; height: 34px; background: linear-gradient(135deg, #6b5cff, #8a7dff); border-radius: 9px; display: flex; align-items: center; justify-content: center; }
+    .pdf-brand-icon svg { width: 19px; height: 19px; stroke: #fff; fill: none; stroke-width: 1.8; }
+    .pdf-brand-name { font-size: 16px; font-weight: 600; color: #1a1815; letter-spacing: -0.02em; }
+    .pdf-brand-sub  { font-size: 11px; color: #8a8378; margin-top: 1px; }
+    .pdf-meta { text-align: right; font-size: 11px; color: #8a8378; line-height: 1.6; }
+    .pdf-meta strong { color: #1a1815; font-weight: 600; }
+    .pdf-title-block { padding: 30px 0 4px; }
+    .pdf-chip { display: inline-flex; align-items: center; gap: 6px; background: #eeecff; color: #6b5cff; font-size: 10.5px; font-weight: 600; padding: 4px 11px; border-radius: 999px; letter-spacing: 0.02em; margin-bottom: 14px; }
+    .pdf-chip::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: #6b5cff; }
+    .pdf-title { font-size: 27px; font-weight: 600; letter-spacing: -0.03em; color: #1a1815; }
+    .pdf-subtitle { font-size: 12.5px; color: #8a8378; margin-top: 6px; }
 
     /* ── Body ── */
-    .pdf-body { padding: 36px 40px 48px; max-width: 800px; }
+    .pdf-body { padding: 30px 48px 44px; max-width: 820px; }
 
     /* ── Typography ── */
-    .rpt-h1 { font-size: 17px; font-weight: 700; color: #1e293b; margin: 24px 0 10px; padding-bottom: 6px; border-bottom: 2px solid #e2e8f0; }
-    .rpt-h2 { font-size: 15px; font-weight: 600; color: #1e293b; margin: 20px 0 8px; padding-bottom: 5px; border-bottom: 1px solid #e2e8f0; }
-    .rpt-h3 { font-size: 13px; font-weight: 600; color: #4f46e5; margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 0.05em; }
-    .rpt-p  { color: #334155; margin: 6px 0; font-size: 13px; }
+    .rpt-h1 { font-size: 17px; font-weight: 600; color: #1a1815; margin: 26px 0 10px; padding-bottom: 8px; border-bottom: 1px solid #ece5da; letter-spacing: -0.01em; }
+    .rpt-h2 { font-size: 14.5px; font-weight: 600; color: #1a1815; margin: 20px 0 8px; padding-bottom: 6px; border-bottom: 1px solid #f0e9de; }
+    .rpt-h3 { font-size: 11px; font-weight: 600; color: #8a8378; margin: 16px 0 6px; text-transform: uppercase; letter-spacing: 0.06em; }
+    .rpt-p  { color: #5a544c; margin: 6px 0; font-size: 13px; }
     .rpt-spacer { height: 8px; }
-    .rpt-hr { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
-    strong { font-weight: 600; color: #1e293b; }
-    code { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; padding: 1px 5px; font-family: monospace; font-size: 12px; }
+    .rpt-hr { border: none; border-top: 1px solid #f0e9de; margin: 16px 0; }
+    strong { font-weight: 600; color: #1a1815; }
+    code { background: #f4efe7; border: 1px solid #ece5da; border-radius: 5px; padding: 1px 6px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #6b5cff; }
 
-    /* ── Table ── */
+    /* ── Table (hairline, sıcak nötr başlık) ── */
     .rpt-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 12px; }
-    .rpt-table th { background: #4f46e5; color: #fff; font-weight: 700; padding: 9px 14px; text-align: left; font-size: 12px; letter-spacing: 0.02em; }
-    .rpt-table th:first-child { border-radius: 6px 0 0 0; }
-    .rpt-table th:last-child  { border-radius: 0 6px 0 0; }
-    .rpt-table td { padding: 8px 14px; border-bottom: 1px solid #f1f5f9; color: #334155; }
-    .rpt-table tr:nth-child(even) td { background: #f8fafc; }
+    .rpt-table th { background: #f7f2ea; color: #5a544c; font-weight: 600; padding: 10px 14px; text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #e4dbcf; }
+    .rpt-table td { padding: 9px 14px; border-bottom: 1px solid #f0e9de; color: #5a544c; font-variant-numeric: tabular-nums; }
     .rpt-table tr:last-child td { border-bottom: none; }
 
     /* ── List ── */
     .rpt-list { padding-left: 20px; margin: 8px 0 10px; }
-    .rpt-list li { padding: 3px 0; color: #334155; }
-    .rpt-list li::marker { color: #4f46e5; }
+    .rpt-list li { padding: 3px 0; color: #5a544c; }
+    .rpt-list li::marker { color: #b3a89a; }
 
     /* ── Footer ── */
-    .pdf-footer { margin: 0 40px; padding: 16px 0; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; font-size: 11px; color: #94a3b8; }
+    .pdf-footer { margin: 0 48px; padding: 16px 0; border-top: 1px solid #ece5da; display: flex; justify-content: space-between; font-size: 10.5px; color: #b3a89a; }
 
     @media print {
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .pdf-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .rpt-table th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .pdf-brand-icon, .pdf-chip, .rpt-table th, code { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       @page { margin: 0; size: A4; }
     }
   </style>
@@ -1644,7 +1854,7 @@ function printReport() {
     <div class="pdf-header-top">
       <div class="pdf-brand">
         <div class="pdf-brand-icon">
-          <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
+          <svg viewBox="0 0 24 24" stroke-linejoin="round"><path d="M12 2l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>
         </div>
         <div>
           <div class="pdf-brand-name">AssetMan</div>
@@ -1653,12 +1863,13 @@ function printReport() {
       </div>
       <div class="pdf-meta">
         <div>Oluşturulma Tarihi</div>
-        <div><strong style="color:#fff">${now}</strong></div>
+        <div><strong>${now}</strong></div>
       </div>
     </div>
     <div class="pdf-title-block">
+      <div class="pdf-chip">Yapay Zeka Analizi</div>
       <div class="pdf-title">${title}</div>
-      <div class="pdf-subtitle">AssetMan AI tarafından oluşturulmuştur</div>
+      <div class="pdf-subtitle">AssetMan tarafından otomatik oluşturulmuştur</div>
     </div>
   </div>
 
@@ -1850,6 +2061,15 @@ document.addEventListener('DOMContentLoaded', () => {
   $(`#openAddModal`)?.addEventListener('click', () => qrOverlay?.classList.add('open'));
   $(`#closeQrModal`)?.addEventListener('click', () => qrOverlay?.classList.remove('open'));
   qrOverlay?.addEventListener('click', (e) => { if (e.target === qrOverlay) qrOverlay.classList.remove('open'); });
+
+  // Excel/CSV dışa aktarım
+  $(`#exportCsvBtn`)?.addEventListener('click', exportAssetsCSV);
+
+  // Cihaz detay modalı
+  const devOverlay = $(`#deviceModalOverlay`);
+  $(`#closeDeviceModal`)?.addEventListener('click', () => devOverlay?.classList.remove('open'));
+  devOverlay?.addEventListener('click', (e) => { if (e.target === devOverlay) devOverlay.classList.remove('open'); });
+  $(`#handoverPdfBtn`)?.addEventListener('click', () => printHandoverReceipt(_deviceModalAsset));
 
   $(`#generateQr`)?.addEventListener('click', () => {
     // Mobil kayıt URL'sini bu tarayıcının origin'inden kur (aynı ağdaki telefon erişebilsin)

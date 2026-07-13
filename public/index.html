@@ -13,9 +13,10 @@
   <aside class="sidebar">
     <div class="sidebar-logo">
       <div class="logo-icon">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-          <polyline points="9,22 9,12 15,12 15,22"/>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">
+          <path d="M12 2l9 5-9 5-9-5 9-5z"/>
+          <path d="M3 12l9 5 9-5"/>
+          <path d="M3 17l9 5 9-5"/>
         </svg>
       </div>
       <span class="logo-text">AssetMan</span>
@@ -197,6 +198,17 @@
           </div>
         </div>
 
+        <!-- Lokasyon Dağılımı -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Lokasyon Dağılımı</h3>
+            <span class="link-small" id="locationTotal"></span>
+          </div>
+          <div class="chart-container">
+            <div class="bar-wrap" id="locationBars"></div>
+          </div>
+        </div>
+
         <!-- Recent Assets -->
         <div class="card">
           <div class="card-header">
@@ -260,6 +272,10 @@
                 <option value="depoda">Depoda</option>
               </select>
             </div>
+            <button class="btn-pdf" id="exportCsvBtn" title="Görünen envanteri Excel/CSV olarak indir">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Excel / CSV
+            </button>
           </div>
           <div class="table-wrap">
             <table class="asset-table">
@@ -973,6 +989,27 @@
         <div class="modal-footer">
           <button class="btn-report" id="createBulk">Taslak Kayıtları Oluştur</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cihaz Detay & Geçmiş Modalı -->
+  <div class="modal-overlay" id="deviceModalOverlay">
+    <div class="modal" style="max-width:560px;">
+      <div class="modal-header">
+        <h3 id="deviceModalTitle">Cihaz Detayı</h3>
+        <button class="btn-icon" id="closeDeviceModal">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body" id="deviceModalBody">
+        <!-- app.js doldurur -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn-pdf" id="handoverPdfBtn" style="flex:1;justify-content:center;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Zimmet Tutanağı (PDF)
+        </button>
       </div>
     </div>
   </div>

@@ -67,6 +67,92 @@ test('auth: identityOf AD kimliği döndürür (UPN/IP/MFA)', async () => {
   assert.equal(id.actor_role, 'it');
 });
 
+// ── LDAP / Active Directory sağlayıcı (canlı AD olmadan sahte client ile) ──────
+// Sahte dizin: servis-bind + kullanıcı arama + kullanıcı-DN re-bind (parola) modellenir.
+function makeFakeLdap(dir) {
+  return {
+    createClient() {
+      return {
+        async bind(dn, pw) {
+          if (dn === dir.serviceDN) { if (pw !== dir.servicePw) throw new Error('svc-bind reddedildi'); return; }
+          const u = Object.values(dir.users).find(x => x.dn === dn);
+          if (!u || u.password !== pw) throw new Error('geçersiz kimlik bilgileri');
+        },
+        async search(base, opts) {
+          const m = /sAMAccountName=([^)]+)/i.exec(opts.filter);
+          const u = m && dir.users[m[1].toLowerCase()];
+          return { searchEntries: u ? [u.entry] : [] };
+        },
+        async unbind() {},
+      };
+    },
+  };
+}
+function dnFor(cn) { return `CN=${cn},OU=Groups,DC=kurumsal,DC=local`; }
+function ldapEnv(extra = {}) {
+  const saved = {};
+  const set = { AUTH_PROVIDER: 'ldap', LDAP_BIND_DN: 'CN=svc,DC=kurumsal,DC=local',
+    LDAP_BIND_PASSWORD: 'svcpw', LDAP_BASE_DN: 'DC=kurumsal,DC=local', ...extra };
+  for (const [k, v] of Object.entries(set)) { saved[k] = process.env[k]; process.env[k] = v; }
+  return () => { for (const k of Object.keys(set)) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; } };
+}
+
+test('ldap: başarılı bind → rol grup üyeliğinden + users tablosuna upsert', async () => {
+  await resetAll();
+  const dir = { serviceDN: 'CN=svc,DC=kurumsal,DC=local', servicePw: 'svcpw', users: {
+    'elif.aydin': { dn: 'CN=Elif Aydin,OU=BT,DC=kurumsal,DC=local', password: 'Parola123!', entry: {
+      dn: 'CN=Elif Aydin,OU=BT,DC=kurumsal,DC=local', sAMAccountName: 'elif.aydin',
+      displayName: 'Elif Aydın', userPrincipalName: 'elif.aydin@kurumsal.local',
+      memberOf: [dnFor('BT Destek')] } },
+  } };
+  const restore = ldapEnv();
+  try {
+    const u = await users.authenticateAsync('elif.aydin', 'Parola123!', makeFakeLdap(dir));
+    assert.ok(u, 'doğru parola ile giriş başarılı olmalı');
+    assert.equal(u.role, 'it', 'BT Destek grubu → it rolü');
+    assert.equal(u.display, 'Elif Aydın');
+    assert.equal(u.password, undefined, 'publicUser parola sızdırmamalı');
+    // Yerel tabloya upsert edildi mi — identityOf artık gerçek AD kimliğini bilmeli
+    const id = users.identityOf('elif.aydin');
+    assert.equal(id.actor_upn, 'elif.aydin@kurumsal.local');
+    assert.deepEqual(users.findUser('elif.aydin').groups, ['BT Destek']);
+  } finally { restore(); }
+});
+
+test('ldap: yanlış parola ve olmayan kullanıcı null döner', async () => {
+  await resetAll();
+  const dir = { serviceDN: 'CN=svc,DC=kurumsal,DC=local', servicePw: 'svcpw', users: {
+    'elif.aydin': { dn: 'CN=Elif,DC=kurumsal,DC=local', password: 'dogru', entry: {
+      dn: 'CN=Elif,DC=kurumsal,DC=local', sAMAccountName: 'elif.aydin', memberOf: [] } },
+  } };
+  const restore = ldapEnv();
+  try {
+    assert.equal(await users.authenticateAsync('elif.aydin', 'yanlis', makeFakeLdap(dir)), null, 'yanlış parola → null');
+    assert.equal(await users.authenticateAsync('yokboyle', 'x', makeFakeLdap(dir)), null, 'olmayan kullanıcı → null');
+  } finally { restore(); }
+});
+
+test('ldap: grup önceliği (admin>it) + MFA grubu üyeliği', async () => {
+  await resetAll();
+  const dir = { serviceDN: 'CN=svc,DC=kurumsal,DC=local', servicePw: 'svcpw', users: {
+    'yonetici': { dn: 'CN=Yonetici,DC=kurumsal,DC=local', password: 'pw', entry: {
+      dn: 'CN=Yonetici,DC=kurumsal,DC=local', sAMAccountName: 'yonetici', displayName: 'Yönetici',
+      memberOf: [dnFor('BT Destek'), dnFor('Domain Admins'), dnFor('MFA-Enforced')] } },
+    'mfasiz': { dn: 'CN=Mfasiz,DC=kurumsal,DC=local', password: 'pw', entry: {
+      dn: 'CN=Mfasiz,DC=kurumsal,DC=local', sAMAccountName: 'mfasiz', displayName: 'Mfasız',
+      memberOf: [dnFor('BT Destek')] } },
+  } };
+  const restore = ldapEnv({ LDAP_MFA_GROUP: 'MFA-Enforced' });
+  try {
+    const a = await users.authenticateAsync('yonetici', 'pw', makeFakeLdap(dir));
+    assert.equal(a.role, 'admin', 'Domain Admins (admin) BT Destek (it) önüne geçmeli');
+    assert.equal(users.findUser('yonetici').mfa_enabled, true, 'MFA grubunda → mfa_enabled true');
+    const b = await users.authenticateAsync('mfasiz', 'pw', makeFakeLdap(dir));
+    assert.equal(b.role, 'it');
+    assert.equal(users.findUser('mfasiz').mfa_enabled, false, 'MFA grubunda değil → mfa_enabled false');
+  } finally { restore(); }
+});
+
 // ── HMAC hash zinciri + tamper ─────────────────────────────────────────────────
 test('zincir: recordEvent ekler, verifyChain geçerli', async () => {
   await resetAll();

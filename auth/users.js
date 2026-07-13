@@ -126,6 +126,50 @@ function authenticate(username, password) {
   if (!verifyPassword(password, u.password)) return null;
   return publicUser(u);
 }
+
+// Sağlayıcı seçimi: 'local' (scrypt, varsayılan) | 'ldap' (gerçek AD bind).
+const AUTH_PROVIDER = () => (process.env.AUTH_PROVIDER || 'local').toLowerCase();
+
+// Async kimlik doğrulama — server.js /api/login buradan çağırır.
+// ldap: gerçek dizin bind'i yapar, profili yerel tabloya upsert eder (cache tazelenir),
+// böylece identityOf/approvers/audit imzası gerçek AD kimliğiyle çalışır.
+// local: mevcut senkron scrypt yolunu kullanır.
+async function authenticateAsync(username, password, deps = {}) {
+  if (AUTH_PROVIDER() !== 'ldap') return authenticate(username, password);
+  const ldap = deps.ldap || require('./ldap');
+  const profile = await ldap.authenticate(username, password, deps);
+  if (!profile) return null;
+  await upsertFromDirectory(profile);
+  return publicUser(findUser(profile.username));
+}
+
+// Dizinden gelen profili users tablosuna insert/update et, cache'i tazele.
+// Parola kolonu: dizin-yönetimli hesaplar için doğrulanamaz rastgele scrypt hash
+// (yerel provider'a dönülse bile bu hesaba bilinen parolayla girilemez).
+async function upsertFromDirectory(profile) {
+  const k = db();
+  const existing = findUser(profile.username);
+  const row = {
+    username: profile.username,
+    role: profile.role,
+    display: profile.display || profile.username,
+    upn: profile.upn || null,
+    groups: JSON.stringify(profile.groups || []),
+    mfa_enabled: profile.mfa_enabled !== false,
+  };
+  if (existing) {
+    await k('users').where({ username: profile.username }).update(row);
+  } else {
+    await k('users').insert({
+      ...row,
+      password: hashPassword(crypto.randomBytes(32).toString('base64')),
+      ip: profile.ip || null,
+      mac: profile.mac || null,
+      created_at: new Date().toISOString(),
+    });
+  }
+  await init(); // cache'i yeniden yükle (senkron API tazelensin)
+}
 function publicUser(u) {
   if (!u) return null;
   const { password, ...rest } = u;
@@ -149,4 +193,4 @@ function identityOf(usernameOrDisplay, overrides = {}) {
 function listApprovers() { _ensure(); return _cache.filter(u => u.role === 'approver' || u.role === 'admin').map(u => u.display); }
 function hasRole(user, ...roles) { return user && roles.includes(user.role); }
 
-module.exports = { ROLES, AD_DOMAIN, init, _invalidate, authenticate, findUser, publicUser, identityOf, listApprovers, hasRole, all };
+module.exports = { ROLES, AD_DOMAIN, AUTH_PROVIDER, init, _invalidate, authenticate, authenticateAsync, upsertFromDirectory, findUser, publicUser, identityOf, listApprovers, hasRole, all };

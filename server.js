@@ -13,6 +13,21 @@ async function initDataLayer() {
   await usersModule.init();
   if (osAgentModule.init) await osAgentModule.init();
   await lifecycleModule.init();
+  // Demo/dev ortamda lifecycle log boşsa data/lifecycle-log.json'ı yeni CHAIN_SECRET ile yeniden zincirleyerek yükle.
+  // Prod'da SEED_DEMO=true açık verilmedikçe atlanır (müşteri envanterine sahte olay eklemez).
+  const seedAllowed = process.env.SEED_DEMO === 'true' || process.env.NODE_ENV !== 'production';
+  if (seedAllowed && lifecycleModule.seedFromJson) {
+    try {
+      const fs = require('fs');
+      const seedPath = require('path').join(__dirname, 'data', 'lifecycle-log.json');
+      if (fs.existsSync(seedPath)) {
+        const raw = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
+        const events = Array.isArray(raw) ? raw : (raw.events || []);
+        const r = await lifecycleModule.seedFromJson(events);
+        if (!r.skipped) console.log('[seed] Yaşam döngüsü demo verisi yüklendi:', r.count, 'olay');
+      }
+    } catch (e) { console.error('[seed] lifecycle seed başarısız:', e.message); }
+  }
   console.log('[db] Katman hazır — driver:', dbLayer.driver(), '| kullanıcı:', usersModule.all().length);
 }
 
@@ -83,7 +98,7 @@ const sessions = {};
 // ─── Kimlik Doğrulama (çok-kullanıcılı + rol, imzalı httpOnly cookie) ─────────
 // Token = base64url(payload).hmac(payload). payload = {u:username, r:role, exp}.
 // Parolalar auth/users.js'te scrypt ile hash'li. Dış bağımlılık yok (Node crypto).
-const { authenticate, findUser, publicUser, hasRole } = require('./auth/users');
+const { authenticate, authenticateAsync, findUser, publicUser, hasRole } = require('./auth/users');
 
 const SESSION_MS  = 8 * 60 * 60 * 1000; // 8 saat
 const COOKIE_NAME = 'am_session';
@@ -141,15 +156,20 @@ function requireRole(...roles) {
 }
 
 // Login/Logout endpoint'leri (public)
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
   const { username, password } = req.body || {};
-  const user = authenticate(username, password);
-  if (user) {
-    res.setHeader('Set-Cookie',
-      `${COOKIE_NAME}=${makeToken(user)}; HttpOnly; Path=/; Max-Age=${SESSION_MS / 1000}; SameSite=Lax`);
-    return res.json({ success: true, user: { username: user.username, display: user.display, role: user.role } });
+  try {
+    const user = await authenticateAsync(username, password);
+    if (user) {
+      res.setHeader('Set-Cookie',
+        `${COOKIE_NAME}=${makeToken(user)}; HttpOnly; Path=/; Max-Age=${SESSION_MS / 1000}; SameSite=Lax`);
+      return res.json({ success: true, user: { username: user.username, display: user.display, role: user.role } });
+    }
+    return res.status(401).json({ error: 'Kullanıcı adı veya parola hatalı' });
+  } catch (err) {
+    console.error('[POST /api/login]', err.message);
+    return res.status(503).json({ error: 'Kimlik doğrulama servisine ulaşılamadı' });
   }
-  return res.status(401).json({ error: 'Kullanıcı adı veya parola hatalı' });
 });
 
 app.post('/api/logout', (req, res) => {

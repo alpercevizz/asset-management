@@ -4,6 +4,11 @@ node_modules/
 *.log
 npm-debug.log*
 
+# SQLite veritabanı — kullanıcı parola hash'leri + audit log içerir, ASLA commit edilmez
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
 # Hassas / runtime veri — ASLA commit edilmez
 data/users.json
 data/os-agents.json
