@@ -16,6 +16,7 @@ data/secrets.json
 data/lifecycle-log.json
 data/notify-state.json
 data/discovery-state.json
+data/fx-cache.json
 data/worm-repository/
 cookies.txt
 *.tmp.json

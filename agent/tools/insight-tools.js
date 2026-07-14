@@ -131,7 +131,7 @@ async function computeRenewalForecast(orgId) {
   });
 
   // DİNAMİK FinOps: anlık parite + distribütör USD fiyatları (kur değişince bütçe oto-güncellenir)
-  const fx = getFxRates();
+  const fx = await getFxRates();
 
   const now = new Date();
   const horizon = new Date(now.getTime() + HORIZON_MONTHS * 30 * 24 * 3600 * 1000);

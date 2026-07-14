@@ -78,6 +78,24 @@
   }
 }
 
+/* Kullanıcı Ayarlar'dan "Koyu" seçerse sistem tercihinden BAĞIMSIZ zorla */
+:root[data-theme="dark"] {
+  --bg: #1a1613; --bg-card: #221e1a; --bg-card2: #2a2521; --bg-hover: #302a25;
+  --border: rgba(255,248,238,0.06); --border-strong: rgba(255,248,238,0.11);
+  --text: #f2ede4; --text-dim: #b3ab9f; --text-muted: #7a7469;
+  --accent: #a99bff; --accent-light: #c0b6ff; --accent-glow: rgba(169,155,255,0.14);
+  --green: #4ade80; --green-bg: rgba(74,222,128,0.13);
+  --yellow: #fbbf24; --yellow-bg: rgba(251,191,36,0.13);
+  --red: #f87171; --red-bg: rgba(248,113,113,0.13);
+  --blue: #7ba9ff; --blue-bg: rgba(123,169,255,0.13);
+  --purple: #c497ff; --purple-bg: rgba(196,151,255,0.13);
+  --orange: #fb923c; --orange-bg: rgba(251,146,60,0.13);
+  --teal: #5eead4; --teal-bg: rgba(94,234,212,0.13);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+  --shadow: 0 4px 12px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,0.4), 0 2px 6px rgba(0,0,0,0.3);
+}
+
 html, body {
   height: 100%;
   font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif;

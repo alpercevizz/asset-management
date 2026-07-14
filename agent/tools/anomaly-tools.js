@@ -2,15 +2,21 @@ const fs = require('fs');
 const path = require('path');
 const { getAllAssets } = require('./baserow-tools');
 const { getAllLicenses } = require('./license-tools');
+const settings = require('./settings-tools');
 
-// ── Eşik değerleri (kurum politikasına göre ayarlanabilir) ───────────────────
-const THRESHOLDS = {
-  LOW_RAM_GB:        8,    // 8 GB altı = yetersiz
-  LOW_DISK_GB:       256,  // 256 GB altı = yetersiz
-  OLD_UPTIME_DAYS:   30,   // 30 günden fazla kesintisiz açık = yeniden başlatma önerilir
-  OFFLINE_HOURS:     24,   // 24 saatten fazla görünmeyen = çevrimdışı
-  STALE_DAYS:        7,    // 7 günden fazla görünmeyen = kayıp/terk edilmiş şüphesi
-};
+// ── Eşik değerleri — Ayarlar deposundan okunur (UI'dan değişebilir), kod'da varsayılan ─
+// settings-tools init edilmese bile DEFAULTS döner → güvenli. Küçük harf store anahtarları
+// büyük harf iç isimlere eşlenir (geriye dönük uyumluluk).
+function THRESHOLDS() {
+  const t = settings.getThresholds();
+  return {
+    LOW_RAM_GB:      t.low_ram_gb,
+    LOW_DISK_GB:     t.low_disk_gb,
+    OLD_UPTIME_DAYS: t.old_uptime_days,
+    OFFLINE_HOURS:   t.offline_hours,
+    STALE_DAYS:      t.stale_days,
+  };
+}
 
 function hoursSince(dateStr) {
   if (!dateStr) return null;
@@ -23,6 +29,7 @@ function hoursSince(dateStr) {
 async function detectAnomalies(orgId) {
   const data = await getAllAssets({ orgId, size: 200 });
   const assets = data.results || [];
+  const TH = THRESHOLDS();
 
   const lowRam = [];
   const lowDisk = [];
@@ -40,13 +47,13 @@ async function detectAnomalies(orgId) {
       username: a.username || '—',
     };
 
-    if (ram > 0 && ram < THRESHOLDS.LOW_RAM_GB)
+    if (ram > 0 && ram < TH.LOW_RAM_GB)
       lowRam.push({ ...base, ram_gb: ram });
 
-    if (disk > 0 && disk < THRESHOLDS.LOW_DISK_GB)
+    if (disk > 0 && disk < TH.LOW_DISK_GB)
       lowDisk.push({ ...base, storage_gb: disk });
 
-    if (up >= THRESHOLDS.OLD_UPTIME_DAYS)
+    if (up >= TH.OLD_UPTIME_DAYS)
       longUptime.push({ ...base, uptime_days: up });
   }
 
@@ -56,7 +63,7 @@ async function detectAnomalies(orgId) {
 
   return {
     total_assets: data.count || assets.length,
-    thresholds: THRESHOLDS,
+    thresholds: TH,
     low_ram:     { count: lowRam.length,     items: lowRam },
     low_disk:    { count: lowDisk.length,    items: lowDisk },
     long_uptime: { count: longUptime.length, items: longUptime },
@@ -68,6 +75,7 @@ async function detectAnomalies(orgId) {
 async function detectOfflineDevices(orgId) {
   const data = await getAllAssets({ orgId, size: 200 });
   const assets = data.results || [];
+  const TH = THRESHOLDS();
 
   const offline = [];   // status alanı açıkça offline olan cihazlar
   const stale = [];     // STALE_DAYS'ten uzun süredir görünmeyen (kayıp/terk şüphesi)
@@ -91,7 +99,7 @@ async function detectOfflineDevices(orgId) {
     // uygula — aksi halde günlük rapor eden cihazlar yanlışlıkla "çevrimdışı" sayılır.
     if (statusOffline) {
       offline.push(item);
-    } else if (hrs !== null && hrs >= THRESHOLDS.STALE_DAYS * 24) {
+    } else if (hrs !== null && hrs >= TH.STALE_DAYS * 24) {
       stale.push(item);
     }
   }
@@ -101,7 +109,7 @@ async function detectOfflineDevices(orgId) {
 
   return {
     total_assets: data.count || assets.length,
-    thresholds: { offline_hours: THRESHOLDS.OFFLINE_HOURS, stale_days: THRESHOLDS.STALE_DAYS },
+    thresholds: { offline_hours: TH.OFFLINE_HOURS, stale_days: TH.STALE_DAYS },
     offline: { count: offline.length, items: offline },
     stale:   { count: stale.length,   items: stale },
     total_alerts: offline.length + stale.length,

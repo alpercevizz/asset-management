@@ -13,6 +13,7 @@ async function initDataLayer() {
   await usersModule.init();
   if (osAgentModule.init) await osAgentModule.init();
   await lifecycleModule.init();
+  await require('./agent/tools/settings-tools').init();
   // Demo/dev ortamda lifecycle log boşsa data/lifecycle-log.json'ı yeni CHAIN_SECRET ile yeniden zincirleyerek yükle.
   // Prod'da SEED_DEMO=true açık verilmedikçe atlanır (müşteri envanterine sahte olay eklemez).
   const seedAllowed = process.env.SEED_DEMO === 'true' || process.env.NODE_ENV !== 'production';
@@ -28,6 +29,11 @@ async function initDataLayer() {
       }
     } catch (e) { console.error('[seed] lifecycle seed başarısız:', e.message); }
   }
+  // Turkcell hat demo seed (tablo boşsa gerçek telefonlara örnek hat bağlar)
+  try {
+    const r = await require('./agent/tools/line-tools').seedDemoIfEmpty();
+    if (!r.skipped) console.log('[seed] Turkcell hat demo verisi yüklendi:', r.count, 'hat');
+  } catch (e) { console.error('[seed] hat seed başarısız:', e.message); }
   console.log('[db] Katman hazır — driver:', dbLayer.driver(), '| kullanıcı:', usersModule.all().length);
 }
 
@@ -42,6 +48,7 @@ const { sendDigest, buildAlertDigest, startNotifyScheduler } = require('./agent/
 const { getLog, getDeviceLog, verifyChain, detectLifecycleConflicts, LIFECYCLE_STATES, ALERT_ON_RECORD, REQUIRES_APPROVAL, APPROVERS, submitChange, approveByToken, renewRequest, expirePendingRequests, auditBackupStatus, restoreAuditFromBackup } = require('./agent/tools/lifecycle-tools');
 const { scanNetwork, startDiscoveryScheduler } = require('./agent/tools/network-discovery');
 const { computeRiskScores, computeRenewalForecast } = require('./agent/tools/insight-tools');
+const lineTools = require('./agent/tools/line-tools');
 const QRCode = require('qrcode');
 const { chat } = require('./agent/claude-agent');
 
@@ -616,6 +623,118 @@ app.get('/api/forecast', async (req, res) => {
   } catch (err) {
     console.error('[GET /api/forecast]', err.message);
     res.status(500).json({ error: 'Öngörü hesaplama hatası', detail: err.message });
+  }
+});
+
+// ─── Turkcell Hat / SIM Envanteri ────────────────────────────────────────────
+// Hat = ayrı varlık (telefon değiştirebilir). "Hangi hat hangi telefonda" + geçmiş.
+app.get('/api/lines', async (req, res) => {
+  try {
+    const [lines, summary] = await Promise.all([lineTools.listLines(), lineTools.summary()]);
+    res.json({ summary, lines });
+  } catch (err) {
+    console.error('[GET /api/lines]', err.message);
+    res.status(500).json({ error: 'Hatlar alınamadı', detail: err.message });
+  }
+});
+
+app.get('/api/lines/:id/history', async (req, res) => {
+  try {
+    res.json({ history: await lineTools.getLineHistory(Number(req.params.id)) });
+  } catch (err) {
+    res.status(500).json({ error: 'Hat geçmişi alınamadı', detail: err.message });
+  }
+});
+
+app.get('/api/lines/for-asset/:assetId', async (req, res) => {
+  try {
+    res.json({ line: await lineTools.getLineForAsset(Number(req.params.assetId)) });
+  } catch (err) {
+    res.status(500).json({ error: 'Hat sorgulanamadı', detail: err.message });
+  }
+});
+
+app.post('/api/lines', requireRole('it', 'admin'), async (req, res) => {
+  try {
+    const actor = currentUser(req)?.username || 'system';
+    const r = await lineTools.upsertLine({ ...(req.body || {}), actor });
+    res.json({ success: true, ...r });
+  } catch (err) {
+    console.error('[POST /api/lines]', err.message);
+    res.status(400).json({ error: 'Hat kaydedilemedi', detail: err.message });
+  }
+});
+
+app.post('/api/lines/import', requireRole('it', 'admin'), async (req, res) => {
+  try {
+    const actor = currentUser(req)?.username || 'system';
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    if (!rows.length) return res.status(400).json({ error: 'İçe aktarılacak satır yok' });
+    res.json({ success: true, ...(await lineTools.importLines(rows, actor)) });
+  } catch (err) {
+    console.error('[POST /api/lines/import]', err.message);
+    res.status(400).json({ error: 'İçe aktarma hatası', detail: err.message });
+  }
+});
+
+app.post('/api/lines/:id/assign', requireRole('it', 'admin'), async (req, res) => {
+  try {
+    const actor = currentUser(req)?.username || 'system';
+    const line = await lineTools.assignLine(Number(req.params.id), { ...(req.body || {}), actor });
+    res.json({ success: true, line });
+  } catch (err) {
+    console.error('[POST /api/lines/:id/assign]', err.message);
+    res.status(400).json({ error: 'Hat atanamadı', detail: err.message });
+  }
+});
+
+app.post('/api/lines/:id/release', requireRole('it', 'admin'), async (req, res) => {
+  try {
+    const actor = currentUser(req)?.username || 'system';
+    const line = await lineTools.releaseLine(Number(req.params.id), { ...(req.body || {}), actor });
+    res.json({ success: true, line });
+  } catch (err) {
+    console.error('[POST /api/lines/:id/release]', err.message);
+    res.status(400).json({ error: 'Hat iade edilemedi', detail: err.message });
+  }
+});
+
+// ─── Ayarlar (runtime config store — admin) ──────────────────────────────────
+const settingsTools = require('./agent/tools/settings-tools');
+
+// Salt-okunur sistem durumu (sırlar GÖSTERİLMEZ — yalnız yapılandırıldı/yapılmadı).
+function systemStatus() {
+  const has = (v) => !!(v && String(v).trim());
+  return {
+    version: require('./package.json').version,
+    node_env: process.env.NODE_ENV || 'development',
+    database: { driver: dbLayer.driver() },
+    auth_provider: (process.env.AUTH_PROVIDER || 'local'),
+    ai: { provider: process.env.AI_PROVIDER || 'ollama' }, // model MÜŞTERİYE gösterilmez → sadece provider
+    fx_provider: (process.env.FX_PROVIDER || 'live'),
+    integrations: {
+      baserow: has(process.env.BASEROW_API_TOKEN),
+      anthropic_key: has(process.env.ANTHROPIC_API_KEY),
+      n8n_notify: has(process.env.N8N_NOTIFY_WEBHOOK_URL),
+      ldap: has(process.env.LDAP_URL) && (process.env.AUTH_PROVIDER === 'ldap'),
+    },
+    approval_ttl_hours: Math.round((Number(process.env.APPROVAL_TTL_MS) || 86400000) / 3600000),
+    backup: (() => { try { return auditBackupStatus(); } catch { return null; } })(),
+  };
+}
+
+app.get('/api/settings', requireRole('admin'), (req, res) => {
+  res.json({ settings: settingsTools.getAll(), defaults: settingsTools.DEFAULTS, system: systemStatus() });
+});
+
+app.put('/api/settings/:section', requireRole('admin'), async (req, res) => {
+  try {
+    const actor = currentUser(req)?.username || 'admin';
+    const merged = await settingsTools.setSection(req.params.section, req.body || {}, actor);
+    res.json({ success: true, section: req.params.section, values: merged });
+  } catch (err) {
+    console.error('[PUT /api/settings]', err.message);
+    res.status(400).json({ error: 'Ayar kaydedilemedi', detail: err.message });
   }
 });
 

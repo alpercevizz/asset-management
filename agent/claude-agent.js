@@ -203,7 +203,7 @@ async function executeTool(toolName, toolInput, orgId) {
     case 'get_renewal_forecast':
       return await computeRenewalForecast(orgId);
     case 'get_fx_rates':
-      return getFxRates();
+      return await getFxRates();
     default:
       throw new Error(`Bilinmeyen araç: ${toolName}`);
   }

@@ -20,6 +20,7 @@ process.env.USER_PW_ZEYNEP_KORKMAZ   = 'Zeynep.2024!';
 process.env.USER_PW_MURAT_DEMIR      = 'Murat.2024!';
 process.env.SUPPRESS_PASSWORD_LOG    = '1';
 process.env.DISABLE_LOGIN_RATE_LIMIT = 'true';
+process.env.FX_PROVIDER              = 'static'; // testte dış döviz API'sine çıkma
 
 const { test } = require('node:test');
 const assert = require('node:assert');
@@ -309,16 +310,81 @@ test('setup: env boşsa güçlü sırlar üretir, tekrar okur (kalıcılık)', (
 });
 
 // ── FinOps döviz dönüşümü ──────────────────────────────────────────────────────
-test('finops: kur döner, USD→TRY dönüşümü kurla ölçeklenir', () => {
-  const fx = finops.getFxRates();
+test('finops: kur döner, USD→TRY dönüşümü kurla ölçeklenir', async () => {
+  const fx = await finops.getFxRates();
   assert.ok(fx.USD_TRY > 0 && fx.EUR_TRY > 0);
-  assert.match(fx.source, /API/);
+  assert.ok(typeof fx.source === 'string' && fx.source.length > 0);
   const pc = finops.costFor('Bilgisayar', fx);
   assert.ok(pc.usd > 0);
   assert.ok(Math.abs(pc.try - pc.usd * fx.USD_TRY) < 1);
   const hi = finops.costFor('Bilgisayar', { USD_TRY: 50, EUR_TRY: 54 });
   const lo = finops.costFor('Bilgisayar', { USD_TRY: 30, EUR_TRY: 33 });
   assert.ok(hi.try > lo.try);
+});
+
+// ── Turkcell Hat / SIM ──────────────────────────────────────────────────────────
+const lineTools = require('../agent/tools/line-tools');
+test('hat: oluştur→ata→başka telefona taşı→geçmiz + MSISDN normalize', async () => {
+  await resetAll();
+  const k = dbLayer.db();
+  await k('line_assignments').del();
+  await k('phone_lines').del();
+
+  // MSISDN normalize: 05xx → +905xx
+  assert.equal(lineTools.normMsisdn('05321234567'), '+905321234567');
+  assert.equal(lineTools.normMsisdn('5321234567'), '+905321234567');
+  assert.equal(lineTools.normIccid('8990-0111 2223'), '899001112223');
+
+  const { line, action } = await lineTools.upsertLine({ iccid: '8990011199988877766', msisdn: '05321234567', tariff: 'Kurumsal' });
+  assert.equal(action, 'created');
+  assert.equal(line.msisdn, '+905321234567');
+  assert.equal(line.assigned_asset_id, null);
+
+  await lineTools.assignLine(line.id, { asset_id: 10, hostname: 'IPHONE-ALPER' });
+  let cur = await lineTools.getLine(line.id);
+  assert.equal(cur.assigned_asset_id, 10);
+
+  // Başka telefona taşı
+  await lineTools.assignLine(line.id, { asset_id: 11, hostname: 'SAMSUNG-YENI' });
+  cur = await lineTools.getLine(line.id);
+  assert.equal(cur.assigned_hostname, 'SAMSUNG-YENI');
+
+  // Geçmiş: olusturuldu + 2 atama = 3 kayıt
+  const hist = await lineTools.getLineHistory(line.id);
+  assert.equal(hist.length, 3);
+  assert.equal(hist[0].action, 'atandi'); // en yeni (desc)
+
+  // İade
+  await lineTools.releaseLine(line.id);
+  cur = await lineTools.getLine(line.id);
+  assert.equal(cur.assigned_asset_id, null);
+
+  // Aynı ICCID upsert → updated (yeni kayıt değil)
+  const again = await lineTools.upsertLine({ iccid: '8990011199988877766', msisdn: '05329998877' });
+  assert.equal(again.action, 'updated');
+  const all = await lineTools.listLines();
+  assert.equal(all.length, 1);
+});
+
+// ── Settings runtime config store ────────────────────────────────────────────
+const settingsTools = require('../agent/tools/settings-tools');
+test('settings: init olmadan DEFAULTS; setSection kalıcı + tip doğrulama', async () => {
+  await resetAll();
+  await dbLayer.db()('settings').del().catch(() => {});
+  // init edilmese bile güvenli defaults döner
+  assert.equal(settingsTools.getThresholds().low_ram_gb, 8);
+  await settingsTools.init();
+  const merged = await settingsTools.setSection('thresholds', { low_ram_gb: 16, low_disk_gb: '512' }, 'admin');
+  assert.equal(merged.low_ram_gb, 16);
+  assert.equal(merged.low_disk_gb, 512); // string → number
+  assert.equal(settingsTools.getThresholds().low_ram_gb, 16); // cache güncellendi
+  // negatif reddedilir
+  await assert.rejects(() => settingsTools.setSection('thresholds', { low_ram_gb: -5 }, 'admin'));
+  // bilinmeyen bölüm reddedilir
+  await assert.rejects(() => settingsTools.setSection('yokboyle', {}, 'admin'));
+  // yeniden init sonrası DB'den okunur (kalıcılık)
+  await settingsTools.init();
+  assert.equal(settingsTools.getThresholds().low_ram_gb, 16);
 });
 
 // ── DB driver seçim ────────────────────────────────────────────────────────────

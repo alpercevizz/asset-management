@@ -337,8 +337,11 @@ async function loadCurrentUser() {
     const av = $(`#userAvatar`);
     if (av && data.user) {
       av.textContent = userInitials(data.user);
-      av.title = data.user;
+      av.title = `${data.user} · ${data.role || ''}`;
     }
+    state.role = data.role;
+    // Ayarlar nav'ı yalnız admin'e görünür
+    if (data.role === 'admin') { const n = $(`#navSettings`); if (n) n.style.display = ''; }
   } catch (_) { /* sessizce geç */ }
 }
 
@@ -355,6 +358,8 @@ function showView(name) {
   state.currentView = name;
   if (name === 'assets')   renderAssetsTable();
   if (name === 'licenses') loadLicenses();
+  if (name === 'lines')    loadLines();
+  if (name === 'settings') loadSettings();
   if (name === 'alerts')   loadAlerts();
   if (name === 'lifecycle') loadLifecycle();
   if (name === 'insights') loadInsights();
@@ -591,6 +596,240 @@ function exportAssetsCSV() {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/* ─── Turkcell Hat / SIM Yönetimi ───────────────────────────────────────────── */
+let _lines = [];
+const LINE_STATUS_CLS = { aktif: 'badge--online', pasif: 'badge--unknown', iptal: 'badge--offline' };
+
+async function loadLines() {
+  const tbody = $(`#linesBody`);
+  if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="loading-cell">Yükleniyor...</td></tr>`;
+  try {
+    const res = await fetch('/api/lines');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    _lines = data.lines || [];
+    const s = data.summary || {};
+    const setC = (id, v) => { const el = $(`#${id}`); if (el) animateCount(el, v); };
+    setC('lineTotal', s.total || 0); setC('lineAssigned', s.assigned || 0); setC('lineUnassigned', s.unassigned || 0);
+    const cnt = $(`#lineCount`); if (cnt) cnt.textContent = `${s.total || 0} hat · ${s.assigned || 0} telefona bağlı`;
+    renderLinesTable();
+  } catch (err) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="loading-cell" style="color:var(--red)">${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+function renderLinesTable() {
+  const tbody = $(`#linesBody`);
+  if (!tbody) return;
+  if (!_lines.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="loading-cell">Kayıtlı hat yok. "Hat Ekle" veya "CSV İçe Aktar" ile başlayın.</td></tr>`;
+    return;
+  }
+  const stCls = (st) => LINE_STATUS_CLS[st] || 'badge--unknown';
+  tbody.innerHTML = _lines.map((l) => `
+    <tr>
+      <td class="hostname-cell">${fmt(l.msisdn)}</td>
+      <td class="serial-cell">${fmt(l.iccid)}</td>
+      <td>${fmt(l.operator)}</td>
+      <td>${fmt(l.tariff)}</td>
+      <td><span class="badge ${stCls(l.status)}">${fmt(l.status)}</span></td>
+      <td>${l.assigned_hostname ? `<span class="hostname-cell">${escapeHtml(l.assigned_hostname)}</span>` : '<span style="color:var(--text-muted)">boşta</span>'}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn-icon line-assign" data-id="${l.id}" title="Telefona ata" style="display:inline-flex">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18"/></svg>
+        </button>
+        ${l.assigned_asset_id ? `<button class="btn-icon line-release" data-id="${l.id}" title="Telefondan çıkar" style="display:inline-flex;margin-left:4px">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg>
+        </button>` : ''}
+        <button class="btn-icon line-history" data-id="${l.id}" title="Geçmiş" style="display:inline-flex;margin-left:4px">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </button>
+      </td>
+    </tr>`).join('');
+
+  tbody.querySelectorAll('.line-assign').forEach(b => b.addEventListener('click', () => assignLinePrompt(Number(b.dataset.id))));
+  tbody.querySelectorAll('.line-release').forEach(b => b.addEventListener('click', () => releaseLineAction(Number(b.dataset.id))));
+  tbody.querySelectorAll('.line-history').forEach(b => b.addEventListener('click', () => showLineHistory(Number(b.dataset.id))));
+}
+
+function openLineModal() {
+  ['lineMsisdn', 'lineIccid', 'lineTariff'].forEach(id => { const el = $(`#${id}`); if (el) el.value = ''; });
+  const op = $(`#lineOperator`); if (op) op.value = 'Turkcell';
+  $(`#lineModalOverlay`)?.classList.add('open');
+}
+
+async function saveLine() {
+  const body = {
+    msisdn: $(`#lineMsisdn`)?.value.trim(),
+    iccid: $(`#lineIccid`)?.value.trim(),
+    operator: $(`#lineOperator`)?.value.trim() || 'Turkcell',
+    tariff: $(`#lineTariff`)?.value.trim(),
+    status: $(`#lineStatus`)?.value || 'aktif',
+  };
+  if (!body.msisdn || !body.iccid) { alert('Telefon no ve SIM no zorunludur.'); return; }
+  try {
+    const res = await fetch('/api/lines', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.detail || j.error || 'Hata');
+    $(`#lineModalOverlay`)?.classList.remove('open');
+    loadLines();
+  } catch (err) { alert('Hat kaydedilemedi: ' + err.message); }
+}
+
+async function assignLinePrompt(lineId) {
+  // Telefon kategorisindeki cihazlardan seç (state.assets veya taze çek)
+  let phones = (state.assets || []).filter(a => a.category === 'Telefon');
+  if (!phones.length) { try { const d = await fetchAssets({ size: 200 }); phones = (d.results || []).filter(a => a.category === 'Telefon'); } catch {} }
+  const opts = phones.map((p, i) => `${i + 1}) ${p.hostname} (${p.username || 'zimmetsiz'})`).join('\n');
+  const pick = prompt(`Hangi telefona atansın? Numara girin:\n\n${opts}`);
+  if (!pick) return;
+  const idx = parseInt(pick, 10) - 1;
+  const phone = phones[idx];
+  if (!phone) { alert('Geçersiz seçim.'); return; }
+  try {
+    const res = await fetch(`/api/lines/${lineId}/assign`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ asset_id: phone.id, hostname: phone.hostname }) });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.detail || j.error);
+    loadLines();
+  } catch (err) { alert('Atanamadı: ' + err.message); }
+}
+
+async function releaseLineAction(lineId) {
+  if (!confirm('Bu hat telefondan çıkarılsın (boşa alınsın) mı?')) return;
+  try {
+    const res = await fetch(`/api/lines/${lineId}/release`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.detail || j.error);
+    loadLines();
+  } catch (err) { alert('İade edilemedi: ' + err.message); }
+}
+
+async function showLineHistory(lineId) {
+  try {
+    const res = await fetch(`/api/lines/${lineId}/history`);
+    const j = await res.json();
+    const h = j.history || [];
+    const line = _lines.find(l => l.id === lineId);
+    const ACT = { olusturuldu: 'Envantere eklendi', atandi: 'Telefona atandı', iade: 'Telefondan çıkarıldı' };
+    const body = h.length
+      ? h.map(e => `<div style="display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+          <div style="width:8px;height:8px;border-radius:50%;background:var(--accent);margin-top:5px;flex-shrink:0"></div>
+          <div style="flex:1"><div style="color:var(--text);font-weight:500">${ACT[e.action] || e.action}${e.hostname ? ` — ${escapeHtml(e.hostname)}` : ''}</div>
+          <div style="color:var(--text-muted);font-size:11px;margin-top:1px">${fmtDate(e.at)} · ${escapeHtml(e.actor || '—')}${e.note ? ` · ${escapeHtml(e.note)}` : ''}</div></div>
+        </div>`).join('')
+      : '<p style="padding:4px 0;color:var(--text-muted)">Geçmiş kaydı yok.</p>';
+  // Cihaz modalını yeniden kullan (başlık + body)
+  $(`#deviceModalTitle`).textContent = `${line ? line.msisdn : 'Hat'} — Geçmiş`;
+  $(`#deviceModalBody`).innerHTML = `<div style="font-size:12.5px">${body}</div>`;
+  $(`#handoverPdfBtn`).style.display = 'none';
+  _deviceModalAsset = null;
+  $(`#deviceModalOverlay`)?.classList.add('open');
+  } catch (err) { alert('Geçmiş alınamadı: ' + err.message); }
+}
+
+// CSV import: başlık satırı iccid,msisdn,operator,tariff,status bekler (esnek eşleme)
+function importLinesCsv(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) { alert('CSV boş veya sadece başlık var.'); return; }
+  const delim = lines[0].includes(';') ? ';' : ',';
+  const headers = lines[0].split(delim).map(h => h.trim().toLowerCase().replace(/^﻿/, ''));
+  const idx = (names) => headers.findIndex(h => names.includes(h));
+  const iIccid = idx(['iccid', 'sim', 'sim no', 'sim_no']);
+  const iMsisdn = idx(['msisdn', 'numara', 'telefon', 'telefon no', 'phone']);
+  const iOp = idx(['operator', 'operatör']);
+  const iTariff = idx(['tariff', 'tarife', 'paket']);
+  const iStatus = idx(['status', 'durum']);
+  if (iIccid < 0 || iMsisdn < 0) { alert('CSV başlığında iccid ve msisdn sütunları bulunmalı.'); return; }
+  const rows = lines.slice(1).map(line => {
+    const c = line.split(delim);
+    return {
+      iccid: (c[iIccid] || '').trim(), msisdn: (c[iMsisdn] || '').trim(),
+      operator: iOp >= 0 ? (c[iOp] || '').trim() || 'Turkcell' : 'Turkcell',
+      tariff: iTariff >= 0 ? (c[iTariff] || '').trim() : '',
+      status: iStatus >= 0 ? (c[iStatus] || '').trim() || 'aktif' : 'aktif',
+    };
+  }).filter(r => r.iccid && r.msisdn);
+  if (!rows.length) { alert('Geçerli satır bulunamadı.'); return; }
+  fetch('/api/lines/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows }) })
+    .then(r => r.json())
+    .then(j => {
+      if (j.error) throw new Error(j.detail || j.error);
+      alert(`İçe aktarma tamam: ${j.created} yeni, ${j.updated} güncellendi${j.errors?.length ? `, ${j.errors.length} hata` : ''}.`);
+      loadLines();
+    })
+    .catch(err => alert('İçe aktarma hatası: ' + err.message));
+}
+
+/* ─── Ayarlar (admin) ───────────────────────────────────────────────────────── */
+async function loadSettings() {
+  try {
+    const res = await fetch('/api/settings');
+    if (res.status === 403) { $(`#systemStatusBody`).innerHTML = `<tr><td colspan="2" class="loading-cell">Bu sayfa yalnız yöneticiler içindir.</td></tr>`; return; }
+    const data = await res.json();
+    const th = data.settings?.thresholds || {};
+    const setV = (id, v) => { const el = $(`#${id}`); if (el) el.value = v; };
+    setV('setLowRam', th.low_ram_gb); setV('setLowDisk', th.low_disk_gb);
+    setV('setUptime', th.old_uptime_days); setV('setOffline', th.offline_hours); setV('setStale', th.stale_days);
+    setV('setTheme', data.settings?.appearance?.theme || 'auto');
+    renderSystemStatus(data.system || {});
+  } catch (err) {
+    $(`#systemStatusBody`).innerHTML = `<tr><td colspan="2" class="loading-cell" style="color:var(--red)">${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+function renderSystemStatus(s) {
+  const tbody = $(`#systemStatusBody`);
+  if (!tbody) return;
+  const yn = (b) => b ? '<span class="badge badge--online">yapılandırıldı</span>' : '<span class="badge badge--unknown">yok</span>';
+  const rows = [
+    ['Sürüm', s.version || '—'],
+    ['Ortam', s.node_env || '—'],
+    ['Veritabanı', (s.database?.driver || '—')],
+    ['Kimlik sağlayıcı', s.auth_provider || '—'],
+    ['Döviz kaynağı', s.fx_provider || '—'],
+    ['Onay bekleme süresi', (s.approval_ttl_hours != null ? s.approval_ttl_hours + ' saat' : '—')],
+    ['Baserow bağlantısı', yn(s.integrations?.baserow)],
+    ['Anthropic anahtarı', yn(s.integrations?.anthropic_key)],
+    ['n8n bildirim', yn(s.integrations?.n8n_notify)],
+    ['LDAP/AD', yn(s.integrations?.ldap)],
+    ['WORM yedek', s.backup ? (s.backup.in_sync ? '<span class="badge badge--online">senkron</span>' : '<span class="badge badge--offline">senkron değil</span>') : '—'],
+  ];
+  tbody.innerHTML = rows.map(([k, v]) => `<tr><td style="color:var(--text-muted);width:40%">${k}</td><td class="hostname-cell">${v}</td></tr>`).join('');
+}
+
+async function saveThresholds() {
+  const body = {
+    low_ram_gb: $(`#setLowRam`)?.value, low_disk_gb: $(`#setLowDisk`)?.value,
+    old_uptime_days: $(`#setUptime`)?.value, offline_hours: $(`#setOffline`)?.value, stale_days: $(`#setStale`)?.value,
+  };
+  const msg = $(`#thresholdsMsg`);
+  try {
+    const res = await fetch('/api/settings/thresholds', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.detail || j.error);
+    if (msg) { msg.textContent = '✓ Kaydedildi — yeni eşikler anında geçerli'; setTimeout(() => msg.textContent = '', 3000); }
+  } catch (err) { if (msg) { msg.style.color = 'var(--red)'; msg.textContent = 'Hata: ' + err.message; } }
+}
+
+async function saveAppearance() {
+  const theme = $(`#setTheme`)?.value || 'auto';
+  applyTheme(theme);
+  const msg = $(`#appearanceMsg`);
+  try {
+    const res = await fetch('/api/settings/appearance', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme }) });
+    if (!res.ok) throw new Error('Hata');
+    localStorage.setItem('theme', theme);
+    if (msg) { msg.textContent = '✓ Kaydedildi'; setTimeout(() => msg.textContent = '', 3000); }
+  } catch (err) { if (msg) { msg.style.color = 'var(--red)'; msg.textContent = 'Hata: ' + err.message; } }
+}
+
+function applyTheme(theme) {
+  const root = document.documentElement;
+  if (theme === 'light' || theme === 'dark') root.setAttribute('data-theme', theme);
+  else root.removeAttribute('data-theme'); // auto → prefers-color-scheme
+}
+
 /* ─── Cihaz Detay & Geçmiş Modalı ───────────────────────────────────────────── */
 let _deviceModalAsset = null;
 
@@ -621,11 +860,34 @@ function openDeviceModal(asset) {
       ${row('İşletim Sistemi', fmt(asset.os))}
       ${row('Son Görülme', fmtDate(asset.last_seen))}
     </div>
+    ${asset.category === 'Telefon' ? '<div id="deviceLineBox" style="margin-bottom:18px"></div>' : ''}
     <h4 style="font-size:13px;font-weight:600;margin:0 0 10px;color:var(--text)">Yaşam Döngüsü Geçmişi</h4>
     <div id="deviceHistory" style="font-size:12.5px;color:var(--text-muted)">Yükleniyor...</div>`;
 
   overlay.classList.add('open');
   loadDeviceHistory(asset);
+  if (asset.category === 'Telefon' && asset.id != null) loadDeviceLine(asset.id);
+}
+
+async function loadDeviceLine(assetId) {
+  const box = $(`#deviceLineBox`);
+  if (!box) return;
+  try {
+    const res = await fetch(`/api/lines/for-asset/${assetId}`);
+    const j = await res.json();
+    const l = j.line;
+    if (!l) {
+      box.innerHTML = `<div style="padding:12px 14px;background:var(--bg-card2);border-radius:10px;font-size:12.5px;color:var(--text-muted)">
+        📱 Bu telefona bağlı hat yok. <a href="#" id="goLinesLink" style="color:var(--accent)">Hatlar</a> sayfasından atayabilirsiniz.</div>`;
+      $(`#goLinesLink`)?.addEventListener('click', (e) => { e.preventDefault(); $(`#deviceModalOverlay`)?.classList.remove('open'); showView('lines'); });
+      return;
+    }
+    box.innerHTML = `<div style="padding:12px 14px;background:var(--accent-glow);border-radius:10px">
+      <div style="font-size:11px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">📱 Bağlı Hat</div>
+      <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text);font-weight:600">${escapeHtml(l.msisdn)}</span><span style="color:var(--text-muted)">${escapeHtml(l.operator)}</span></div>
+      <div style="font-size:11.5px;color:var(--text-muted);margin-top:3px">SIM: ${escapeHtml(l.iccid)}${l.tariff ? ` · ${escapeHtml(l.tariff)}` : ''}</div>
+    </div>`;
+  } catch { box.innerHTML = ''; }
 }
 
 async function loadDeviceHistory(asset) {
@@ -2071,6 +2333,25 @@ document.addEventListener('DOMContentLoaded', () => {
   devOverlay?.addEventListener('click', (e) => { if (e.target === devOverlay) devOverlay.classList.remove('open'); });
   $(`#handoverPdfBtn`)?.addEventListener('click', () => printHandoverReceipt(_deviceModalAsset));
 
+  // Ayarlar kaydet butonları
+  $(`#saveThresholds`)?.addEventListener('click', saveThresholds);
+  $(`#saveAppearance`)?.addEventListener('click', saveAppearance);
+
+  // Hat (Turkcell) modalı + CSV import
+  const lineOverlay = $(`#lineModalOverlay`);
+  $(`#openAddLine`)?.addEventListener('click', openLineModal);
+  $(`#closeLineModal`)?.addEventListener('click', () => lineOverlay?.classList.remove('open'));
+  lineOverlay?.addEventListener('click', (e) => { if (e.target === lineOverlay) lineOverlay.classList.remove('open'); });
+  $(`#saveLineBtn`)?.addEventListener('click', saveLine);
+  $(`#importLinesBtn`)?.addEventListener('click', () => $(`#lineCsvInput`)?.click());
+  $(`#lineCsvInput`)?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => { importLinesCsv(String(reader.result || '')); e.target.value = ''; };
+    reader.readAsText(file, 'utf-8');
+  });
+
   $(`#generateQr`)?.addEventListener('click', () => {
     // Mobil kayıt URL'sini bu tarayıcının origin'inden kur (aynı ağdaki telefon erişebilsin)
     const params = new URLSearchParams();
@@ -2183,6 +2464,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const det = $('#backupDetail'); if (det) { det.style.color = 'var(--red,#ef4444)'; det.textContent = 'Geri yükleme hatası: ' + err.message; }
     } finally { btn.disabled = false; btn.textContent = 'Yedekten Geri Yükle'; }
   });
+
+  // Kaydedilmiş temayı uygula (auto → sistem tercihi)
+  applyTheme(localStorage.getItem('theme') || 'auto');
 
   // Initial load
   loadDashboard();
