@@ -978,22 +978,24 @@ function printHandoverReceipt(asset) {
   const win = window.open('', '_blank');
   win.document.write(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"/>
   <title>Zimmet Tutanağı — ${g(asset.hostname)}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     * { box-sizing:border-box; margin:0; padding:0; }
-    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif; color:#1a1815; font-size:13px; line-height:1.7; padding:0; }
+    body { font-family:"Hanken Grotesk",-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color:#1a1815; font-size:13px; line-height:1.7; padding:0; }
     .hdr { padding:44px 48px 0; }
     .hdr-top { display:flex; justify-content:space-between; align-items:center; padding-bottom:22px; border-bottom:1px solid #ece5da; }
     .brand { display:flex; align-items:center; gap:11px; }
     .brand-icon { width:34px; height:34px; background:linear-gradient(135deg,#6b5cff,#8a7dff); border-radius:9px; display:flex; align-items:center; justify-content:center; }
     .brand-icon svg { width:19px; height:19px; stroke:#fff; fill:none; stroke-width:1.8; }
-    .brand-name { font-size:16px; font-weight:600; color:#1a1815; letter-spacing:-.02em; }
+    .brand-name { font-family:"Fraunces",Georgia,serif; font-size:17px; font-weight:600; color:#1a1815; letter-spacing:-.01em; }
     .brand-sub { font-size:11px; color:#8a8378; }
     .meta { text-align:right; font-size:11px; color:#8a8378; }
     .meta strong { color:#1a1815; }
     .title-block { padding:30px 0 4px; }
     .chip { display:inline-flex; align-items:center; gap:6px; background:#eeecff; color:#6b5cff; font-size:10.5px; font-weight:600; padding:4px 11px; border-radius:999px; margin-bottom:14px; }
     .chip::before { content:''; width:5px; height:5px; border-radius:50%; background:#6b5cff; }
-    .title { font-size:27px; font-weight:600; letter-spacing:-.03em; color:#1a1815; }
+    .title { font-family:"Fraunces",Georgia,serif; font-size:30px; font-weight:600; letter-spacing:-.01em; color:#1a1815; }
     .subtitle { font-size:12.5px; color:#8a8378; margin-top:6px; }
     .body { padding:26px 48px 44px; }
     .sec { font-size:11px; font-weight:600; color:#8a8378; text-transform:uppercase; letter-spacing:.06em; margin:22px 0 8px; }
@@ -2111,9 +2113,11 @@ function printReport() {
 <head>
   <meta charset="UTF-8"/>
   <title>${title} — AssetMan</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color: #1a1815; background: #fff; font-size: 13px; line-height: 1.7; -webkit-font-smoothing: antialiased; letter-spacing: -0.005em; }
+    body { font-family: "Hanken Grotesk", -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #1a1815; background: #fff; font-size: 13px; line-height: 1.7; -webkit-font-smoothing: antialiased; letter-spacing: -0.006em; }
 
     /* ── Header (editoryal, açık zemin) ── */
     .pdf-header { padding: 44px 48px 0; }
@@ -2121,14 +2125,14 @@ function printReport() {
     .pdf-brand { display: flex; align-items: center; gap: 11px; }
     .pdf-brand-icon { width: 34px; height: 34px; background: linear-gradient(135deg, #6b5cff, #8a7dff); border-radius: 9px; display: flex; align-items: center; justify-content: center; }
     .pdf-brand-icon svg { width: 19px; height: 19px; stroke: #fff; fill: none; stroke-width: 1.8; }
-    .pdf-brand-name { font-size: 16px; font-weight: 600; color: #1a1815; letter-spacing: -0.02em; }
+    .pdf-brand-name { font-family: "Fraunces", Georgia, serif; font-size: 17px; font-weight: 600; color: #1a1815; letter-spacing: -0.01em; }
     .pdf-brand-sub  { font-size: 11px; color: #8a8378; margin-top: 1px; }
     .pdf-meta { text-align: right; font-size: 11px; color: #8a8378; line-height: 1.6; }
     .pdf-meta strong { color: #1a1815; font-weight: 600; }
     .pdf-title-block { padding: 30px 0 4px; }
     .pdf-chip { display: inline-flex; align-items: center; gap: 6px; background: #eeecff; color: #6b5cff; font-size: 10.5px; font-weight: 600; padding: 4px 11px; border-radius: 999px; letter-spacing: 0.02em; margin-bottom: 14px; }
     .pdf-chip::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: #6b5cff; }
-    .pdf-title { font-size: 27px; font-weight: 600; letter-spacing: -0.03em; color: #1a1815; }
+    .pdf-title { font-family: "Fraunces", Georgia, serif; font-size: 30px; font-weight: 600; letter-spacing: -0.01em; color: #1a1815; }
     .pdf-subtitle { font-size: 12.5px; color: #8a8378; margin-top: 6px; }
 
     /* ── Body ── */
