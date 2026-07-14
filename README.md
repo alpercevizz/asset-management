@@ -9,7 +9,7 @@ Değiştirilemez audit log · çift dijital onay · gerçek AD/LDAP girişi · c
 [![Node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![Express](https://img.shields.io/badge/express-4.x-000000?logo=express&logoColor=white)](https://expressjs.com)
 [![Database](https://img.shields.io/badge/db-SQLite%20%7C%20PostgreSQL-336791?logo=postgresql&logoColor=white)](#kurulum)
-[![Tests](https://img.shields.io/badge/tests-19%2F19%20passing-22c55e)](#test)
+[![Tests](https://img.shields.io/badge/tests-22%2F22%20passing-22c55e)](#test)
 [![License](https://img.shields.io/badge/license-see%20LICENSE-blue)](./LICENSE)
 [![Status](https://img.shields.io/badge/status-active-success)]()
 
@@ -18,7 +18,7 @@ Değiştirilemez audit log · çift dijital onay · gerçek AD/LDAP girişi · c
 ---
 
 <p align="center">
-  <img src="docs/screenshots/hero-lifecycle.png" alt="AssetMan — Cihaz Yaşam Döngüsü & Audit Log paneli" width="880"/>
+  <img src="docs/screenshots/hero-dashboard.png" alt="AssetMan — Dashboard (sıcak-modern arayüz)" width="880"/>
 </p>
 
 ## Niçin AssetMan?
@@ -45,6 +45,7 @@ Piyasadaki çoğu envanter aracı (Snipe-IT, Lansweeper, GLPI) cihazın **son du
 - Cihaz detay & yaşam döngüsü geçmişi
 - Zimmet teslim tutanağı (PDF) · Excel/CSV dışa aktarım
 - Lokasyon dağılım analizi
+- **Turkcell hat/SIM envanteri** — hangi hat hangi telefonda + geçmiş
 
 </td>
 <td width="50%" valign="top">
@@ -55,8 +56,8 @@ Piyasadaki çoğu envanter aracı (Snipe-IT, Lansweeper, GLPI) cihazın **son du
 - **Kişi-bazlı dijital imza** (AD UPN + IP + MFA gömülü)
 - **WORM hardened yedek** (AES-256-GCM, write-once)
 - **Gerçek AD/LDAP girişi** (`AUTH_PROVIDER=ldap`) — grup→rol eşleme
+- **Zimmet devir koruması** — resmi zimmet kilitli, sessiz devralma engellenir
 - Çok-kullanıcılı auth (scrypt + roller) · SQL katmanı
-- Atomik yazma (çökme dayanıklı)
 
 </td>
 </tr>
@@ -73,9 +74,10 @@ Piyasadaki çoğu envanter aracı (Snipe-IT, Lansweeper, GLPI) cihazın **son du
 <td valign="top">
 
 ### FinOps & AI
-- **Döviz endeksli bütçe** (USD/EUR-TRY canlı parite)
+- **Gerçek döviz kuru** (ECB / frankfurter.app) — önbellekli, çevrimdışı fallback
 - 12 aylık yenileme öngörüsü (EOL + garanti birleşik)
 - Cihaz risk skoru (0-100, çok kaynaklı)
+- **Ayarlar** — eşikler UI'dan canlı düzenlenir (restart yok)
 - AI agent (Ollama / Anthropic) — deterministik tool kullanımı
 
 </td>
@@ -129,17 +131,23 @@ flowchart LR
 
 <table>
 <tr>
-<td align="center" width="33%">
-  <a href="docs/screenshots/risk-scores.png"><img src="docs/screenshots/risk-scores.png" alt="Risk skoru tablosu" width="300"/></a>
-  <br/><b>Risk Skorları</b><br/>Çok-kaynaklı sinyallerden 0-100 puan, MFA bypass etiketi
+<td align="center" width="50%">
+  <a href="docs/screenshots/device-modal.png"><img src="docs/screenshots/device-modal.png" alt="Cihaz detayı — resmi zimmet + bağlı hat" width="420"/></a>
+  <br/><b>Cihaz Detayı</b><br/>🔒 Resmi zimmet (kilitli) + telemetri ayrımı · bağlı Turkcell hattı · zimmet tutanağı
 </td>
-<td align="center" width="33%">
-  <a href="docs/screenshots/forecast.png"><img src="docs/screenshots/forecast.png" alt="Döviz endeksli FinOps bütçe" width="300"/></a>
-  <br/><b>Döviz Endeksli Bütçe</b><br/>Canlı USD/EUR parite · 12 aylık yenileme planı
+<td align="center" width="50%">
+  <a href="docs/screenshots/lines.png"><img src="docs/screenshots/lines.png" alt="Turkcell hat / SIM envanteri" width="420"/></a>
+  <br/><b>Hatlar & SIM</b><br/>Hangi hat hangi telefonda · atama geçmişi · CSV içe aktarım
 </td>
-<td align="center" width="33%">
-  <a href="docs/screenshots/alerts.png"><img src="docs/screenshots/alerts.png" alt="Uyarılar paneli" width="300"/></a>
-  <br/><b>Uyarılar</b><br/>EOL · Düşük RAM/Disk · Uzun Uptime · Lisans · Shadow IT
+</tr>
+<tr>
+<td align="center" width="50%">
+  <a href="docs/screenshots/insights.png"><img src="docs/screenshots/insights.png" alt="Risk skorları ve döviz endeksli bütçe" width="420"/></a>
+  <br/><b>Risk & Öngörü</b><br/>0-100 risk skoru · canlı ECB kuruyla 12 aylık yenileme bütçesi
+</td>
+<td align="center" width="50%">
+  <a href="docs/screenshots/settings.png"><img src="docs/screenshots/settings.png" alt="Ayarlar — eşikler ve sistem durumu" width="420"/></a>
+  <br/><b>Ayarlar</b><br/>Tespit eşikleri UI'dan canlı düzenlenir (restart yok) · tema · sistem durumu
 </td>
 </tr>
 </table>
@@ -229,6 +237,9 @@ Node'un yerleşik test runner'ı (`node:test`) — dış bağımlılık yok. Çe
 - `sameDevice` (asset_id rename dayanıklılığı)
 - WORM yedekleme + AES roundtrip + kurtarma
 - OS Agent handshake (spoofing tespiti)
+- **Zimmet devir koruması** (zaten zimmetli cihaz force olmadan devralınamaz)
+- **Turkcell hat/SIM** (oluştur→ata→taşı→geçmiş + MSISDN normalize)
+- **Ayarlar deposu** (setSection tip-doğrulama + kalıcılık)
 - Döviz dönüşümü · SQL driver seçimi
 
 ## Client Script
@@ -280,7 +291,10 @@ Register-ScheduledTask -TaskName "AssetCollector" -Action $action -Trigger $trig
 | `GET /api/lifecycle/{log,conflicts,verify}` | auth | Audit log & doğrulama |
 | `GET /api/network/scan` | auth | VLAN-segmentli canlı ağ keşfi |
 | `GET /api/backup/status` · `POST /api/backup/restore` | auth | WORM yedek |
-| `GET /api/risk-scores` · `forecast` | auth | Risk & FinOps |
+| `GET /api/risk-scores` · `forecast` | auth | Risk & FinOps (canlı ECB kuru) |
+| `GET /api/lines` · `POST /api/lines/import` | auth / it | Turkcell hat/SIM envanteri + CSV |
+| `POST /api/assets/:id/assign` · `release` | it / admin | Resmi zimmet devri (409 koruma) |
+| `GET /api/settings` · `PUT /api/settings/:section` | admin | Runtime ayarlar (eşikler, tema) |
 | `POST /api/chat` | auth | AI agent sohbeti |
 
 ## Bilinçli Sınırlar (dürüst kapsam)

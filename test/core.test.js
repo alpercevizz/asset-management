@@ -366,6 +366,37 @@ test('hat: oluştur→ata→başka telefona taşı→geçmiz + MSISDN normalize'
   assert.equal(all.length, 1);
 });
 
+// ── Resmi Zimmet devir koruması ──────────────────────────────────────────────
+const assignmentTools = require('../agent/tools/assignment-tools');
+test('zimmet: zaten zimmetli cihaz force olmadan devralınamaz; telemetri uyuşmazlığı yakalanır', async () => {
+  await resetAll();
+  await dbLayer.db()('asset_assignments').del().catch(() => {});
+
+  // İlk zimmet
+  await assignmentTools.assign(6, { to: 'alper', hostname: 'ALPER-PC', by: 'admin' });
+  assert.equal((await assignmentTools.getAssignment(6)).assigned_to, 'alper');
+
+  // Başka kullanıcı force olmadan → REDDEDİLİR (ALREADY_ASSIGNED)
+  await assert.rejects(
+    () => assignmentTools.assign(6, { to: 'baskasi', hostname: 'ALPER-PC', by: 'it' }),
+    (e) => e.code === 'ALREADY_ASSIGNED' && e.current === 'alper'
+  );
+  // Aynı kişiye tekrar → sorunsuz (idempotent)
+  await assignmentTools.assign(6, { to: 'alper', hostname: 'ALPER-PC' });
+  // force ile devir → geçer
+  await assignmentTools.assign(6, { to: 'baskasi', hostname: 'ALPER-PC', force: true, by: 'admin' });
+  assert.equal((await assignmentTools.getAssignment(6)).assigned_to, 'baskasi');
+
+  // Telemetri uyuşmazlığı: resmi 'baskasi' iken 'alper' görülürse sinyal
+  const mm = await assignmentTools.checkMismatch(6, 'alper');
+  assert.ok(mm && mm.assigned_to === 'baskasi' && mm.seen_user === 'alper');
+  assert.equal(await assignmentTools.checkMismatch(6, 'baskasi'), null); // eşleşiyorsa sinyal yok
+
+  // İade sonrası zimmetsiz
+  await assignmentTools.release(6, { by: 'admin' });
+  assert.equal((await assignmentTools.getAssignment(6)).assigned_to, null);
+});
+
 // ── Settings runtime config store ────────────────────────────────────────────
 const settingsTools = require('../agent/tools/settings-tools');
 test('settings: init olmadan DEFAULTS; setSection kalıcı + tip doğrulama', async () => {

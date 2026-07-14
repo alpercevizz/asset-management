@@ -14,6 +14,12 @@ async function initDataLayer() {
   if (osAgentModule.init) await osAgentModule.init();
   await lifecycleModule.init();
   await require('./agent/tools/settings-tools').init();
+  // Resmi zimmet: tablo boşsa mevcut Baserow username'lerinden başlangıç zimmeti oluştur.
+  try {
+    const seedAssets = await getAllAssets({ size: 200 });
+    const r = await require('./agent/tools/assignment-tools').seedFromAssets(seedAssets.results || []);
+    if (!r.skipped) console.log('[seed] Resmi zimmet başlangıcı:', r.count, 'cihaz');
+  } catch (e) { console.error('[seed] zimmet seed başarısız:', e.message); }
   // Demo/dev ortamda lifecycle log boşsa data/lifecycle-log.json'ı yeni CHAIN_SECRET ile yeniden zincirleyerek yükle.
   // Prod'da SEED_DEMO=true açık verilmedikçe atlanır (müşteri envanterine sahte olay eklemez).
   const seedAllowed = process.env.SEED_DEMO === 'true' || process.env.NODE_ENV !== 'production';
@@ -266,6 +272,15 @@ app.post('/api/webhook', async (req, res) => {
 
     let result;
     if (existing) {
+      // GÜVENLİK: webhook yalnız TELEMETRİ günceller (username = son gören kullanıcı).
+      // Resmi zimmet (assigned_to) AYRI tabloda ve KİLİTLİ — buradan DEĞİŞMEZ.
+      // Telemetri kullanıcı, resmi zimmetten farklıysa izinsiz-kullanım sinyali ver.
+      if (payload.username) {
+        try {
+          const mm = await require('./agent/tools/assignment-tools').checkMismatch(existing.id, payload.username);
+          if (mm) console.warn(`[ZİMMET UYARISI] ${enriched.hostname || existing.id}: resmi zimmet "${mm.assigned_to}" iken telemetri "${mm.seen_user}" gördü (izinsiz kullanım şüphesi).`);
+        } catch (_) { /* sinyal opsiyonel */ }
+      }
       result = await updateAsset(existing.id, enriched);
       console.log(`[WEBHOOK] Updated: ${payload.hostname || payload.serial_number}`);
     } else {
@@ -696,6 +711,54 @@ app.post('/api/lines/:id/release', requireRole('it', 'admin'), async (req, res) 
   } catch (err) {
     console.error('[POST /api/lines/:id/release]', err.message);
     res.status(400).json({ error: 'Hat iade edilemedi', detail: err.message });
+  }
+});
+
+// ─── Resmi Zimmet (assigned_to) — Devir Koruması ─────────────────────────────
+const assignmentTools = require('./agent/tools/assignment-tools');
+
+// Bir cihazın resmi zimmeti (kilitli owner) + telemetri (Baserow username) birlikte
+app.get('/api/assets/:id/assignment', async (req, res) => {
+  try {
+    res.json({ assignment: await assignmentTools.getAssignment(req.params.id) || null });
+  } catch (err) {
+    res.status(500).json({ error: 'Zimmet sorgulanamadı', detail: err.message });
+  }
+});
+
+// Resmi devir — zaten başkasına zimmetliyse force olmadan 409 (sessiz devralma engellenir)
+app.post('/api/assets/:id/assign', requireRole('it', 'admin'), async (req, res) => {
+  try {
+    const by = currentUser(req)?.username || 'system';
+    const { to, hostname, note, force } = req.body || {};
+    const a = await assignmentTools.assign(req.params.id, { to, hostname, note, force: !!force, by });
+    res.json({ success: true, assignment: a });
+  } catch (err) {
+    if (err.code === 'ALREADY_ASSIGNED') {
+      return res.status(409).json({ error: err.message, code: 'ALREADY_ASSIGNED', current: err.current });
+    }
+    console.error('[POST /api/assets/:id/assign]', err.message);
+    res.status(400).json({ error: 'Zimmet atanamadı', detail: err.message });
+  }
+});
+
+app.post('/api/assets/:id/release', requireRole('it', 'admin'), async (req, res) => {
+  try {
+    const by = currentUser(req)?.username || 'system';
+    const a = await assignmentTools.release(req.params.id, { by, note: (req.body || {}).note });
+    res.json({ success: true, assignment: a });
+  } catch (err) {
+    res.status(400).json({ error: 'İade edilemedi', detail: err.message });
+  }
+});
+
+// Telemetri ≠ resmi zimmet uyuşmazlıkları (izinsiz kullanım şüphesi)
+app.get('/api/assignments/mismatches', async (req, res) => {
+  try {
+    const data = await getAllAssets({ size: 200 });
+    res.json({ mismatches: await assignmentTools.listMismatches(data.results || []) });
+  } catch (err) {
+    res.status(500).json({ error: 'Uyuşmazlık taranamadı', detail: err.message });
   }
 });
 

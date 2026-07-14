@@ -1,20 +1,18 @@
 # Ekran Görüntüleri
 
-Bu klasör README'deki ekran görüntülerini barındırır. İdeal boyut **1600×1000**, format **PNG**.
+Bu klasör README'deki ekran görüntülerini barındırır (sıcak-modern arayüz, 2× DPI).
 
 | Dosya | Hangi panel | İçerik notu |
 |---|---|---|
-| `hero-lifecycle.png` | Yaşam Döngüsü | timeline + sign-off mührü + zincir bütünlüğü kartı (İHLAL VAR! + canlı ağ alarmı en şovluk) |
-| `risk-scores.png` | Risk & Öngörü (üst) | 4 özet kart + risk skor tablosu (kritik cihazlar listelenmiş hâliyle) |
-| `forecast.png` | Risk & Öngörü (alt) | 💱 kur satırı + 12 aylık tahmini bütçe + yenileme planı tablosu |
-| `alerts.png` | Uyarılar | EOL · Düşük RAM/Disk · Uzun uptime · Lisans tabloları |
+| `hero-dashboard.png` | Dashboard | KPI kartları + marka/kategori/durum + lokasyon dağılımı |
+| `device-modal.png` | Cihaz detayı | 🔒 resmi zimmet + telemetri ayrımı + bağlı Turkcell hattı |
+| `lines.png` | Hatlar & SIM | hat envanteri + bağlı telefon + CSV içe aktarım |
+| `insights.png` | Risk & Öngörü | risk skorları + canlı ECB kuruyla 12 aylık bütçe |
+| `settings.png` | Ayarlar | tespit eşikleri (canlı) + tema + sistem durumu |
+| `assets.png` | Varlıklar | envanter tablosu + kategori sekmeleri + export |
 
-## Nasıl alınır?
+## Nasıl yeniden üretilir?
 
-1. Sunucuyu başlat: `npm start` → `http://localhost:3000`
-2. `admin/admin123` ile giriş yap
-3. İlgili panele git, **Win+Shift+S** ile ekran al
-4. Bu klasöre yukarıdaki adlarla PNG olarak kaydet
-5. `git add docs/screenshots/*.png && git commit -m "Ekran görüntülerini ekle" && git push`
-
-README otomatik olarak görüntüleri gösterir; ek bir değişiklik gerekmez.
+Sunucu `http://localhost:3000` çalışırken, puppeteer-core ile gerçek login akışından
+otomatik alınır (dev script `shots.js` — commit edilmez). Alternatif: her panele girip
+**Win+Shift+S** ile elle al, bu klasöre yukarıdaki adlarla PNG kaydet. README otomatik gösterir.

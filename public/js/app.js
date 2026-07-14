@@ -853,20 +853,74 @@ function openDeviceModal(asset) {
     <div style="margin-bottom:18px">
       ${row('Marka / Model', `${fmt(asset.brand)} ${fmt(asset.model, '')}`)}
       ${row('Seri No', `<span class="serial-cell">${fmt(asset.serial_number)}</span>`)}
-      ${row('Zimmetli Kullanıcı', fmt(asset.username, '— (zimmetsiz)'))}
+      ${row('Son gören kullanıcı (telemetri)', fmt(asset.username, '—'))}
       ${row('CPU', fmt(asset.cpu))}
       ${row('RAM / Disk', `${asset.ram_gb ? asset.ram_gb + ' GB' : '—'} / ${asset.storage_gb ? asset.storage_gb + ' GB' : '—'}`)}
       ${row('IP / MAC', `<span class="serial-cell">${fmt(asset.ip_address)} · ${fmt(asset.mac_address)}</span>`)}
       ${row('İşletim Sistemi', fmt(asset.os))}
       ${row('Son Görülme', fmtDate(asset.last_seen))}
     </div>
+    <div id="deviceAssignBox" style="margin-bottom:18px"></div>
     ${asset.category === 'Telefon' ? '<div id="deviceLineBox" style="margin-bottom:18px"></div>' : ''}
     <h4 style="font-size:13px;font-weight:600;margin:0 0 10px;color:var(--text)">Yaşam Döngüsü Geçmişi</h4>
     <div id="deviceHistory" style="font-size:12.5px;color:var(--text-muted)">Yükleniyor...</div>`;
 
+  const pdfBtn = $(`#handoverPdfBtn`); if (pdfBtn) pdfBtn.style.display = '';
   overlay.classList.add('open');
   loadDeviceHistory(asset);
+  loadDeviceAssignment(asset);
   if (asset.category === 'Telefon' && asset.id != null) loadDeviceLine(asset.id);
+}
+
+async function loadDeviceAssignment(asset) {
+  const box = $(`#deviceAssignBox`);
+  if (!box || asset.id == null) { if (box) box.innerHTML = ''; return; }
+  try {
+    const res = await fetch(`/api/assets/${asset.id}/assignment`);
+    const a = (await res.json()).assignment;
+    const owner = a && a.assigned_to;
+    const seen = (asset.username || '').trim();
+    const mismatch = owner && seen && seen.toLowerCase() !== owner.toLowerCase();
+    box.innerHTML = `
+      <div style="padding:12px 14px;background:${mismatch ? 'var(--red-bg)' : 'var(--bg-card2)'};border-radius:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-size:11px;font-weight:600;color:${mismatch ? 'var(--red)' : 'var(--text-muted)'};text-transform:uppercase;letter-spacing:.05em">🔒 Resmi Zimmet</span>
+          <span>${owner ? `<button class="btn-icon" id="devReleaseBtn" title="İade al" style="display:inline-flex;width:26px;height:26px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>` : ''}
+          <button class="btn-icon" id="devAssignBtn" title="${owner ? 'Devret' : 'Zimmetle'}" style="display:inline-flex;width:26px;height:26px;margin-left:4px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></button></span>
+        </div>
+        <div style="font-size:14px;font-weight:600;color:var(--text)">${owner ? escapeHtml(owner) : '<span style="color:var(--text-muted);font-weight:400">Zimmetsiz</span>'}</div>
+        ${mismatch ? `<div style="font-size:11.5px;color:var(--red);margin-top:5px">⚠ Telemetri farklı kullanıcı gördü: <b>${escapeHtml(seen)}</b> — izinsiz kullanım şüphesi</div>` : ''}
+        ${a && a.assigned_at ? `<div style="font-size:11px;color:var(--text-muted);margin-top:3px">${fmtDate(a.assigned_at)}${a.assigned_by ? ` · ${escapeHtml(a.assigned_by)}` : ''}</div>` : ''}
+      </div>`;
+    $(`#devAssignBtn`)?.addEventListener('click', () => assignDevicePrompt(asset, owner));
+    $(`#devReleaseBtn`)?.addEventListener('click', () => releaseDevice(asset));
+  } catch { box.innerHTML = ''; }
+}
+
+async function assignDevicePrompt(asset, currentOwner) {
+  const to = prompt(`"${asset.hostname}" cihazını kime zimmetleyelim?${currentOwner ? `\n\n(Şu an "${currentOwner}" kullanıcısına zimmetli — devir onayı istenecek)` : ''}`, currentOwner || (asset.username || ''));
+  if (!to || !to.trim()) return;
+  try {
+    let res = await fetch(`/api/assets/${asset.id}/assign`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: to.trim(), hostname: asset.hostname }) });
+    if (res.status === 409) {
+      const j = await res.json();
+      if (!confirm(`${j.error}\n\nYine de devretmek istiyor musunuz? (yetkili onaylı devir)`)) return;
+      res = await fetch(`/api/assets/${asset.id}/assign`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: to.trim(), hostname: asset.hostname, force: true }) });
+    }
+    if (!res.ok) throw new Error((await res.json()).detail || 'Hata');
+    loadDeviceAssignment(asset);
+  } catch (err) { alert('Zimmet hatası: ' + err.message); }
+}
+
+async function releaseDevice(asset) {
+  if (!confirm(`"${asset.hostname}" cihazının resmi zimmeti kaldırılsın (iade) mı?`)) return;
+  try {
+    const res = await fetch(`/api/assets/${asset.id}/release`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    if (!res.ok) throw new Error('Hata');
+    loadDeviceAssignment(asset);
+  } catch (err) { alert('İade hatası: ' + err.message); }
 }
 
 async function loadDeviceLine(assetId) {
