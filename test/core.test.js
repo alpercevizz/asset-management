@@ -322,6 +322,43 @@ test('finops: kur döner, USD→TRY dönüşümü kurla ölçeklenir', async () 
   assert.ok(hi.try > lo.try);
 });
 
+// ── Envanter SQL sağlayıcı (Baserow'dan bağımsız) ────────────────────────────
+const invSql = require('../agent/tools/inventory-sql');
+const licSql = require('../agent/tools/licenses-sql');
+test('envanter-sql: create→getBySerial→update→getAllAssets filtre→getStats', async () => {
+  await resetAll();
+  await dbLayer.db()('assets').del();
+  await dbLayer.db()('licenses').del();
+
+  const a = await invSql.createAsset({ hostname: 'PC-1', serial_number: 'SN-1', brand: 'Dell', category: 'Bilgisayar', ram_gb: 8, storage_gb: 256, os: 'Windows 11', status: 'online', ignore_me: 'x' });
+  assert.ok(a.id, 'insert id döner');
+  assert.equal(a.brand, 'Dell');
+  assert.equal(a.ignore_me, undefined, 'bilinmeyen alan atılır');
+
+  const bySerial = await invSql.getAssetBySerial({ serialNumber: 'SN-1' });
+  assert.equal(bySerial.hostname, 'PC-1');
+
+  await invSql.updateAsset(a.id, { status: 'offline', username: 'alper' });
+  assert.equal((await invSql.getAssetBySerial({ serialNumber: 'SN-1' })).status, 'offline');
+
+  await invSql.createAsset({ hostname: 'SRV-1', serial_number: 'SN-2', brand: 'HPE', category: 'Sunucu', ram_gb: 64, status: 'online' });
+  const all = await invSql.getAllAssets({ size: 200 });
+  assert.equal(all.count, 2);
+  const filtered = await invSql.getAllAssets({ size: 200, filterField: 'category', filterValue: 'Sunucu' });
+  assert.equal(filtered.count, 1);
+
+  const stats = await invSql.getStats();
+  assert.equal(stats.total, 2);
+  assert.equal(stats.by_category['Bilgisayar'], 1);
+  assert.equal(stats.by_category['Sunucu'], 1);
+  assert.equal(stats.avg_ram_gb, 36); // (8+64)/2
+
+  await licSql.createLicense({ hostname: 'PC-1', software_name: 'Office', license_status: 'Unlicensed', license_type: 'ESD' });
+  const ls = await licSql.getLicenseStats();
+  assert.equal(ls.total, 1);
+  assert.equal(ls.unlicensed, 1);
+});
+
 // ── Turkcell Hat / SIM ──────────────────────────────────────────────────────────
 const lineTools = require('../agent/tools/line-tools');
 test('hat: oluştur→ata→başka telefona taşı→geçmiz + MSISDN normalize', async () => {

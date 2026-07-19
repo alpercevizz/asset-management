@@ -69,6 +69,21 @@ docker compose --profile postgres up -d
 
 > **Secret'ları elle set etmeyin.** `SESSION_SECRET`, `CHAIN_SECRET`, `WORM_SECRET` — ilk açılışta setup wizard **rastgele üretip** `data/secrets.json`'a yazar (`chmod 600`). Env'de tanımlıysanız o kullanılır (env her zaman önceliklidir).
 
+### Envanter deposu (Baserow vs SQL)
+
+`INVENTORY_PROVIDER` ile envanterin (assets + licenses) nerede tutulacağı seçilir:
+
+```
+INVENTORY_PROVIDER=baserow   # varsayılan — Baserow REST API
+INVENTORY_PROVIDER=sql       # DATABASE_URL'deki veritabanı (Baserow'a bağımlılık YOK)
+```
+
+`sql` modunda envanter de diğer tablolarla (kullanıcılar, audit, hatlar…) aynı PostgreSQL/SQLite'ta durur → **veri kurumdan çıkmaz**, tek yedek noktası. Baserow'dan geçiş:
+```bash
+docker compose exec app node scripts/migrate-inventory-to-sql.js   # id'ler korunarak taşır
+```
+`baserow`↔`sql` arasında aynı fonksiyon dikişi kullanıldığı için uygulama kodu değişmez; geri dönüş güvenli.
+
 ## 3. Ayağa kaldır
 
 **SQLite (varsayılan):**
