@@ -13,10 +13,20 @@ const ASSET_COLS = new Set([
   'category', 'location', 'warranty_expiry', 'org_id', 'created_on',
 ]);
 const SEARCH_COLS = ['hostname', 'serial_number', 'username', 'brand', 'model', 'ip_address', 'mac_address'];
+// Integer sütunlar — collector ondalık gönderebilir ("4.1"); PostgreSQL katı, yuvarla.
+const INT_COLS = new Set(['cpu_cores', 'cpu_threads', 'ram_gb', 'storage_gb', 'gpu_ram_gb', 'uptime_days']);
 
 function clean(data) {
   const out = {};
-  for (const k of Object.keys(data || {})) if (ASSET_COLS.has(k)) out[k] = data[k];
+  for (const k of Object.keys(data || {})) {
+    if (!ASSET_COLS.has(k)) continue;
+    let v = data[k];
+    if (INT_COLS.has(k)) {
+      if (v === '' || v === null || v === undefined) v = null;
+      else { const n = Math.round(Number(v)); v = Number.isFinite(n) ? n : null; }
+    }
+    out[k] = v;
+  }
   return out;
 }
 function getById(id) { return db()('assets').where({ id }).first(); }

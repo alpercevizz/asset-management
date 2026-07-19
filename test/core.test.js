@@ -330,9 +330,10 @@ test('envanter-sql: create→getBySerial→update→getAllAssets filtre→getSta
   await dbLayer.db()('assets').del();
   await dbLayer.db()('licenses').del();
 
-  const a = await invSql.createAsset({ hostname: 'PC-1', serial_number: 'SN-1', brand: 'Dell', category: 'Bilgisayar', ram_gb: 8, storage_gb: 256, os: 'Windows 11', status: 'online', ignore_me: 'x' });
+  const a = await invSql.createAsset({ hostname: 'PC-1', serial_number: 'SN-1', brand: 'Dell', category: 'Bilgisayar', ram_gb: 8, storage_gb: 256, cpu_cores: '4.1', os: 'Windows 11', status: 'online', ignore_me: 'x' });
   assert.ok(a.id, 'insert id döner');
   assert.equal(a.brand, 'Dell');
+  assert.equal(Number(a.cpu_cores), 4, 'ondalık integer alan yuvarlanır (PG katılığı — 4.1→4)');
   assert.equal(a.ignore_me, undefined, 'bilinmeyen alan atılır');
 
   const bySerial = await invSql.getAssetBySerial({ serialNumber: 'SN-1' });
