@@ -75,6 +75,19 @@
     .ok-add { background: var(--card); border: 1px solid var(--border-strong); color: var(--text-dim); padding: 11px 20px; border-radius: 11px; font-size: 14px; cursor: pointer; font-family: inherit; }
 
     .err-box { display: none; background: rgba(201,74,63,0.10); border: 1px solid rgba(201,74,63,0.25); color: var(--red); padding: 11px 14px; border-radius: 11px; font-size: 13px; }
+
+    /* Seri barkod tarama */
+    .serial-row { display: flex; gap: 8px; }
+    .serial-row input { flex: 1; }
+    .scan-btn { background: var(--card); border: 1px solid var(--border-strong); color: var(--accent); border-radius: 11px; padding: 0 16px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; font-family: inherit; }
+    .scan-btn:active { opacity: 0.7; }
+    .scan-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
+    .scan-overlay.open { display: flex; }
+    .scan-box { position: relative; width: 100%; max-width: 420px; }
+    .scan-box video { width: 100%; border-radius: 14px; background: #000; display: block; }
+    .scan-frame { position: absolute; top: 34%; left: 8%; right: 8%; height: 24%; border: 3px solid var(--accent); border-radius: 12px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.35); pointer-events: none; }
+    .scan-hint { color: #fff; text-align: center; margin-top: 16px; font-size: 14px; opacity: 0.9; }
+    .scan-close { display: block; margin: 18px auto 0; background: #fff; color: #1a1815; border: none; border-radius: 11px; padding: 12px 30px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; }
   </style>
 </head>
 <body>
@@ -118,18 +131,22 @@
       </div>
 
       <div class="field">
-        <label>Marka</label>
+        <label>Marka <span class="auto-tag" id="brandAuto" style="display:none">otomatik</span></label>
         <input type="text" id="brand" placeholder="Örn: Apple, Samsung, Zebra" />
       </div>
 
       <div class="field">
-        <label>Model</label>
+        <label>Model <span class="auto-tag" id="modelAuto" style="display:none">otomatik</span></label>
         <input type="text" id="model" placeholder="Örn: iPhone 15, Galaxy Tab S9" />
       </div>
 
       <div class="field">
-        <label>Seri No / IMEI</label>
-        <input type="text" id="serial_number" placeholder="Cihazın seri numarası" />
+        <label>Seri No / IMEI <span class="auto-tag" id="serialAuto" style="display:none">tarandı</span></label>
+        <div class="serial-row">
+          <input type="text" id="serial_number" placeholder="Cihazın seri numarası" />
+          <button type="button" class="scan-btn" id="scanBtn" style="display:none">📷 Tara</button>
+        </div>
+        <span class="hint" id="scanHint" style="display:none">Seri/IMEI barkodunu kamerayla okutabilirsiniz.</span>
       </div>
 
       <div class="field">
@@ -160,6 +177,16 @@
     </div>
   </div>
 
+  <!-- Kamera-barkod okuyucu (seri/IMEI) -->
+  <div class="scan-overlay" id="scanOverlay">
+    <div class="scan-box">
+      <video id="scanVideo" playsinline muted></video>
+      <div class="scan-frame"></div>
+      <div class="scan-hint">Seri numarası / IMEI barkodunu çerçeveye getirin</div>
+      <button type="button" class="scan-close" id="scanClose">Kapat</button>
+    </div>
+  </div>
+
   <script>
     const params = new URLSearchParams(location.search);
     const $ = (id) => document.getElementById(id);
@@ -170,8 +197,28 @@
       if (v && $(k)) $(k).value = v;
     });
 
-    // ── Cihaz tipini/OS'u User-Agent'tan tahmin et ──
-    (function autodetect() {
+    // ── Marka'yı model kodundan türet (Android model ön ekleri) ──
+    function brandFromModel(m) {
+      m = String(m || '');
+      if (/^SM-|samsung|galaxy/i.test(m)) return 'Samsung';
+      if (/pixel/i.test(m)) return 'Google';
+      if (/^(SNE|ELS|VOG|ANA|LYA|JAD|NOH)|huawei/i.test(m)) return 'Huawei';
+      if (/redmi|poco|xiaomi|^M2\d|^2\d{3}[A-Z]/i.test(m)) return 'Xiaomi';
+      if (/^RMX|realme/i.test(m)) return 'Realme';
+      if (/^CPH|oppo/i.test(m)) return 'Oppo';
+      if (/oneplus|^(BE|GM|IN|LE|KB|DN)\d{4}/i.test(m)) return 'OnePlus';
+      if (/^(TC|Zebra)/i.test(m)) return 'Zebra';
+      return '';
+    }
+    function setAuto(id, val, tagId) {
+      if (val && !$(id).value && !params.get(id)) {
+        $(id).value = val;
+        if (tagId && $(tagId)) $(tagId).style.display = 'inline-block';
+      }
+    }
+
+    // ── Cihaz tipini/OS/marka/model'i otomatik tespit et ──
+    (async function autodetect() {
       const ua = navigator.userAgent;
       let cat = null, brand = null, os = null;
 
@@ -181,7 +228,6 @@
         cat = /Mobile/.test(ua) ? 'Telefon' : 'Tablet';
         const m = ua.match(/Android\s+([\d.]+)/);
         os = m ? 'Android ' + m[1] : 'Android';
-        // Bazı UA'larda model adı bulunur (örn: SM-S928B → Samsung)
         if (/SM-|SAMSUNG/i.test(ua)) brand = 'Samsung';
         else if (/Pixel/i.test(ua)) brand = 'Google';
         else if (/HUAWEI/i.test(ua)) brand = 'Huawei';
@@ -192,11 +238,64 @@
         os = /Windows/.test(ua) ? 'Windows' : /Macintosh/.test(ua) ? 'macOS' : 'Linux';
       }
 
-      // Yalnızca IT ön-doldurmadıysa otomatik değeri uygula
       if (cat && !params.get('category')) { $('category').value = cat; $('catAuto').style.display = 'inline-block'; }
-      if (os && !$('os').value)           { $('os').value = os;       $('osAuto').style.display = 'inline-block'; }
-      if (brand && !$('brand').value)      { $('brand').value = brand; }
+      setAuto('os', os, 'osAuto');
+      setAuto('brand', brand, 'brandAuto');
+
+      // Client Hints (Android Chrome): kesin model + OS sürümü → marka türet
+      try {
+        if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
+          const ud = await navigator.userAgentData.getHighEntropyValues(['model', 'platform', 'platformVersion']);
+          if (ud.model) {
+            setAuto('model', ud.model, 'modelAuto');
+            const b = brandFromModel(ud.model);
+            if (b) setAuto('brand', b, 'brandAuto');
+          }
+          if (ud.platform) {
+            const osStr = (ud.platform + (ud.platformVersion ? ' ' + String(ud.platformVersion).split('.')[0] : '')).trim();
+            setAuto('os', osStr, 'osAuto');
+          }
+        }
+      } catch (_) { /* Client Hints desteklenmiyorsa UA tahmini kalır */ }
     })();
+
+    // ── Kamera-barkod okuyucu (seri/IMEI) — native BarcodeDetector, harici kütüphane YOK ──
+    let _scanStream = null, _scanLoop = null, _detector = null;
+    if ('BarcodeDetector' in window) {
+      try { _detector = new BarcodeDetector({ formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'qr_code', 'data_matrix', 'itf', 'codabar'] }); }
+      catch (_) { try { _detector = new BarcodeDetector(); } catch (e) { _detector = null; } }
+    }
+    if (_detector) { $('scanBtn').style.display = 'inline-block'; $('scanHint').style.display = 'block'; }
+
+    async function startScan() {
+      try {
+        _scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } });
+        const v = $('scanVideo');
+        v.srcObject = _scanStream;
+        await v.play();
+        $('scanOverlay').classList.add('open');
+        _scanLoop = setInterval(async () => {
+          try {
+            const codes = await _detector.detect(v);
+            if (codes && codes.length && codes[0].rawValue) {
+              $('serial_number').value = codes[0].rawValue.trim();
+              $('serialAuto').style.display = 'inline-block';
+              stopScan();
+            }
+          } catch (_) { /* kare atla */ }
+        }, 300);
+      } catch (e) {
+        stopScan();
+        alert('Kamera açılamadı: ' + e.message + '\nSeri numarasını elle girebilirsiniz.');
+      }
+    }
+    function stopScan() {
+      if (_scanLoop) { clearInterval(_scanLoop); _scanLoop = null; }
+      if (_scanStream) { _scanStream.getTracks().forEach((t) => t.stop()); _scanStream = null; }
+      $('scanOverlay').classList.remove('open');
+    }
+    $('scanBtn') && $('scanBtn').addEventListener('click', startScan);
+    $('scanClose') && $('scanClose').addEventListener('click', stopScan);
 
     // ── Gönder ──
     $('regForm').addEventListener('submit', async (e) => {
