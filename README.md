@@ -175,11 +175,23 @@ npm start
 
 ### Veritabanı (driver seçilebilir)
 
-Kimlik, audit log ve OS Agent kayıtları **SQL katmanında** tutulur (envanter Baserow'da kalır):
+Kimlik, audit log, OS Agent, hatlar, ayarlar ve zimmet kayıtları **SQL katmanında** tutulur:
 
 ```bash
 DATABASE_URL=sqlite:./data/assetman.db          # varsayılan — sıfır ek servis, tek dosya
 # DATABASE_URL=postgres://assetman:PAROLA@db:5432/assetman   # Pro/Enterprise (Docker profile)
+```
+
+Envanter (assets + licenses) **`INVENTORY_PROVIDER`** ile seçilir:
+
+```bash
+INVENTORY_PROVIDER=baserow   # varsayılan — Baserow REST API
+# INVENTORY_PROVIDER=sql     # envanter de DATABASE_URL'de → Baserow'a bağımlılık YOK, veri kurumda kalır
+```
+
+Baserow'dan SQL'e geçiş (id'ler korunur, `asset_id` bağları bozulmaz):
+```bash
+docker compose exec app node scripts/migrate-inventory-to-sql.js
 ```
 
 ### Kimlik sağlayıcı (local | LDAP/AD)
@@ -196,11 +208,13 @@ AUTH_PROVIDER=local     # yerel scrypt parola (varsayılan)
 | Değişken | Açıklama |
 |---|---|
 | `AI_PROVIDER` | `ollama` veya `anthropic` |
-| `OLLAMA_URL` / `OLLAMA_MODEL` | Yerel/uzak Ollama uç noktası |
+| `OLLAMA_URL` / `OLLAMA_MODEL` | Yerel/uzak Ollama uç noktası (Docker'da: `http://host.docker.internal:<port>`) |
 | `ANTHROPIC_API_KEY` | Claude API anahtarı (anthropic ise) |
-| `BASEROW_API_URL` / `BASEROW_API_TOKEN` / `BASEROW_TABLE_ID` | Baserow erişimi |
+| `INVENTORY_PROVIDER` | `baserow` (varsayılan) veya `sql` (envanter SQL'de) |
+| `BASEROW_API_URL` / `BASEROW_API_TOKEN` / `BASEROW_TABLE_ID` | Baserow erişimi (provider=baserow ise) |
 | `DATABASE_URL` | SQL katmanı — `sqlite:...` veya `postgres://...` |
 | `AUTH_PROVIDER` | `local` (scrypt) veya `ldap` (gerçek AD bind) |
+| `FX_PROVIDER` | `live` (frankfurter.app/ECB) veya `static` (tam izole) |
 | `SESSION_SECRET` | Oturum cookie HMAC (zorunlu, ≥32 karakter) |
 | `CHAIN_SECRET` | Audit log HMAC zincir sırrı (ayrı tutulması önerilir) |
 | `WORM_SECRET` | WORM AES-256-GCM anahtar türetimi |
@@ -210,6 +224,37 @@ AUTH_PROVIDER=local     # yerel scrypt parola (varsayılan)
 | `DISCOVERY_CONCURRENCY` / `DISCOVERY_BATCH_SIZE` | Ağ keşfi ölçek parametreleri |
 
 > **PRODUCTION:** `NODE_ENV=production` iken zayıf/varsayılan/kısa (<32) secret tespit edilirse sunucu **başlamaz** (`checkSecrets`).
+
+### Canlı sunucuya Docker kurulumu — sık takılınan noktalar (checklist)
+
+Gerçek bir sunucuya (Docker + PostgreSQL) kurarken karşılaşılan noktalar ve **kesin çözümleri** — tek seferde düzgün kurulum için:
+
+1. **Sunucuda zaten bir reverse-proxy (Traefik/Nginx) varsa** → bundled Caddy'yi **kullanma** (80/443 çakışır). `docker-compose.override.yml` ile Caddy'yi devre dışı bırakıp app'i mevcut proxy'ye label ile bağla:
+   ```yaml
+   services:
+     caddy: { profiles: ["disabled"] }
+     app:
+       labels:                                   # Traefik örneği (entrypoint/certresolver kendi adlarınla)
+         - "traefik.enable=true"
+         - "traefik.http.routers.assetman.rule=Host(`envanter.sirket.com`)"
+         - "traefik.http.routers.assetman.entrypoints=websecure"
+         - "traefik.http.routers.assetman.tls.certresolver=letsencrypt"
+         - "traefik.http.services.assetman.loadbalancer.server.port=3000"
+   ```
+   Proxy yoksa: `docker compose --profile postgres up -d` (Caddy TLS'i halleder).
+
+2. **Ollama ayrı bir container ise** → host'a publish edilen **porta** bağlan (iç 11434'e değil): `OLLAMA_URL=http://host.docker.internal:<host-portu>` (ör. `:32768`). app servisine ekle:
+   ```yaml
+   app:
+     extra_hosts: ["host.docker.internal:host-gateway"]
+   ```
+   Native Ollama ise varsayılan `127.0.0.1`'e bağlıdır → konteynerden erişilmez. `OLLAMA_HOST=0.0.0.0:11434` ile aç (systemd override + restart). **Ollama portunu firewall'da dışarı AÇMA** (iç iletişim, dışarı açmak güvenlik riski).
+
+3. **`.env` değiştirdiysen `docker compose up -d`** (recreate) — `docker compose restart` **.env'i yeniden okumaz**, eski değerlerle çalışır.
+
+4. **Firewall'da 80 VE 443 açık olmalı** (Let's Encrypt HTTP-challenge 80'i, uygulama 443'ü kullanır). Bulut firewall'unda (ör. Hostinger) kuralı eklediğin halde uygulanmıyorsa → firewall'u sunucudan **ayır → tekrar bağla** (detach/reattach); ruleset yeniden itilir.
+
+5. **Envanteri Baserow'suz kur**: `INVENTORY_PROVIDER=sql` + PostgreSQL. Not: PostgreSQL tip-katıdır — collector'ın gönderebildiği ondalık sayılar (ör. çekirdek `4.1`) integer sütunlara otomatik yuvarlanır (v2.0+ ile giderildi).
 
 ## Roller & Yetki Modeli
 

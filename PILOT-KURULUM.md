@@ -53,7 +53,9 @@ nano .env        # aşağıdaki §4 şablonuna göre doldur
 ```ini
 # ── AI: kapalı devre Ollama (aynı VPS) ──
 AI_PROVIDER=ollama
-OLLAMA_URL=http://host.docker.internal:11434   # bkz §4 not: docker-compose'a extra_hosts eklenir
+# Ollama CONTAINER ise host'a publish edilen porta bağlan (iç 11434'e DEĞİL), ör. 32768:
+OLLAMA_URL=http://host.docker.internal:32768   # `docker ps | grep ollama` ile host portunu doğrula
+# Native Ollama ise: OLLAMA_HOST=0.0.0.0:11434 (systemd) + OLLAMA_URL=http://host.docker.internal:11434
 OLLAMA_MODEL=qwen2.5:3b
 
 # ── Envanter: SQL (Baserow'dan bağımsız — veri kurumda kalır) ──
@@ -154,6 +156,15 @@ Register-ScheduledTask -TaskName "AssetCollector" -Action $action -Trigger $trig
 `collect-assets.ps1` içindeki webhook URL'sini `https://envanter.sirket.com/api/webhook` yap.
 
 ---
+
+## ⚡ Canlı kurulumda çözülmüş gotcha'lar (checklist)
+
+Bunlar gerçek kurulumda yaşandı — README [Canlı kurulum checklist](./README.md#canlı-sunucuya-docker-kurulumu--sık-takılınan-noktalar-checklist)'inde ayrıntılı:
+- **Sunucuda mevcut Traefik/proxy varsa** → Caddy'yi kapat, app'e proxy label'ları ekle (`docker-compose.override.yml`). 80/443 çakışmasın.
+- **Ollama container** → `OLLAMA_URL` host publish portuna (`:32768`), `extra_hosts: host.docker.internal:host-gateway`.
+- **`.env` değişince `up -d`** (recreate) — `restart` .env okumaz.
+- **Firewall: 80 + 443 aç.** Bulut firewall kuralı uygulanmıyorsa **detach/reattach**.
+- **`INVENTORY_PROVIDER=sql`** → PostgreSQL tip-katı; collector ondalıkları integer'a yuvarlanır (v2.0+).
 
 ## Canlı pilot uyarıları (dürüst)
 
