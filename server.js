@@ -622,6 +622,20 @@ app.get('/api/network/scan', async (req, res) => {
   }
 });
 
+// SNMP ağ keşfi — switch/firewall/AP/yazıcıları SNMP'yle bulup envantere yazar (it/admin)
+const snmpDiscovery = require('./agent/tools/snmp-discovery');
+app.post('/api/network/snmp-scan', requireRole('it', 'admin'), async (req, res) => {
+  try {
+    const body = req.body || {};
+    const opts = {};
+    if (Array.isArray(body.subnets) && body.subnets.length) opts.subnets = body.subnets;
+    res.json(await snmpDiscovery.runDiscovery(opts));
+  } catch (err) {
+    console.error('[POST /api/network/snmp-scan]', err.message);
+    res.status(400).json({ error: 'SNMP keşif hatası', detail: err.message });
+  }
+});
+
 // ─── Risk Skoru & Yenileme/Maliyet Öngörüsü ─────────────────────────────────
 app.get('/api/risk-scores', async (req, res) => {
   try {
@@ -973,4 +987,6 @@ initDataLayer().then(() => app.listen(PORT, () => {
   }, 60 * 1000); // dakikada bir kontrol
   // Network Discovery Agent: karantina cihazları ağda aktif mi? (canlı tarama + anlık alarm)
   startDiscoveryScheduler(sendDigest, 90 * 1000);
+  // SNMP Ağ Keşfi: switch/firewall/AP/yazıcı envanteri (SNMP_ENABLED=true ise)
+  snmpDiscovery.startSnmpScheduler();
 })).catch(err => { console.error('[boot] initDataLayer başarısız:', err.message); process.exit(1); });

@@ -456,6 +456,42 @@ test('settings: init olmadan DEFAULTS; setSection kalıcı + tip doğrulama', as
   assert.equal(settingsTools.getThresholds().low_ram_gb, 16);
 });
 
+// ── SNMP ağ keşfi (saf fonksiyonlar — ağ gerekmez) ────────────────────────────
+const snmpd = require('../agent/tools/snmp-discovery');
+test('snmp: CIDR genişletme + marka/kategori çıkarımı + parseDevice', () => {
+  // /24 → 254 host (.1-.254), ağ/broadcast hariç
+  const ips = snmpd.expandCidr('172.16.20.0/24');
+  assert.equal(ips.length, 254);
+  assert.equal(ips[0], '172.16.20.1');
+  assert.equal(ips[253], '172.16.20.254');
+  assert.equal(snmpd.expandCidr('10.0.0.0/30').length, 2); // /30 → 2 host
+
+  // Marka: enterprise OID önce, sonra sysDescr anahtar kelimeleri
+  assert.equal(snmpd.brandFrom('Linux', '1.3.6.1.4.1.12356.101'), 'Fortinet'); // OID
+  assert.equal(snmpd.brandFrom('Sophos XG Firewall', ''), 'Sophos');
+  assert.equal(snmpd.brandFrom('HP ProCurve Switch 2530', ''), 'HP');
+
+  // Kategori
+  assert.equal(snmpd.categoryFrom('HP LaserJet MFP'), 'Yazıcı');
+  assert.equal(snmpd.categoryFrom('Sophos XG Firewall'), 'Ağ Aygıtı');
+  assert.equal(snmpd.categoryFrom('Cisco Catalyst Switch'), 'Ağ Aygıtı');
+
+  // parseDevice: SNMP varbind sonuçlarını asset'e çevirir
+  const O = snmpd.OID;
+  const dev = snmpd.parseDevice('172.16.20.5', {
+    [O.sysDescr]: 'Sophos XG 210 Firewall', [O.sysName]: 'FW-HQ',
+    [O.sysUpTime]: 8640000 * 3, [O.sysObjectID]: '1.3.6.1.4.1.2604.5', [O.sysLocation]: 'Merkez',
+  }, 'S3100ABC', 'XG 210');
+  assert.equal(dev.hostname, 'FW-HQ');
+  assert.equal(dev.serial_number, 'S3100ABC');
+  assert.equal(dev.brand, 'Sophos');
+  assert.equal(dev.category, 'Ağ Aygıtı');
+  assert.equal(dev.ip_address, '172.16.20.5');
+  assert.equal(dev.uptime_days, 3); // 25920000 tick /100/86400 = 3 gün
+  // serial yoksa SNMP-<ip> fallback
+  assert.equal(snmpd.parseDevice('10.0.0.9', { [O.sysDescr]: 'x' }, null, null).serial_number, 'SNMP-10.0.0.9');
+});
+
 // ── DB driver seçim ────────────────────────────────────────────────────────────
 test('db: DATABASE_URL sqlite:./x.db → sqlite driver', () => {
   assert.equal(dbLayer.driver(), 'sqlite');
