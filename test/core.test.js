@@ -322,6 +322,25 @@ test('finops: kur döner, USD→TRY dönüşümü kurla ölçeklenir', async () 
   assert.ok(hi.try > lo.try);
 });
 
+// ── LDAP(S) TLS seçenekleri ───────────────────────────────────────────────────
+test('ldap: buildTlsOptions env okumasi (public CA bos, ic CA icin ca/reject/servername)', () => {
+  const ldap = require('../auth/ldap');
+  const saved = { ...process.env };
+  try {
+    delete process.env.LDAP_TLS_CA; delete process.env.LDAP_TLS_REJECT_UNAUTHORIZED; delete process.env.LDAP_TLS_SERVERNAME;
+    assert.deepEqual(ldap.buildTlsOptions(), {}, 'ayar yoksa boş (public CA otomatik güvenir)');
+    process.env.LDAP_TLS_REJECT_UNAUTHORIZED = 'false';
+    process.env.LDAP_TLS_SERVERNAME = 'dc.zenauraprint.local';
+    const t = ldap.buildTlsOptions();
+    assert.equal(t.rejectUnauthorized, false);
+    assert.equal(t.servername, 'dc.zenauraprint.local');
+  } finally {
+    for (const k of ['LDAP_TLS_CA', 'LDAP_TLS_REJECT_UNAUTHORIZED', 'LDAP_TLS_SERVERNAME']) {
+      if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k];
+    }
+  }
+});
+
 // ── Envanter SQL sağlayıcı (Baserow'dan bağımsız) ────────────────────────────
 const invSql = require('../agent/tools/inventory-sql');
 const licSql = require('../agent/tools/licenses-sql');

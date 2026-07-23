@@ -64,6 +64,21 @@ function mapRole(groupCNs, roleMap, defaultRole) {
   return best || defaultRole;
 }
 
+// LDAPS (ldaps://) için TLS seçenekleri — public CA'da gerekmez; iç CA'da kök tanıtılır.
+//  LDAP_TLS_CA=/yol/ca.pem            → iç CA kök sertifikası (önerilen, doğrulamalı)
+//  LDAP_TLS_REJECT_UNAUTHORIZED=false → doğrulamayı kapat (YALNIZ hızlı test, üretimde KULLANMA)
+//  LDAP_TLS_SERVERNAME=host           → SNI/hostname override (IP ile bağlanıp cert hostname'i farklıysa)
+function buildTlsOptions() {
+  const tls = {};
+  if (process.env.LDAP_TLS_REJECT_UNAUTHORIZED === 'false') tls.rejectUnauthorized = false;
+  if (process.env.LDAP_TLS_CA) {
+    try { tls.ca = require('fs').readFileSync(process.env.LDAP_TLS_CA); }
+    catch (e) { console.error('[ldap] LDAP_TLS_CA okunamadı:', e.message); }
+  }
+  if (process.env.LDAP_TLS_SERVERNAME) tls.servername = process.env.LDAP_TLS_SERVERNAME;
+  return tls;
+}
+
 // Varsayılan client fabrikası — ldapts YALNIZ burada (provider=ldap iken) yüklenir.
 function defaultCreateClient(url, timeoutMs) {
   let LdapClient;
@@ -71,7 +86,12 @@ function defaultCreateClient(url, timeoutMs) {
   catch {
     throw new Error("LDAP sağlayıcı için 'ldapts' paketi gerekli. Kurun: npm install ldapts");
   }
-  return new LdapClient({ url, timeout: timeoutMs, connectTimeout: timeoutMs });
+  const opts = { url, timeout: timeoutMs, connectTimeout: timeoutMs };
+  if (/^ldaps:/i.test(String(url))) {                    // yalnız LDAPS'te TLS seçenekleri
+    const tls = buildTlsOptions();
+    if (Object.keys(tls).length) opts.tlsOptions = tls;
+  }
+  return new LdapClient(opts);
 }
 
 // Bir arama sonucundan attribute değeri (ldapts entry: { dn, <attr>: value|[value] })
@@ -137,4 +157,4 @@ async function authenticate(username, password, deps = {}) {
   };
 }
 
-module.exports = { authenticate, escapeFilter, cnOf, groupsOf, mapRole, _cfg: cfg };
+module.exports = { authenticate, escapeFilter, cnOf, groupsOf, mapRole, buildTlsOptions, _cfg: cfg };

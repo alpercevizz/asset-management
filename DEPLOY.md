@@ -153,7 +153,28 @@ LDAP_MFA_GROUP=MFA-Enforced
 3. `memberOf` grupları `LDAP_GROUP_ROLE_MAP` ile role eşlenir. Kullanıcı birden çok gruptaysa **en yetkili rol kazanır** (admin > approver > it). Hiçbiri eşleşmezse `LDAP_DEFAULT_ROLE`.
 4. **MFA:** `LDAP_MFA_GROUP` üyeliğiyle modellenir (Entra ID / Duo'dan senkronlanan güvenlik grubu). Boş bırakılırsa MFA üst katmanda zorunlu varsayılır. Grupta olmayan kullanıcı için audit log **MFA-bypass** olarak işaretlenir.
 
-> **Güvenlik notu:** LDAP hesaplarının yerel `password` kolonu doğrulanamaz rastgele bir hash'le doldurulur — `AUTH_PROVIDER=local`'a geri dönseniz bile bu hesaplara bilinen parolayla girilemez. LDAPS (636/TLS) için `LDAP_URL=ldaps://...` kullanın.
+> **Güvenlik notu:** LDAP hesaplarının yerel `password` kolonu doğrulanamaz rastgele bir hash'le doldurulur — `AUTH_PROVIDER=local`'a geri dönseniz bile bu hesaplara bilinen parolayla girilemez.
+
+### LDAP mı LDAPS mı? (şema ile seçilir)
+
+`LDAP_URL` şeması modu belirler — **ikisi de desteklenir, kurulum başına seçersiniz:**
+
+| Mod | `LDAP_URL` | TLS ek ayarı |
+|---|---|---|
+| **LDAP (389)** | `ldap://dc.sirket.local:389` | Yok. **Uyarı:** parolalar açık metin gider (yalnız güvenilir iç LAN); sertleştirilmiş DC "LDAP signing zorunlu" ise **reddedebilir** |
+| **LDAPS + public CA** | `ldaps://dc.sirket.com:636` | Yok — Node otomatik güvenir (hostname wildcard/SAN ile eşleşmeli, IP değil) |
+| **LDAPS + iç CA (AD CS)** | `ldaps://dc.sirket.local:636` | İç CA kökünü tanıtın → aşağı |
+
+İç CA ile LDAPS (en yaygın on-prem):
+```
+# İç CA kök sertifikasını PEM olarak dışa aktarıp volume'a koyun (ör. data/):
+LDAP_TLS_CA=/app/data/internal-ca.pem
+# Sadece hızlı test için (üretimde KULLANMAYIN):
+# LDAP_TLS_REJECT_UNAUTHORIZED=false
+# IP ile bağlanıp cert hostname'i farklıysa:
+# LDAP_TLS_SERVERNAME=dc.sirket.local
+```
+> Güvenlik-odaklı ürün için **LDAPS önerilir** — maliyeti tek bir CA-kök dosyası. DC'nin 636'da hangi cert'i sunduğunu görmek için: `openssl s_client -connect dc.sirket.local:636 </dev/null 2>/dev/null | openssl x509 -noout -subject -issuer`.
 
 **LDAP bağlantı testi:**
 ```bash
