@@ -124,6 +124,8 @@ Yerleşik roller: `admin` · `it` · `approver` — Roller & Yetki Modeli için 
 
 ## 4b. Kimlik sağlayıcı: LDAP / Active Directory (opsiyonel)
 
+> 📘 **On-prem AD kurulumu için adım-adım runbook:** [docs/LDAP-KURULUM.md](./docs/LDAP-KURULUM.md) — servis hesabı, grup→rol, LDAP/LDAPS, iç CA, doğrulama, sorun giderme.
+
 AssetMan **kimlik sağlayıcısı seçilebilir** (`AUTH_PROVIDER`), tıpkı veritabanı gibi:
 
 **local (varsayılan):** Kullanıcılar `users` tablosunda, scrypt parola. Sıfır ek servis, hızlı demo.
