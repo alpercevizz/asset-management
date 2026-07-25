@@ -132,9 +132,7 @@ AssetMan **kimlik sağlayıcısı seçilebilir** (`AUTH_PROVIDER`), tıpkı veri
 
 **ldap:** Gerçek Active Directory bind. Kullanıcı **ilk girişte** dizinden `users` tablosuna senkronlanır; **rolü AD grup üyeliğinden** türetilir. Audit log imzası, onay akışı ve MFA-bypass tespiti gerçek AD kimliğiyle çalışır.
 
-```bash
-npm install ldapts        # yalnız ldap modunda gerekli (pure-JS, native derleme yok)
-```
+> `ldapts` bağımlılığı pakette gelir (pure-JS, native derleme yok) — Docker imajında hazırdır, ek kurulum gerekmez.
 
 `.env`:
 ```

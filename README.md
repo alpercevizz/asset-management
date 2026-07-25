@@ -9,7 +9,7 @@ Değiştirilemez audit log · çift dijital onay · gerçek AD/LDAP girişi · c
 [![Node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![Express](https://img.shields.io/badge/express-4.x-000000?logo=express&logoColor=white)](https://expressjs.com)
 [![Database](https://img.shields.io/badge/db-SQLite%20%7C%20PostgreSQL-336791?logo=postgresql&logoColor=white)](#kurulum)
-[![Tests](https://img.shields.io/badge/tests-22%2F22%20passing-22c55e)](#test)
+[![Tests](https://img.shields.io/badge/tests-25%2F25%20passing-22c55e)](#test)
 [![License](https://img.shields.io/badge/license-see%20LICENSE-blue)](./LICENSE)
 [![Status](https://img.shields.io/badge/status-active-success)]()
 
@@ -108,7 +108,7 @@ flowchart LR
 
     WORM[(WORM Repository<br/>AES-256-GCM<br/>write-once)]
     LDAP[LDAP / Active Directory]
-    BR[(Baserow<br/>Inventory DB)]
+    BR[(Envanter deposu<br/>SQL veya Baserow<br/>INVENTORY_PROVIDER)]
     N8N[n8n Webhook<br/>Mail · Telegram]
     UI[Web Panel<br/>sıcak-modern · light/dark]
 
@@ -154,56 +154,208 @@ flowchart LR
 
 ## Kurulum
 
+### Adım 1 — Kurulum yolunuzu seçin
+
+| | Senaryo | Kime uygun | Ne kurulur | Süre |
+|---|---|---|---|---|
+| **A** | [Hızlı deneme](#kurulum-a) | Geliştirici, demo | Node.js + SQLite | ~5 dk |
+| **B** | [Tek sunucu (Docker)](#kurulum-b) | Küçük/orta kurum | Docker + SQLite + Caddy TLS | ~15 dk |
+| **C** | [Kurumsal on-prem](#kurulum-c) | Üretim, müşteri sahası | Docker + PostgreSQL + AD/LDAP + SNMP | ~45 dk |
+| **D** | [Mevcut proxy'li sunucu](#kurulum-d) | Traefik/Nginx zaten var | C + reverse-proxy entegrasyonu | ~30 dk |
+
+> Ortak ön koşullar: **B/C/D** için Docker 20.10+ ve `docker compose`. HTTPS istiyorsanız bir **alan adı** (DNS A kaydı sunucu IP'sine) + **80/443** portları açık.
+
+### Adım 2 — Seçtiğiniz yolun komutları
+
+<a id="kurulum-a"></a>
+
+<details>
+<summary><b>A — Hızlı deneme (geliştirme/demo)</b></summary>
+
+Üretim için değildir; tek komutla ayağa kalkar, veriler `data/assetman.db` (SQLite) içinde.
+
 ```bash
-# 1. Klonla
+git clone https://github.com/alpercevizz/asset-management.git
+cd asset-management
+npm install
+cp .env.example .env          # varsayılanlar demo için yeterli
+npm start                     # → http://localhost:3000
+```
+
+İlk açılışta kullanıcılar tohumlanır ve **parolalar bir kez console'a yazılır** — kaydedin.
+Kendi parolanızı belirlemek için `.env`'ye `APP_PASSWORD=...` (admin) veya `USER_PW_<KULLANICI>=...` ekleyin.
+</details>
+
+<a id="kurulum-b"></a>
+
+<details>
+<summary><b>B — Tek sunucu (Docker + otomatik TLS)</b></summary>
+
+Caddy, alan adınız için Let's Encrypt sertifikasını otomatik alır.
+
+```bash
+# 1) Klonla
 git clone https://github.com/alpercevizz/asset-management.git
 cd asset-management
 
-# 2. Bağımlılıkları yükle
-npm install
-
-# 3. Yapılandırma
+# 2) Yapılandır
 cp .env.example .env
-# .env içindeki değerleri doldur (Baserow, AI provider, secrets)
-
-# 4. Sunucuyu başlat
-npm start
-# Dashboard: http://localhost:3000
+nano .env
 ```
+`.env` içinde en az şunlar:
+```ini
+ASSETMAN_HOST=envanter.sirket.com     # DNS A kaydı bu sunucuya bakmalı
+ADMIN_EMAIL=it@sirket.com             # Let's Encrypt bildirimi
+APP_PASSWORD=guclu-bir-admin-parolasi
+NODE_ENV=production
+DATABASE_URL=sqlite:./data/assetman.db
+INVENTORY_PROVIDER=sql                # envanter de kurumda kalsın (Baserow gerekmez)
+SESSION_SECRET=                       # BOŞ bırakın → ilk açılışta güçlü üretilir
+CHAIN_SECRET=
+WORM_SECRET=
+```
+```bash
+# 3) Başlat
+docker compose up -d
+docker compose logs -f app            # "Server: http://localhost:3000" görene kadar
 
-İlk açılışta `users` tablosu (SQL) tohumlanır. Demo kullanıcı parolaları **rastgele üretilip console'a yazılır** (bir kez gösterilir, kaydedin). Kendi parolanızı belirlemek için `.env`'ye `USER_PW_<USERNAME>=...` ekleyin. Docker + Caddy TLS ile kurumsal kurulum için [DEPLOY.md](./DEPLOY.md)'ye bakın.
+# 4) Doğrula
+curl -sI https://envanter.sirket.com | head -3     # 200/302 dönmeli
+```
+Tarayıcıdan `https://envanter.sirket.com` → **admin** + belirlediğiniz parola.
+</details>
 
-### Veritabanı (driver seçilebilir)
+<a id="kurulum-c"></a>
 
-Kimlik, audit log, OS Agent, hatlar, ayarlar ve zimmet kayıtları **SQL katmanında** tutulur:
+<details>
+<summary><b>C — Kurumsal on-prem (PostgreSQL + AD + SNMP)</b></summary>
+
+Tam kurulum: veriler kurumda, kimlik AD'den, ağ cihazları SNMP ile otomatik envantere.
 
 ```bash
-DATABASE_URL=sqlite:./data/assetman.db          # varsayılan — sıfır ek servis, tek dosya
-# DATABASE_URL=postgres://assetman:PAROLA@db:5432/assetman   # Pro/Enterprise (Docker profile)
+# 1) Klonla + yapılandır
+git clone https://github.com/alpercevizz/asset-management.git
+cd asset-management
+cp .env.example .env
+nano .env
+```
+```ini
+# — Alan adı & TLS —
+ASSETMAN_HOST=envanter.sirket.local
+ADMIN_EMAIL=it@sirket.com
+NODE_ENV=production
+
+# — Veri: her şey kurumun kendi PostgreSQL'inde —
+DATABASE_URL=postgres://assetman:GUCLU-PAROLA@db:5432/assetman
+DB_PASSWORD=GUCLU-PAROLA
+INVENTORY_PROVIDER=sql
+
+# — Kimlik: gerçek Active Directory —
+AUTH_PROVIDER=ldap
+LDAP_URL=ldaps://dc.sirket.local:636          # veya ldap://dc.sirket.local:389
+LDAP_TLS_CA=/app/data/internal-ca.pem         # iç CA ise (public CA'da gerekmez)
+LDAP_BIND_DN=CN=svc-assetman,OU=ServiceAccounts,DC=sirket,DC=local
+LDAP_BIND_PASSWORD=servis-hesabi-parolasi
+LDAP_BASE_DN=DC=sirket,DC=local
+LDAP_GROUP_ROLE_MAP={"AssetMan-Admins":"admin","AssetMan-IT":"it","AssetMan-Approvers":"approver"}
+
+# — AI: kapalı devre (veri dışarı çıkmaz) —
+AI_PROVIDER=ollama
+OLLAMA_URL=http://host.docker.internal:11434  # Ollama container ise host'a publish edilen port
+OLLAMA_MODEL=qwen2.5:3b
+
+# — Ağ keşfi: switch/firewall/AP/yazıcı otomatik envanter —
+SNMP_ENABLED=true
+SNMP_SUBNETS=192.168.1.0/24,172.16.20.0/24    # HQ + uzak şube subnet'leri
+SNMP_VERSION=3
+SNMP_V3_USER=assetman-ro
+SNMP_V3_AUTH_KEY=...
+SNMP_V3_PRIV_KEY=...
+
+# — Sırlar: BOŞ bırakın, otomatik üretilir —
+SESSION_SECRET=
+CHAIN_SECRET=
+WORM_SECRET=
+```
+```bash
+# 2) Ollama (kapalı devre AI) — aynı sunucuda
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull qwen2.5:3b
+
+# 3) app servisine host erişimi (docker-compose.yml → app:)
+#      extra_hosts:
+#        - "host.docker.internal:host-gateway"
+
+# 4) PostgreSQL profiliyle başlat
+docker compose --profile postgres up -d
+docker compose logs -f app
+
+# 5) (Baserow'dan geliyorsanız) envanteri taşı — id'ler korunur
+docker compose exec app node scripts/migrate-inventory-to-sql.js
+
+# 6) AD bağlantısını doğrula
+docker compose exec app node -e "process.env.AUTH_PROVIDER='ldap'; require('./auth/ldap').authenticate('KULLANICI','PAROLA').then(p=>console.log(p||'BASARISIZ')).catch(e=>console.error(e.message))"
 ```
 
-Envanter (assets + licenses) **`INVENTORY_PROVIDER`** ile seçilir:
+**Ayrıntılı rehberler:** [AD/LDAP runbook](./docs/LDAP-KURULUM.md) · [pilot kurulum](./PILOT-KURULUM.md) · [DEPLOY.md](./DEPLOY.md)
+</details>
+
+<a id="kurulum-d"></a>
+
+<details>
+<summary><b>D — Sunucuda zaten Traefik/Nginx varsa</b></summary>
+
+Bundled Caddy'yi **kullanmayın** (80/443 çakışır). Caddy'yi kapatıp app'i mevcut proxy'ye bağlayın:
 
 ```bash
-INVENTORY_PROVIDER=baserow   # varsayılan — Baserow REST API
-# INVENTORY_PROVIDER=sql     # envanter de DATABASE_URL'de → Baserow'a bağımlılık YOK, veri kurumda kalır
+cat > docker-compose.override.yml <<'EOF'
+services:
+  caddy:
+    profiles: ["disabled"]
+  app:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.assetman.rule=Host(`envanter.sirket.com`)"
+      - "traefik.http.routers.assetman.entrypoints=websecure"
+      - "traefik.http.routers.assetman.tls.certresolver=letsencrypt"
+      - "traefik.http.services.assetman.loadbalancer.server.port=3000"
+EOF
+
+docker compose --profile postgres up -d
 ```
+> `entrypoints` / `certresolver` adlarını kendi Traefik kurulumunuzdan alın:
+> `docker inspect <traefik-container> --format '{{range .Args}}{{println .}}{{end}}'`
+>
+> Nginx/başka proxy ise: app'i `expose: 3000` ile bırakıp proxy'den `proxy_pass http://assetman-app:3000` verin.
+</details>
+
+### Adım 3 — Kurulum sonrası
+
+```bash
+# Cihazları toplamaya başlat (Windows istemci)
+.\client-scripts\windows\collect-assets.ps1 -WebhookUrl "https://envanter.sirket.com/api/webhook"
+```
+Ardından: GPO ile yaygınlaştırma ([aşağıda](#zamanlanmış-görev-windows)) · telefon/tablet için panelden **QR self-servis** · ağ cihazları için **SNMP keşfi**.
+
+### Bileşen seçimleri (özet)
+
+| Bileşen | Seçenekler | Değişken |
+|---|---|---|
+| **Veritabanı** | SQLite (tek dosya) · PostgreSQL (kurumsal) | `DATABASE_URL` |
+| **Envanter** | Baserow (no-code) · SQL (kurumda kalır) | `INVENTORY_PROVIDER` |
+| **Kimlik** | Yerel scrypt · Active Directory | `AUTH_PROVIDER` |
+| **LDAP taşıma** | LDAP (389) · LDAPS (636, TLS) | `LDAP_URL` şeması |
+| **Yapay zeka** | Ollama (kapalı devre) · Anthropic API | `AI_PROVIDER` |
+| **Döviz** | Canlı ECB · Sabit (tam izole) | `FX_PROVIDER` |
 
 Baserow'dan SQL'e geçiş (id'ler korunur, `asset_id` bağları bozulmaz):
 ```bash
 docker compose exec app node scripts/migrate-inventory-to-sql.js
 ```
 
-### Kimlik sağlayıcı (local | LDAP/AD)
-
-```bash
-AUTH_PROVIDER=local     # yerel scrypt parola (varsayılan)
-# AUTH_PROVIDER=ldap    # gerçek Active Directory bind — rol AD grup üyeliğinden türetilir
-```
-
-`ldap` modunda kullanıcı ilk girişte dizinden `users` tablosuna senkronlanır; ayrıntılı yapılandırma (`LDAP_URL`, `LDAP_BIND_DN`, `LDAP_GROUP_ROLE_MAP`, `LDAP_MFA_GROUP` …) için [DEPLOY.md §4b](./DEPLOY.md)'ye bakın. Gerektiğinde: `npm install ldapts`.
-
-### Yapılandırma (.env)
+### Yapılandırma referansı (.env)
 
 | Değişken | Açıklama |
 |---|---|
@@ -225,36 +377,22 @@ AUTH_PROVIDER=local     # yerel scrypt parola (varsayılan)
 
 > **PRODUCTION:** `NODE_ENV=production` iken zayıf/varsayılan/kısa (<32) secret tespit edilirse sunucu **başlamaz** (`checkSecrets`).
 
-### Canlı sunucuya Docker kurulumu — sık takılınan noktalar (checklist)
+### Kurulum sorun giderme
 
-Gerçek bir sunucuya (Docker + PostgreSQL) kurarken karşılaşılan noktalar ve **kesin çözümleri** — tek seferde düzgün kurulum için:
+Gerçek kurulumlarda karşılaşılan sorunlar ve **kesin çözümleri**:
 
-1. **Sunucuda zaten bir reverse-proxy (Traefik/Nginx) varsa** → bundled Caddy'yi **kullanma** (80/443 çakışır). `docker-compose.override.yml` ile Caddy'yi devre dışı bırakıp app'i mevcut proxy'ye label ile bağla:
-   ```yaml
-   services:
-     caddy: { profiles: ["disabled"] }
-     app:
-       labels:                                   # Traefik örneği (entrypoint/certresolver kendi adlarınla)
-         - "traefik.enable=true"
-         - "traefik.http.routers.assetman.rule=Host(`envanter.sirket.com`)"
-         - "traefik.http.routers.assetman.entrypoints=websecure"
-         - "traefik.http.routers.assetman.tls.certresolver=letsencrypt"
-         - "traefik.http.services.assetman.loadbalancer.server.port=3000"
-   ```
-   Proxy yoksa: `docker compose --profile postgres up -d` (Caddy TLS'i halleder).
+| Belirti | Neden | Çözüm |
+|---|---|---|
+| `port is already allocated` / Caddy başlamıyor | Sunucuda zaten Traefik/Nginx var (80/443 dolu) | [Senaryo D](#d--sunucuda-zaten-traefiknginx-varsa) — Caddy'yi kapat, app'i mevcut proxy'ye bağla |
+| Sohbette `ECONNREFUSED ...:11434` | Ollama **container** ise 11434 iç porttur | `OLLAMA_URL`'i host'a publish edilen porta çevir (`docker ps \| grep ollama`), app'e `extra_hosts: host.docker.internal:host-gateway` ekle |
+| Ollama native ama erişilemiyor | Varsayılan `127.0.0.1`'e bağlı | `OLLAMA_HOST=0.0.0.0:11434` (systemd override + restart). Portu firewall'da **dışarı açma** |
+| `.env` değişti ama etkisiz | `docker compose restart` .env'i **yeniden okumaz** | `docker compose up -d` (recreate) |
+| Let's Encrypt `Timeout during connect` | 80 dışarıdan kapalı (challenge başarısız) | Firewall'da **80 + 443** aç. Bulut firewall'unda (ör. Hostinger) kural uygulanmıyorsa → sunucudan **ayır/tekrar bağla** (ruleset yeniden itilir) |
+| Site açılmıyor ama cert alınmış | 443 kapalı (cert 80'den alınır, tarayıcı 443 kullanır) | 443'ü aç: `Test-NetConnection <host> -Port 443` ile doğrula |
+| Webhook `500` + `invalid input syntax for type integer` | PostgreSQL tip-katı; collector ondalık gönderebilir | v2.0+ ile giderildi (otomatik yuvarlama) — güncelleyin |
+| `npm ci` build hatası (`Missing: ... from lock file`) | `package.json` ↔ `package-lock.json` uyumsuz | `npm install --package-lock-only` çalıştırıp lock'u commit'leyin |
 
-2. **Ollama ayrı bir container ise** → host'a publish edilen **porta** bağlan (iç 11434'e değil): `OLLAMA_URL=http://host.docker.internal:<host-portu>` (ör. `:32768`). app servisine ekle:
-   ```yaml
-   app:
-     extra_hosts: ["host.docker.internal:host-gateway"]
-   ```
-   Native Ollama ise varsayılan `127.0.0.1`'e bağlıdır → konteynerden erişilmez. `OLLAMA_HOST=0.0.0.0:11434` ile aç (systemd override + restart). **Ollama portunu firewall'da dışarı AÇMA** (iç iletişim, dışarı açmak güvenlik riski).
-
-3. **`.env` değiştirdiysen `docker compose up -d`** (recreate) — `docker compose restart` **.env'i yeniden okumaz**, eski değerlerle çalışır.
-
-4. **Firewall'da 80 VE 443 açık olmalı** (Let's Encrypt HTTP-challenge 80'i, uygulama 443'ü kullanır). Bulut firewall'unda (ör. Hostinger) kuralı eklediğin halde uygulanmıyorsa → firewall'u sunucudan **ayır → tekrar bağla** (detach/reattach); ruleset yeniden itilir.
-
-5. **Envanteri Baserow'suz kur**: `INVENTORY_PROVIDER=sql` + PostgreSQL. Not: PostgreSQL tip-katıdır — collector'ın gönderebildiği ondalık sayılar (ör. çekirdek `4.1`) integer sütunlara otomatik yuvarlanır (v2.0+ ile giderildi).
+LDAP/AD'ye özel sorunlar için: [docs/LDAP-KURULUM.md → Sorun giderme](./docs/LDAP-KURULUM.md).
 
 ## Roller & Yetki Modeli
 
