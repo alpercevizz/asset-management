@@ -13,7 +13,7 @@ kendi AD hesaplarıyla girer, **rolleri AD grup üyeliğinden** türetilir. ~30 
 |---|---|---|
 | 1 | AssetMan on-prem kurulu ve çalışıyor | `AUTH_PROVIDER=local` ile ilk açılış yapılmış olabilir |
 | 2 | AD/DC erişilebilir | AssetMan sunucusu → DC **389** (LDAP) veya **636** (LDAPS) |
-| 3 | Domain bilgileri | Domain: `zenauraprint.local` · Base DN: `DC=zenauraprint,DC=local` |
+| 3 | Domain bilgileri | Domain: `yourdomain.local` · Base DN: `DC=yourdomain,DC=local` |
 | 4 | Bir **Domain Admin** (kurulum adımları için) | Servis hesabı + grup oluşturmak için |
 
 ---
@@ -27,8 +27,8 @@ Import-Module ActiveDirectory
 
 # Servis (okuma) hesabı
 New-ADUser -Name "svc-assetman" -SamAccountName "svc-assetman" `
-  -UserPrincipalName "svc-assetman@zenauraprint.local" `
-  -Path "OU=ServiceAccounts,DC=zenauraprint,DC=local" `      # kendi OU'nu yaz
+  -UserPrincipalName "svc-assetman@yourdomain.local" `
+  -Path "OU=ServiceAccounts,DC=yourdomain,DC=local" `      # kendi OU'nu yaz
   -AccountPassword (Read-Host -AsSecureString "Servis hesabi parolasi") `
   -Enabled $true -PasswordNeverExpires $true -CannotChangePassword $true
 ```
@@ -40,9 +40,9 @@ AssetMan rolleri: **admin · it · approver**. Her AD grubunu bir role eşleyece
 
 ```powershell
 # Rol grupları (istersen mevcut gruplarını kullan — Domain Admins, BT vb.)
-New-ADGroup -Name "AssetMan-Admins"    -GroupScope Global -Path "OU=Groups,DC=zenauraprint,DC=local"
-New-ADGroup -Name "AssetMan-IT"        -GroupScope Global -Path "OU=Groups,DC=zenauraprint,DC=local"
-New-ADGroup -Name "AssetMan-Approvers" -GroupScope Global -Path "OU=Groups,DC=zenauraprint,DC=local"
+New-ADGroup -Name "AssetMan-Admins"    -GroupScope Global -Path "OU=Groups,DC=yourdomain,DC=local"
+New-ADGroup -Name "AssetMan-IT"        -GroupScope Global -Path "OU=Groups,DC=yourdomain,DC=local"
+New-ADGroup -Name "AssetMan-Approvers" -GroupScope Global -Path "OU=Groups,DC=yourdomain,DC=local"
 
 # Kullanıcıları ekle (DOĞRUDAN üyelik — iç içe/nested grup DEĞİL)
 Add-ADGroupMember -Identity "AssetMan-Admins"    -Members "bt.muduru"
@@ -77,10 +77,10 @@ Modu **`LDAP_URL` şeması** belirler. Üç senaryodan birini seç:
 **Senaryo A — LDAP (389, şifresiz — yalnız güvenilir iç LAN)**
 ```ini
 AUTH_PROVIDER=ldap
-LDAP_URL=ldap://dc.zenauraprint.local:389
-LDAP_BIND_DN=CN=svc-assetman,OU=ServiceAccounts,DC=zenauraprint,DC=local
+LDAP_URL=ldap://dc.yourdomain.local:389
+LDAP_BIND_DN=CN=svc-assetman,OU=ServiceAccounts,DC=yourdomain,DC=local
 LDAP_BIND_PASSWORD=servis-hesabi-parolasi
-LDAP_BASE_DN=DC=zenauraprint,DC=local
+LDAP_BASE_DN=DC=yourdomain,DC=local
 LDAP_USER_ATTR=sAMAccountName
 LDAP_USER_FILTER=(&(objectCategory=person)(objectClass=user)({attr}={u}))
 LDAP_GROUP_ROLE_MAP={"AssetMan-Admins":"admin","AssetMan-IT":"it","AssetMan-Approvers":"approver"}
@@ -91,13 +91,13 @@ LDAP_MFA_GROUP=
 **Senaryo B — LDAPS (636) + iç CA (önerilen on-prem)**
 ```ini
 # A'daki her şey + şunlar:
-LDAP_URL=ldaps://dc.zenauraprint.local:636
+LDAP_URL=ldaps://dc.yourdomain.local:636
 LDAP_TLS_CA=/app/data/internal-ca.pem
 ```
 
 **Senaryo C — LDAPS (636) + public CA** (DC 636'da public wildcard sunuyorsa)
 ```ini
-LDAP_URL=ldaps://dc.zenauraprint.com:636     # cert hostname'iyle eşleşen ad (IP değil!)
+LDAP_URL=ldaps://dc.yourdomain.com:636     # cert hostname'iyle eşleşen ad (IP değil!)
 # TLS ayarı gerekmez — Node otomatik güvenir
 ```
 
