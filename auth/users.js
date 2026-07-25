@@ -193,4 +193,79 @@ function identityOf(usernameOrDisplay, overrides = {}) {
 function listApprovers() { _ensure(); return _cache.filter(u => u.role === 'approver' || u.role === 'admin').map(u => u.display); }
 function hasRole(user, ...roles) { return user && roles.includes(user.role); }
 
-module.exports = { ROLES, AD_DOMAIN, AUTH_PROVIDER, init, _invalidate, authenticate, authenticateAsync, upsertFromDirectory, findUser, publicUser, identityOf, listApprovers, hasRole, all };
+// ── Kullanıcı yönetimi (admin) — local hesaplar için CRUD ────────────────────
+// GÜVENLİK KURALLARI (burada uygulanır, UI'a güvenilmez):
+//  • Son admin silinemez / rolü düşürülemez → sistem kilitlenmez
+//  • Kullanıcı adı benzersiz (küçük harfe normalize)
+//  • Parola en az 8 karakter, scrypt ile saklanır
+//  • LDAP modunda hesaplar dizinden gelir; buradan eklenen yerel hesap bir sonraki
+//    AD girişinde EZİLMEZ (farklı username ise), ama rol değişiklikleri AD'den gelen
+//    kullanıcıda bir sonraki girişte dizindeki gruba göre yeniden yazılır.
+const MIN_PW = 8;
+
+function _adminCount() { _ensure(); return _cache.filter(u => u.role === 'admin').length; }
+function _isLastAdmin(username) {
+  const u = findUser(username);
+  return !!(u && u.role === 'admin' && _adminCount() <= 1);
+}
+function _validate({ username, role, password, requirePassword }) {
+  if (username !== undefined) {
+    const un = String(username || '').trim().toLowerCase();
+    if (!/^[a-z0-9._-]{3,64}$/.test(un)) throw new Error('Kullanıcı adı 3-64 karakter olmalı (a-z, 0-9, nokta, tire, alt çizgi).');
+  }
+  if (role !== undefined && !ROLES.includes(role)) throw new Error(`Geçersiz rol. Geçerli: ${ROLES.join(', ')}`);
+  if (requirePassword || (password !== undefined && password !== '')) {
+    if (String(password || '').length < MIN_PW) throw new Error(`Parola en az ${MIN_PW} karakter olmalı.`);
+  }
+}
+
+// Tüm kullanıcılar (parolasız) — admin listesi için
+function listUsers() { _ensure(); return _cache.map(publicUser); }
+
+async function createUser({ username, password, role = 'it', display, upn }) {
+  _validate({ username, role, password, requirePassword: true });
+  const un = String(username).trim().toLowerCase();
+  if (findUser(un)) throw new Error(`"${un}" kullanıcı adı zaten var.`);
+  await db()('users').insert({
+    username: un,
+    password: hashPassword(password),
+    role,
+    display: (display && String(display).trim()) || un,
+    upn: (upn && String(upn).trim()) || `${un}@${AD_DOMAIN}`,
+    groups: JSON.stringify([]),
+    mfa_enabled: true,
+    created_at: new Date().toISOString(),
+  });
+  await init();
+  return publicUser(findUser(un));
+}
+
+// Kısmi güncelleme: role / display / upn / password (boş parola = değiştirme)
+async function updateUser(username, { role, display, upn, password } = {}) {
+  const u = findUser(username);
+  if (!u) throw new Error('Kullanıcı bulunamadı.');
+  _validate({ role, password });
+  if (role && role !== 'admin' && _isLastAdmin(u.username)) {
+    throw new Error('Son admin hesabının rolü değiştirilemez — sistemde en az bir admin kalmalı.');
+  }
+  const patch = {};
+  if (role) patch.role = role;
+  if (display !== undefined) patch.display = String(display).trim() || u.username;
+  if (upn !== undefined) patch.upn = String(upn).trim() || null;
+  if (password) patch.password = hashPassword(password);
+  if (!Object.keys(patch).length) return publicUser(u);
+  await db()('users').where({ username: u.username }).update(patch);
+  await init();
+  return publicUser(findUser(u.username));
+}
+
+async function deleteUser(username) {
+  const u = findUser(username);
+  if (!u) throw new Error('Kullanıcı bulunamadı.');
+  if (_isLastAdmin(u.username)) throw new Error('Son admin hesabı silinemez — sistemde en az bir admin kalmalı.');
+  await db()('users').where({ username: u.username }).del();
+  await init();
+  return { deleted: u.username };
+}
+
+module.exports = { ROLES, AD_DOMAIN, AUTH_PROVIDER, init, _invalidate, authenticate, authenticateAsync, upsertFromDirectory, findUser, publicUser, identityOf, listApprovers, hasRole, all, listUsers, createUser, updateUser, deleteUser };

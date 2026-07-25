@@ -776,6 +776,58 @@ app.get('/api/assignments/mismatches', async (req, res) => {
   }
 });
 
+// ─── Kullanıcı Yönetimi (admin) ──────────────────────────────────────────────
+// Yerel hesapların CRUD'u. Son-admin ve kendi-hesabını-silme korumaları uygulanır.
+// LDAP modunda hesaplar dizinden senkronlanır — buradaki rol değişikliği, o kullanıcının
+// bir sonraki AD girişinde grup üyeliğine göre yeniden yazılır (uyarı olarak döner).
+app.get('/api/users', requireRole('admin'), (req, res) => {
+  try {
+    res.json({
+      provider: usersModule.AUTH_PROVIDER(),
+      roles: usersModule.ROLES,
+      users: usersModule.listUsers(),
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Kullanıcılar alınamadı', detail: err.message });
+  }
+});
+
+app.post('/api/users', requireRole('admin'), async (req, res) => {
+  try {
+    const u = await usersModule.createUser(req.body || {});
+    console.log(`[users] Oluşturuldu: ${u.username} (${u.role}) — ${currentUser(req)?.username}`);
+    res.json({ success: true, user: u, warning: usersModule.AUTH_PROVIDER() === 'ldap'
+      ? 'LDAP modundasınız: bu yerel hesap AD dışıdır, dizinden gelmez.' : undefined });
+  } catch (err) {
+    res.status(400).json({ error: 'Kullanıcı oluşturulamadı', detail: err.message });
+  }
+});
+
+app.put('/api/users/:username', requireRole('admin'), async (req, res) => {
+  try {
+    const u = await usersModule.updateUser(req.params.username, req.body || {});
+    console.log(`[users] Güncellendi: ${u.username} (${u.role}) — ${currentUser(req)?.username}`);
+    res.json({ success: true, user: u, warning: (usersModule.AUTH_PROVIDER() === 'ldap' && req.body && req.body.role)
+      ? 'LDAP modunda rol, kullanıcının bir sonraki girişinde AD grubuna göre yeniden yazılır.' : undefined });
+  } catch (err) {
+    res.status(400).json({ error: 'Kullanıcı güncellenemedi', detail: err.message });
+  }
+});
+
+app.delete('/api/users/:username', requireRole('admin'), async (req, res) => {
+  try {
+    const me = currentUser(req);
+    if (me && String(me.username).toLowerCase() === String(req.params.username).toLowerCase()) {
+      return res.status(400).json({ error: 'Kendi hesabınızı silemezsiniz', code: 'SELF_DELETE' });
+    }
+    const r = await usersModule.deleteUser(req.params.username);
+    console.log(`[users] Silindi: ${r.deleted} — ${me?.username}`);
+    res.json({ success: true, ...r });
+  } catch (err) {
+    res.status(400).json({ error: 'Kullanıcı silinemedi', detail: err.message });
+  }
+});
+
 // ─── Ayarlar (runtime config store — admin) ──────────────────────────────────
 const settingsTools = require('./agent/tools/settings-tools');
 

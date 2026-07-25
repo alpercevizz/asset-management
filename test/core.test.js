@@ -322,6 +322,42 @@ test('finops: kur döner, USD→TRY dönüşümü kurla ölçeklenir', async () 
   assert.ok(hi.try > lo.try);
 });
 
+// ── Kullanıcı yönetimi (admin CRUD + son-admin koruması) ─────────────────────
+test('kullanıcı yönetimi: oluştur/güncelle/sil + son admin korumasi + dogrulamalar', async () => {
+  await resetAll();
+
+  // Oluştur
+  const u = await users.createUser({ username: 'Yeni.Kullanici', password: 'GucluParola1', role: 'it', display: 'Yeni Kullanıcı' });
+  assert.equal(u.username, 'yeni.kullanici', 'kullanıcı adı küçük harfe normalize edilir');
+  assert.equal(u.role, 'it');
+  assert.equal(u.password, undefined, 'publicUser parola sızdırmaz');
+  assert.ok(users.authenticate('yeni.kullanici', 'GucluParola1'), 'yeni hesapla giriş yapılabilir');
+
+  // Doğrulamalar
+  await assert.rejects(() => users.createUser({ username: 'yeni.kullanici', password: 'GucluParola1' }), /zaten var/);
+  await assert.rejects(() => users.createUser({ username: 'ab', password: 'GucluParola1' }), /3-64/);
+  await assert.rejects(() => users.createUser({ username: 'test.kisi', password: 'kisa' }), /en az 8/);
+  await assert.rejects(() => users.createUser({ username: 'test.kisi', password: 'GucluParola1', role: 'kral' }), /Geçersiz rol/);
+
+  // Güncelle: rol + parola
+  await users.updateUser('yeni.kullanici', { role: 'approver', password: 'YeniParola123' });
+  assert.equal(users.findUser('yeni.kullanici').role, 'approver');
+  assert.ok(users.authenticate('yeni.kullanici', 'YeniParola123'), 'yeni parola geçerli');
+  assert.equal(users.authenticate('yeni.kullanici', 'GucluParola1'), null, 'eski parola geçersiz');
+
+  // Sil
+  await users.deleteUser('yeni.kullanici');
+  assert.equal(users.findUser('yeni.kullanici'), null);
+
+  // SON ADMIN KORUMASI: tek admin kalınca ne silinir ne rolü düşürülür
+  const admins = users.all().filter(x => x.role === 'admin').map(x => x.username);
+  for (const a of admins.slice(1)) await users.deleteUser(a);      // biri hariç hepsini sil
+  const last = users.all().filter(x => x.role === 'admin');
+  assert.equal(last.length, 1, 'tek admin kaldı');
+  await assert.rejects(() => users.deleteUser(last[0].username), /Son admin/);
+  await assert.rejects(() => users.updateUser(last[0].username, { role: 'it' }), /Son admin/);
+});
+
 // ── LDAP(S) TLS seçenekleri ───────────────────────────────────────────────────
 test('ldap: buildTlsOptions env okumasi (public CA bos, ic CA icin ca/reject/servername)', () => {
   const ldap = require('../auth/ldap');
