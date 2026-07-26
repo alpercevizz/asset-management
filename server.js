@@ -113,7 +113,8 @@ const sessions = {};
 // Parolalar auth/users.js'te scrypt ile hash'li. Dış bağımlılık yok (Node crypto).
 const { authenticate, authenticateAsync, findUser, publicUser, hasRole } = require('./auth/users');
 
-const SESSION_MS  = 8 * 60 * 60 * 1000; // 8 saat
+const SESSION_MS  = 8 * 60 * 60 * 1000;       // 8 saat (varsayılan oturum)
+const REMEMBER_MS = 30 * 24 * 60 * 60 * 1000; // 30 gün ("Beni hatırla" işaretliyse)
 const COOKIE_NAME = 'am_session';
 
 // SESSION_SECRET zorunlu/güçlü olmalı — sertleştirme app.listen'de doğrulanır.
@@ -124,8 +125,8 @@ function signPart(part) {
   return crypto.createHmac('sha256', AUTH_SECRET).update(part).digest('base64')
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
-function makeToken(user) {
-  const payload = b64u(JSON.stringify({ u: user.username, r: user.role, exp: Date.now() + SESSION_MS }));
+function makeToken(user, ttlMs = SESSION_MS) {
+  const payload = b64u(JSON.stringify({ u: user.username, r: user.role, exp: Date.now() + ttlMs }));
   return `${payload}.${signPart(payload)}`;
 }
 function verifyToken(token) {
@@ -174,8 +175,10 @@ app.post('/api/login', async (req, res) => {
   try {
     const user = await authenticateAsync(username, password);
     if (user) {
+      // "Beni hatırla": token exp'i ve cookie ömrü birlikte uzar (yalnız biri yetmez).
+      const ttl = (req.body && req.body.remember) ? REMEMBER_MS : SESSION_MS;
       res.setHeader('Set-Cookie',
-        `${COOKIE_NAME}=${makeToken(user)}; HttpOnly; Path=/; Max-Age=${SESSION_MS / 1000}; SameSite=Lax`);
+        `${COOKIE_NAME}=${makeToken(user, ttl)}; HttpOnly; Path=/; Max-Age=${ttl / 1000}; SameSite=Lax`);
       return res.json({ success: true, user: { username: user.username, display: user.display, role: user.role } });
     }
     return res.status(401).json({ error: 'Kullanıcı adı veya parola hatalı' });
