@@ -24,7 +24,8 @@
       --accent-soft: rgba(79, 70, 229, 0.10);
 
       /* Form paneli (açık) */
-      --page: #f4f5fa;
+      --shell: #eceef4;
+      --page: #f5f6fa;
       --card: #ffffff;
       --ink: #14162e;
       --ink-2: #4b5168;
@@ -39,6 +40,7 @@
       --shadow-card: 0 24px 60px -20px rgba(20, 22, 46, 0.18), 0 6px 18px -8px rgba(20, 22, 46, 0.08);
     }
     :root[data-theme="dark"] {
+      --shell: #080a18;
       --page: #0e1022;
       --card: #171a33;
       --ink: #eef0fb;
@@ -56,13 +58,19 @@
     html, body { height: 100%; }
     body {
       font-family: var(--font);
-      background: var(--page);
+      background: var(--shell);
       color: var(--ink);
       -webkit-font-smoothing: antialiased;
       letter-spacing: -0.011em;
+      padding: 18px;
     }
 
-    .auth { display: grid; grid-template-columns: 42% 58%; min-height: 100vh; }
+    .auth {
+      display: grid; grid-template-columns: 42% 58%;
+      min-height: calc(100vh - 36px);
+      border-radius: 26px; overflow: hidden;
+      box-shadow: 0 30px 70px -30px rgba(20, 22, 46, .28);
+    }
 
     /* ── Sol: marka paneli ───────────────────────────────────────── */
     .brand {
@@ -104,7 +112,7 @@
     .brand-art svg { width: 100%; height: auto; display: block; max-height: 44vh; }
 
     /* ── Sağ: form paneli ────────────────────────────────────────── */
-    .pane { position: relative; display: flex; align-items: center; justify-content: center; padding: 40px 32px; }
+    .pane { position: relative; display: flex; align-items: center; justify-content: center; padding: 40px 32px; background: var(--page); }
 
     .theme-switch {
       position: absolute; top: 28px; right: 32px;
@@ -182,6 +190,21 @@
     .submit:hover { transform: translateY(-1px); box-shadow: 0 16px 30px -12px rgba(79,70,229,.7); }
     .submit:disabled { opacity: .6; cursor: default; transform: none; }
 
+    /* "veya" ayırıcı */
+    .divider { display: flex; align-items: center; gap: 14px; margin: 22px 0; }
+    .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+    .divider span { font-size: 13px; color: var(--muted); }
+
+    /* Google ile giriş */
+    .google {
+      width: 100%; font-family: inherit; font-size: 15px; font-weight: 600; color: var(--ink);
+      background: var(--card); border: 1px solid var(--line); border-radius: var(--r-field);
+      padding: 14px 16px; display: inline-flex; align-items: center; justify-content: center; gap: 11px;
+      cursor: pointer; transition: background .15s, border-color .15s, transform .14s;
+    }
+    .google:hover { background: var(--field); border-color: #d9dced; transform: translateY(-1px); }
+    .google svg { width: 20px; height: 20px; }
+
     .note {
       display: none; align-items: center; gap: 9px;
       font-size: 13.5px; padding: 12px 14px; border-radius: var(--r-field); margin-bottom: 18px;
@@ -227,9 +250,10 @@
         <stop offset="0%" stop-color="#7c74ff"/><stop offset="100%" stop-color="#4f46e5"/>
       </linearGradient>
       <symbol id="assetmark" viewBox="0 0 64 64">
-        <rect x="2" y="2" width="60" height="60" rx="17" fill="url(#mg)" opacity=".14"/>
-        <path d="M32 12 L50 50 H41.5 L32 29.5 L22.5 50 H14 Z" fill="url(#mg)"/>
-        <rect x="24" y="36.5" width="16" height="5" rx="2.5" fill="url(#mg)"/>
+        <!-- Dış üçgen çerçeve (A formu) -->
+        <path d="M32 7 L57 54 H49.5 L32 21 L14.5 54 H7 Z" fill="url(#mg)"/>
+        <!-- İç üçgen (A'nın gövdesi) -->
+        <path d="M32 30 L44 54 H36.5 L32 44.5 L27.5 54 H20 Z" fill="url(#mg)" opacity=".55"/>
       </symbol>
     </defs>
   </svg>
@@ -269,49 +293,63 @@
           </defs>
 
           <!-- zemin ışıması -->
-          <ellipse cx="268" cy="292" rx="196" ry="26" fill="#4f46e5" opacity=".18"/>
+          <ellipse cx="268" cy="300" rx="205" ry="22" fill="#4f46e5" opacity=".22"/>
 
-          <!-- laptop gövde -->
-          <path d="M118 268 L418 268 L446 292 L90 292 Z" fill="url(#base)"/>
-          <rect x="196" y="276" width="144" height="7" rx="3.5" fill="#151a45" opacity=".8"/>
-          <!-- ekran -->
-          <path d="M150 96 L386 96 L418 268 L118 268 Z" fill="url(#lid)"/>
-          <path d="M162 108 L374 108 L402 256 L134 256 Z" fill="url(#scr)"/>
+          <!-- laptop tabanı -->
+          <path d="M122 278 L414 278 L470 300 L66 300 Z" fill="url(#base)"/>
+          <path d="M122 278 L414 278 L411 283 L125 283 Z" fill="#5a63ad" opacity=".45"/>
+          <rect x="222" y="289" width="92" height="6" rx="3" fill="#0f1338" opacity=".5"/>
 
-          <!-- ekran içi: mini dashboard -->
-          <rect x="150" y="120" width="52" height="126" rx="5" fill="#eceafe"/>
-          <rect x="158" y="130" width="34" height="4.5" rx="2.25" fill="url(#vio)" opacity=".85"/>
-          <g fill="#c9c6f5">
-            <rect x="158" y="144" width="30" height="3.6" rx="1.8"/><rect x="158" y="154" width="26" height="3.6" rx="1.8"/>
-            <rect x="158" y="164" width="31" height="3.6" rx="1.8"/><rect x="158" y="174" width="24" height="3.6" rx="1.8"/>
-            <rect x="158" y="184" width="29" height="3.6" rx="1.8"/><rect x="158" y="194" width="27" height="3.6" rx="1.8"/>
+          <!-- ekran (düz, hafif açılı gövde) -->
+          <rect x="130" y="84" width="276" height="194" rx="11" fill="url(#lid)"/>
+          <rect x="139" y="93" width="258" height="176" rx="7" fill="#0d1030"/>
+          <rect x="143" y="97" width="250" height="168" rx="5" fill="url(#scr)"/>
+
+          <!-- ── ekran içi: AssetMan dashboard ── -->
+          <!-- sol sidebar -->
+          <path d="M143 97 h44 v168 h-39 a5 5 0 0 1 -5 -5 V102 a5 5 0 0 1 5 -5 z" fill="#1b1f4a"/>
+          <circle cx="156" cy="110" r="4.5" fill="#8b83ff"/>
+          <rect x="164" y="107.5" width="17" height="4" rx="2" fill="#8b83ff" opacity=".85"/>
+          <g fill="#7d78d8" opacity=".5">
+            <rect x="151" y="128" width="28" height="3.4" rx="1.7"/>
+            <rect x="151" y="144" width="24" height="3.4" rx="1.7"/>
+            <rect x="151" y="160" width="27" height="3.4" rx="1.7"/>
+            <rect x="151" y="176" width="22" height="3.4" rx="1.7"/>
+            <rect x="151" y="192" width="26" height="3.4" rx="1.7"/>
+            <rect x="151" y="208" width="21" height="3.4" rx="1.7"/>
           </g>
-          <!-- kpi kartları -->
+
+          <!-- üst KPI kartları -->
           <g>
-            <rect x="212" y="120" width="58" height="30" rx="6" fill="#f6f5ff" stroke="#ddd9fb"/>
-            <rect x="219" y="127" width="24" height="3.4" rx="1.7" fill="#b9b4f2"/>
-            <rect x="219" y="136" width="18" height="6" rx="3" fill="url(#vio)"/>
-            <rect x="278" y="120" width="58" height="30" rx="6" fill="#f6f5ff" stroke="#ddd9fb"/>
-            <rect x="285" y="127" width="24" height="3.4" rx="1.7" fill="#b9b4f2"/>
-            <rect x="285" y="136" width="14" height="6" rx="3" fill="#7c74ff"/>
-            <rect x="344" y="120" width="46" height="30" rx="6" fill="#f6f5ff" stroke="#ddd9fb"/>
-            <rect x="351" y="127" width="20" height="3.4" rx="1.7" fill="#b9b4f2"/>
-            <rect x="351" y="136" width="16" height="6" rx="3" fill="#a5a0f0"/>
+            <rect x="196" y="107" width="62" height="34" rx="6" fill="#ffffff" stroke="#e3e0fa"/>
+            <rect x="203" y="114" width="28" height="3.4" rx="1.7" fill="#c7c3f2"/>
+            <rect x="203" y="124" width="22" height="8" rx="4" fill="url(#vio)"/>
+            <rect x="264" y="107" width="62" height="34" rx="6" fill="#ffffff" stroke="#e3e0fa"/>
+            <rect x="271" y="114" width="28" height="3.4" rx="1.7" fill="#c7c3f2"/>
+            <rect x="271" y="124" width="16" height="8" rx="4" fill="#7c74ff"/>
+            <rect x="332" y="107" width="55" height="34" rx="6" fill="#ffffff" stroke="#e3e0fa"/>
+            <rect x="339" y="114" width="24" height="3.4" rx="1.7" fill="#c7c3f2"/>
+            <rect x="339" y="124" width="18" height="8" rx="4" fill="#a5a0f0"/>
           </g>
-          <!-- donut -->
-          <g transform="translate(212 160)">
-            <rect width="86" height="86" rx="7" fill="#f6f5ff" stroke="#ddd9fb"/>
-            <circle cx="43" cy="44" r="24" fill="none" stroke="#e2defb" stroke-width="10"/>
-            <circle cx="43" cy="44" r="24" fill="none" stroke="url(#vio)" stroke-width="10"
-                    stroke-dasharray="112 151" stroke-linecap="round" transform="rotate(-90 43 44)"/>
+
+          <!-- büyük donut kartı -->
+          <g>
+            <rect x="196" y="149" width="95" height="106" rx="7" fill="#ffffff" stroke="#e3e0fa"/>
+            <circle cx="243.5" cy="202" r="30" fill="none" stroke="#e8e5fb" stroke-width="14"/>
+            <circle cx="243.5" cy="202" r="30" fill="none" stroke="url(#vio)" stroke-width="14"
+                    stroke-dasharray="136 189" stroke-linecap="round" transform="rotate(-90 243.5 202)"/>
+            <circle cx="243.5" cy="202" r="15" fill="#f9f8ff"/>
           </g>
-          <!-- bar chart -->
-          <g transform="translate(306 160)">
-            <rect width="86" height="86" rx="7" fill="#f6f5ff" stroke="#ddd9fb"/>
+
+          <!-- bar chart kartı -->
+          <g>
+            <rect x="299" y="149" width="88" height="106" rx="7" fill="#ffffff" stroke="#e3e0fa"/>
             <g fill="url(#vio)">
-              <rect x="12" y="52" width="9" height="22" rx="3"/><rect x="26" y="42" width="9" height="32" rx="3"/>
-              <rect x="40" y="30" width="9" height="44" rx="3"/><rect x="54" y="38" width="9" height="36" rx="3"/>
-              <rect x="68" y="22" width="9" height="52" rx="3"/>
+              <rect x="311" y="214" width="10" height="27" rx="3.5"/>
+              <rect x="327" y="199" width="10" height="42" rx="3.5"/>
+              <rect x="343" y="179" width="10" height="62" rx="3.5"/>
+              <rect x="359" y="192" width="10" height="49" rx="3.5"/>
+              <rect x="375" y="167" width="10" height="74" rx="3.5"/>
             </g>
           </g>
 
@@ -395,7 +433,7 @@
 
           <div class="row">
             <label class="remember">
-              <input type="checkbox" id="remember" />
+              <input type="checkbox" id="remember" checked />
               <span class="box">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
               </span>
@@ -410,6 +448,18 @@
             </svg>
             Giriş Yap
           </button>
+
+          <div class="divider"><span>veya</span></div>
+
+          <button type="button" class="google" id="googleBtn">
+            <svg viewBox="0 0 48 48" aria-hidden="true">
+              <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.7-6.7C35.6 2.6 30.2 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.8 6.1C12.3 13.2 17.7 9.5 24 9.5z"/>
+              <path fill="#4285F4" d="M46.6 24.6c0-1.6-.2-3.2-.5-4.6H24v9.1h12.7c-.6 3-2.2 5.5-4.7 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/>
+              <path fill="#FBBC05" d="M10.4 28.7c-.5-1.5-.8-3-.8-4.7s.3-3.2.8-4.7l-7.8-6.1C.9 16.5 0 20.1 0 24s.9 7.5 2.6 10.8l7.8-6.1z"/>
+              <path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.8 2.3-8.4 2.3-6.3 0-11.7-3.7-13.6-9.8l-7.8 6.1C6.5 42.6 14.6 48 24 48z"/>
+            </svg>
+            Google ile giriş yap
+          </button>
         </form>
 
         <div class="card-foot">
@@ -417,9 +467,9 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/>
             </svg>
-            Bağlantınız TLS ile şifrelenir; oturumunuz imzalı çerezle korunur.
+            Verileriniz 256-bit SSL ile korunmaktadır.
           </span>
-          <div class="copy">© <span id="yr">2026</span> AssetMan · IT Varlık Yönetimi</div>
+          <div class="copy">© <span id="yr">2026</span> AssetMan. Tüm hakları saklıdır.</div>
         </div>
       </div>
     </main>
@@ -451,6 +501,14 @@
       $('peekIcon').innerHTML = on ? EYE_OFF : EYE;
       $('peek').setAttribute('aria-label', on ? 'Parolayı gizle' : 'Parolayı göster');
       p.focus();
+    });
+
+    /* ── Google ile giriş (bu kurulumda yapılandırılmamışsa bilgilendir) ── */
+    $('googleBtn').addEventListener('click', () => {
+      const box = $('infoBox');
+      box.textContent = 'Google ile giriş bu kurulumda yapılandırılmamış. Kullanıcı adı ve parolanızla giriş yapabilirsiniz.';
+      box.classList.add('show');
+      $('errBox').classList.remove('show');
     });
 
     /* ── Parolamı unuttum: kurumsal akış (self-service sıfırlama yok) ── */
