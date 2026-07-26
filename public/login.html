@@ -67,15 +67,15 @@
 
     .auth {
       display: grid; grid-template-columns: 42% 58%;
-      min-height: calc(100vh - 36px);
+      height: calc(100vh - 36px);          /* sayfa taşmaz — paneller kendi içinde kayar */
       border-radius: 26px; overflow: hidden;
       box-shadow: 0 30px 70px -30px rgba(20, 22, 46, .28);
     }
 
     /* ── Sol: marka paneli ───────────────────────────────────────── */
     .brand {
-      position: relative; overflow: hidden;
-      padding: 46px 48px;
+      position: relative; overflow: hidden auto;
+      padding: 44px 48px;
       display: flex; flex-direction: column;
       background:
         radial-gradient(900px 520px at 78% 8%, rgba(99, 102, 241, 0.28), transparent 60%),
@@ -112,7 +112,7 @@
     .brand-art svg { width: 100%; height: auto; display: block; max-height: 44vh; }
 
     /* ── Sağ: form paneli ────────────────────────────────────────── */
-    .pane { position: relative; display: flex; align-items: center; justify-content: center; padding: 40px 32px; background: var(--page); }
+    .pane { position: relative; display: flex; align-items: center; justify-content: center; padding: 28px 32px; background: var(--page); overflow-y: auto; }
 
     .theme-switch {
       position: absolute; top: 28px; right: 32px;
@@ -133,22 +133,22 @@
       width: 100%; max-width: 520px;
       background: var(--card); border: 1px solid var(--line);
       border-radius: var(--r-card); box-shadow: var(--shadow-card);
-      padding: 44px 46px 34px;
+      padding: 34px 42px 26px;
     }
 
-    .card-head { display: flex; align-items: center; gap: 16px; margin-bottom: 30px; }
+    .card-head { display: flex; align-items: center; gap: 16px; margin-bottom: 22px; }
     .card-head .mark { width: 56px; height: 56px; }
     .welcome { font-size: 27px; font-weight: 800; letter-spacing: -0.03em; color: var(--ink); }
     .welcome-sub { font-size: 13.5px; color: var(--muted); margin-top: 5px; line-height: 1.5; }
 
-    .field { margin-bottom: 18px; }
+    .field { margin-bottom: 15px; }
     .field label { display: block; font-size: 13.5px; font-weight: 700; color: var(--ink); margin-bottom: 8px; }
     .control { position: relative; display: flex; align-items: center; }
     .control > svg.lead { position: absolute; left: 15px; width: 18px; height: 18px; color: var(--muted); pointer-events: none; }
     .control input {
       width: 100%; font-family: inherit; font-size: 15px; color: var(--ink);
       background: var(--field); border: 1px solid var(--line); border-radius: var(--r-field);
-      padding: 15px 15px 15px 46px; outline: none;
+      padding: 13px 15px 13px 46px; outline: none;
       transition: border-color .15s, box-shadow .15s, background .15s;
     }
     .control input::placeholder { color: var(--muted); }
@@ -162,7 +162,7 @@
 
     .row {
       display: flex; align-items: center; justify-content: space-between;
-      gap: 12px; margin: 6px 0 24px;
+      gap: 12px; margin: 4px 0 18px;
     }
     .remember { display: inline-flex; align-items: center; gap: 9px; cursor: pointer; font-size: 14px; color: var(--ink-2); user-select: none; }
     .remember input { position: absolute; opacity: 0; width: 0; height: 0; }
@@ -181,7 +181,7 @@
     .submit {
       width: 100%; font-family: inherit; font-size: 16px; font-weight: 700; letter-spacing: -0.01em;
       color: #fff; background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
-      border: none; border-radius: var(--r-field); padding: 16px;
+      border: none; border-radius: var(--r-field); padding: 14px;
       display: inline-flex; align-items: center; justify-content: center; gap: 10px;
       cursor: pointer; box-shadow: 0 12px 26px -12px rgba(79,70,229,.65);
       transition: transform .14s, box-shadow .14s, opacity .14s;
@@ -191,7 +191,7 @@
     .submit:disabled { opacity: .6; cursor: default; transform: none; }
 
     /* "veya" ayırıcı */
-    .divider { display: flex; align-items: center; gap: 14px; margin: 22px 0; }
+    .divider { display: flex; align-items: center; gap: 14px; margin: 17px 0; }
     .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
     .divider span { font-size: 13px; color: var(--muted); }
 
@@ -199,7 +199,7 @@
     .google {
       width: 100%; font-family: inherit; font-size: 15px; font-weight: 600; color: var(--ink);
       background: var(--card); border: 1px solid var(--line); border-radius: var(--r-field);
-      padding: 14px 16px; display: inline-flex; align-items: center; justify-content: center; gap: 11px;
+      padding: 12.5px 16px; display: inline-flex; align-items: center; justify-content: center; gap: 11px;
       cursor: pointer; transition: background .15s, border-color .15s, transform .14s;
     }
     .google:hover { background: var(--field); border-color: #d9dced; transform: translateY(-1px); }
@@ -213,7 +213,7 @@
     .note.err { background: rgba(214,69,69,.10); color: var(--danger); }
     .note.info { background: var(--accent-soft); color: var(--accent); }
 
-    .card-foot { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--line); text-align: center; }
+    .card-foot { margin-top: 19px; padding-top: 16px; border-top: 1px solid var(--line); text-align: center; }
     .secure { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-2); }
     .secure svg { width: 15px; height: 15px; color: var(--ok); }
     .copy { font-size: 12px; color: var(--muted); margin-top: 8px; }
