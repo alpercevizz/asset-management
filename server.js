@@ -302,30 +302,7 @@ app.post('/api/webhook', async (req, res) => {
       console.log(`[WEBHOOK] Created: ${payload.hostname || payload.serial_number}`);
     }
 
-    // Lokasyon konaklama kaydı — yer değiştiyse denetim zincirine de mühürlenir.
-    let locationChanged = null;
-    if (loc.location) {
-      try {
-        const seen = await locTools.recordSeen(result.id, {
-          location: loc.location, source: loc.source,
-          serial_number: enriched.serial_number || null,
-          hostname: enriched.hostname || null,
-        });
-        if (seen.changed) {
-          locationChanged = seen;
-          console.warn(`[LOKASYON] ${enriched.hostname || result.id}: "${seen.from}" → "${seen.to}"`);
-          try {
-            await lifecycleModule.recordEvent({
-              asset_id: result.id, hostname: enriched.hostname || null,
-              serial_number: enriched.serial_number || null,
-              to_status: 'Lokasyon Değişikliği',
-              note: `Otomatik tespit: "${seen.from}" → "${seen.to}" (kaynak: ${loc.source})`,
-              actor: `location-agent/${loc.source}`, approval_status: 'n/a',
-            });
-          } catch (e) { console.warn('[LOKASYON] olay kaydedilemedi:', e.message); }
-        }
-      } catch (e) { console.warn('[LOKASYON] konaklama kaydı hatası:', e.message); }
-    }
+    const locationChanged = await trackLocation(result.id, enriched, loc.location, loc.source);
 
     res.json({
       success: true, action: existing ? 'updated' : 'created', id: result.id,
@@ -356,6 +333,36 @@ app.get('/api/qr', async (req, res) => {
     res.status(500).json({ error: 'QR üretim hatası', detail: err.message });
   }
 });
+
+/* Lokasyon konaklama kaydı — TÜM kaynaklar için ortak.
+   Kaynak (webhook/qr/snmp) kaydın güven seviyesini taşır; yer değiştiyse denetim
+   zincirine de mühürlenir. Bu adım atlanırsa o cihazda süre eşiği çalışmaz
+   (geçmiş yoksa "ne kadar süredir orada" bilinemez). */
+async function trackLocation(assetId, asset, location, source) {
+  if (!assetId || !location) return null;
+  try {
+    const seen = await locationTools.recordSeen(assetId, {
+      location, source,
+      serial_number: asset.serial_number || null,
+      hostname: asset.hostname || null,
+    });
+    if (!seen.changed) return null;
+    console.warn(`[LOKASYON] ${asset.hostname || assetId}: "${seen.from}" → "${seen.to}" (${source})`);
+    try {
+      await lifecycleModule.recordEvent({
+        asset_id: assetId, hostname: asset.hostname || null,
+        serial_number: asset.serial_number || null,
+        to_status: 'Lokasyon Değişikliği',
+        note: `Otomatik tespit: "${seen.from}" → "${seen.to}" (kaynak: ${source})`,
+        actor: `sistem/${source}`, approval_status: 'n/a',
+      });
+    } catch (e) { console.warn('[LOKASYON] olay kaydedilemedi:', e.message); }
+    return seen;
+  } catch (e) {
+    console.warn('[LOKASYON] konaklama kaydı hatası:', e.message);
+    return null;
+  }
+}
 
 // Mobil formdan gelen cihaz kaydı (telefon, tablet, el terminali vb.)
 app.post('/api/register', async (req, res) => {
@@ -397,6 +404,9 @@ app.post('/api/register', async (req, res) => {
       action = 'created';
     }
     console.log(`[REGISTER] ${action}: ${hostname} (${enriched.category})`);
+    // QR kaydında lokasyon formdan BEYAN edilir → kaynak 'qr' olarak izlenir (token'lı
+    // ajan kadar güvenilir değil ama geçmiş tutulmazsa süre eşiği hiç çalışmaz).
+    await trackLocation(result.id, enriched, enriched.location, 'qr');
     res.json({ success: true, action, id: result.id });
   } catch (err) {
     console.error('[POST /api/register]', err.message);

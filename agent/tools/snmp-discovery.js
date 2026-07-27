@@ -185,10 +185,21 @@ async function runDiscovery({ subnets, cred, timeout, concurrency } = {}) {
 
   let created = 0, updated = 0;
   const now = new Date().toISOString();
+  const locTools = require('./location-tools');
   for (const d of found) {
     const existing = await getAssetBySerial({ serialNumber: d.serial_number }).catch(() => null);
-    if (existing) { await updateAsset(existing.id, { ...d, last_seen: now }); updated++; }
-    else { await createAsset({ ...d, last_seen: now }); created++; }
+    let row;
+    if (existing) { row = await updateAsset(existing.id, { ...d, last_seen: now }); updated++; }
+    else { row = await createAsset({ ...d, last_seen: now }); created++; }
+    // sysLocation'dan gelen lokasyon da konum geçmişine yazılır (kaynak: snmp).
+    // Geçmiş tutulmazsa o cihazda sapma süre eşiği hiç çalışmaz.
+    const assetId = (row && row.id) != null ? row.id : (existing && existing.id);
+    if (assetId != null && d.location) {
+      await locTools.recordSeen(assetId, {
+        location: d.location, source: 'snmp',
+        serial_number: d.serial_number || null, hostname: d.hostname || null,
+      }).catch((e) => console.warn('[SNMP] konaklama kaydı hatası:', e.message));
+    }
   }
   return { scanned_subnets: subnets.length, discovered: found.length, created, updated,
     devices: found.map((d) => ({ hostname: d.hostname, ip: d.ip_address, brand: d.brand, model: d.model, serial: d.serial_number, category: d.category })) };
