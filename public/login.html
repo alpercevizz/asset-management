@@ -233,8 +233,25 @@
       .brand-desc { margin-top: 12px; }
     }
 
-    /* ── Responsive: tek kolon, dikey akış (mobil tasarım referansı) ──── */
-    @media (max-width: 1040px) {
+    /* ── Tablet (yatay): split-screen korunur, oranlar kompaktlaşır ──── */
+    @media (min-width: 901px) and (max-width: 1279px) {
+      body { padding: 14px; }
+      .auth { grid-template-columns: 50% 50%; height: calc(100vh - 28px); border-radius: 22px; }
+      .brand { padding: 34px 36px; }
+      .brand-head .mark { width: 48px; height: 48px; }
+      .brand-name { font-size: 25px; }
+      .brand-title { font-size: 33px; }
+      .brand-desc { font-size: 14.5px; margin-top: 14px; }
+      .pane { padding: 24px; }
+      .card { max-width: 470px; padding: 30px 32px 22px; }
+      .card-head { gap: 14px; margin-bottom: 20px; }
+      .card-head .mark { width: 52px; height: 52px; }
+      .welcome { font-size: 25px; }
+      .theme-switch { top: 22px; right: 24px; }
+    }
+
+    /* ── Tek kolon: dikey akış (mobil + dar tablet) ──── */
+    @media (max-width: 900px) {
       body { padding: 0; background: var(--brand-1); }
 
       /* Tüm sayfa marka gradientinde — kesintisiz koyu zemin */
