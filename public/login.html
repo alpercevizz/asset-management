@@ -66,6 +66,7 @@
     }
 
     .auth {
+      position: relative;                  /* tema toggle buna göre konumlanır */
       display: grid; grid-template-columns: 42% 58%;
       height: calc(100vh - 36px);          /* sayfa taşmaz — paneller kendi içinde kayar */
       border-radius: 26px; overflow: hidden;
@@ -116,10 +117,10 @@
     .brand-art svg { width: 100%; height: 100%; display: block; object-fit: contain; }
 
     /* ── Sağ: form paneli ────────────────────────────────────────── */
-    .pane { position: relative; display: flex; align-items: center; justify-content: center; padding: 28px 32px; background: var(--page); overflow-y: auto; }
+    .pane { display: flex; align-items: center; justify-content: center; padding: 28px 32px; background: var(--page); overflow-y: auto; }
 
     .theme-switch {
-      position: absolute; top: 28px; right: 32px;
+      position: absolute; top: 28px; right: 32px; z-index: 3;
       display: inline-flex; gap: 2px; padding: 4px;
       background: var(--card); border: 1px solid var(--line);
       border-radius: 999px; box-shadow: 0 4px 14px -6px rgba(20,22,46,.14);
@@ -232,26 +233,67 @@
       .brand-desc { margin-top: 12px; }
     }
 
-    /* ── Responsive ──────────────────────────────────────────────── */
+    /* ── Responsive: tek kolon, dikey akış (mobil tasarım referansı) ──── */
     @media (max-width: 1040px) {
-      .auth { grid-template-columns: 1fr; }
-      .brand { padding: 30px 28px 26px; }
-      .brand-copy { padding-top: 22px; }
-      .brand-title { font-size: 28px; }
-      .brand-desc { font-size: 14.5px; margin-top: 12px; }
-      .brand-art { display: none; }
-      /* Mobil: toggle kartın üstüne binmesin → normal akışta, sağa yaslı */
-      .pane { padding: 22px 20px 44px; flex-direction: column; align-items: stretch; }
-      .theme-switch { position: static; align-self: flex-end; margin-bottom: 14px; }
-      .card { margin: 0 auto; }
+      body { padding: 0; background: var(--brand-1); }
+
+      /* Tüm sayfa marka gradientinde — kesintisiz koyu zemin */
+      .auth {
+        grid-template-columns: 1fr;
+        height: auto; min-height: 100vh;
+        border-radius: 0; overflow: visible; box-shadow: none;
+        background:
+          radial-gradient(760px 460px at 82% 4%, rgba(99, 102, 241, 0.30), transparent 62%),
+          radial-gradient(620px 460px at 8% 42%, rgba(79, 70, 229, 0.24), transparent 64%),
+          linear-gradient(168deg, var(--brand-1) 0%, var(--brand-2) 46%, var(--brand-3) 100%);
+      }
+
+      .brand {
+        background: none; overflow: visible;
+        padding: 26px 22px 0;
+      }
+      /* yıldız dokusu tüm sayfaya yayılsın */
+      .brand::after { position: fixed; }
+
+      .brand-head .mark { width: 46px; height: 46px; }
+      .brand-name { font-size: 24px; }
+      .brand-tag { font-size: 12.5px; }
+
+      .brand-copy { margin-top: 0; padding-top: 26px; }
+      .brand-title { font-size: 30px; }
+      .brand-desc { font-size: 15px; margin-top: 14px; max-width: 100%; }
+
+      /* İllüstrasyon mobilde de görünür (tasarımda var) */
+      .brand-art { display: flex; flex: none; min-height: 0; margin-top: 4px; }
+      .brand-art svg { height: auto; max-height: 320px; }
+
+      .pane {
+        background: none; overflow: visible;
+        padding: 26px 16px 30px;
+      }
+      .card {
+        max-width: 480px; margin: 0 auto;    /* tablette aşırı genişlemesin */
+        padding: 26px 20px 20px; border-radius: 20px;
+      }
+      .brand-copy, .brand-head, .brand-art { max-width: 520px; margin-left: auto; margin-right: auto; width: 100%; }
+      .card-head { gap: 13px; margin-bottom: 18px; }
+      .card-head .mark { width: 48px; height: 48px; }
+      .welcome { font-size: 24px; }
+      .welcome-sub { font-size: 13px; }
+
+      /* toggle logo satırıyla aynı hizada, sağ üstte */
+      .theme-switch { top: 26px; right: 20px; }
     }
+
     @media (max-width: 560px) {
-      .card { padding: 30px 22px 24px; border-radius: 18px; }
-      .card-head { gap: 12px; margin-bottom: 22px; }
-      .card-head .mark { width: 46px; height: 46px; }
-      .welcome { font-size: 23px; }
-      .brand-head .mark { width: 42px; height: 42px; }
-      .brand-name { font-size: 22px; }
+      .brand { padding: 22px 18px 0; }
+      .brand-title { font-size: 27px; }
+      .brand-desc { font-size: 14.5px; }
+      .brand-art svg { max-height: 250px; }
+      .pane { padding: 22px 14px 26px; }
+      .card { padding: 22px 18px 18px; }
+      .welcome { font-size: 22px; }
+      .theme-switch { top: 22px; right: 16px; }
     }
     @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
   </style>
