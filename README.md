@@ -297,7 +297,7 @@ docker compose exec app node scripts/migrate-inventory-to-sql.js
 docker compose exec app node -e "process.env.AUTH_PROVIDER='ldap'; require('./auth/ldap').authenticate('KULLANICI','PAROLA').then(p=>console.log(p||'BASARISIZ')).catch(e=>console.error(e.message))"
 ```
 
-**Ayrıntılı rehberler:** [AD/LDAP runbook](./docs/LDAP-KURULUM.md) · [pilot kurulum](./PILOT-KURULUM.md) · [DEPLOY.md](./DEPLOY.md)
+**Ayrıntılı rehberler:** [AD/LDAP runbook](./docs/LDAP-KURULUM.md) · [lokasyon ajanı runbook](./docs/LOKASYON-AJANI-KURULUM.md) · [pilot kurulum](./PILOT-KURULUM.md) · [DEPLOY.md](./DEPLOY.md)
 </details>
 
 <a id="kurulum-d"></a>

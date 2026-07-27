@@ -68,6 +68,19 @@ function makeSerial(mac, ip) {
 async function processHost(ip, arpTable) {
   const mac       = arpTable[ip] || null;
   const snmpData  = await snmpGet(ip, config.network.snmp_community, config.network.snmp_timeout_ms);
+
+  // ENVANTER KİRLİLİĞİ KORUMASI (varsayılan AÇIK):
+  // SNMP'ye cevap vermeyen host'lar (Windows/Mac istemciler) hakkında ajanın elinde
+  // yalnız IP+MAC var → "device-<ip>" / seri "MAC-..." diye JENERİK kayıt açardı.
+  // Aynı makine collector ile GERÇEK seri numarasıyla da kaydolduğu için ÇİFT KAYIT
+  // oluşurdu. Bu yüzden yalnız SNMP'ye cevap veren cihazlar (switch/firewall/AP/yazıcı)
+  // envantere yazılır. İstemcilerin envanteri collector'ün işidir.
+  const onlySnmp = config.network.only_snmp !== false;
+  if (onlySnmp && !snmpData) {
+    log('INFO', `${ip.padEnd(16)} SNMP yanıtı yok → atlandı (only_snmp)`);
+    return;
+  }
+
   const detected  = detectDevice(snmpData);
   const parsed    = parseBrandModel(snmpData?.sysDescr);
 

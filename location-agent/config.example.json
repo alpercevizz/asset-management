@@ -9,7 +9,9 @@
   "network": {
     "range":           "192.168.1.0/24",
     "snmp_community":  "public",
-    "snmp_timeout_ms": 3000
+    "snmp_timeout_ms": 3000,
+    "_not_only_snmp":  "true (varsayılan) = yalnız SNMP'ye cevap veren cihazlar envantere yazılır. false yapmak, SNMP'siz her host için 'device-<ip>' jenerik kaydı açar ve collector'ün gerçek seri numarasıyla yazdığı aynı makineyle ÇİFT KAYIT oluşturur.",
+    "only_snmp":       true
   },
 
   "intervals": {
