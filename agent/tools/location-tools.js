@@ -200,6 +200,67 @@ async function detectLocationDrift(assets) {
   return { threshold_days: TH, count: drifted.length, drifted, unassigned };
 }
 
+/* ══ Dashboard özeti ═══════════════════════════════════════════════════════
+   Her cihazı TEK bir kovaya koyar (toplam = envanter sayısı, yuvarlama kaybı yok):
+     dogru      → beklenen tanımlı ve görülen == beklenen
+     tasinmis   → beklenen tanımlı ama görülen farklı (eşik uygulanmaz, ham gerçek)
+     guncellenen→ son STALE penceresi içinde yer değiştirmiş (yeni konaklama açılmış)
+     bilinmeyen → lokasyon bilgisi hiç yok
+     baseline_yok → lokasyonu var ama beklenen tanımlanmamış (tohumlama bekliyor)
+   Sapma şiddeti süreye göre: kritik > 30 gün · uyarı eşik-30 · bilgi eşik altı. */
+const RECENT_MOVE_DAYS = 7;
+const CRITICAL_DRIFT_DAYS = 30;
+
+async function getLocationSummary(assets) {
+  const TH = driftDays();
+  const list = assets || [];
+  const expected = await getAllExpected();
+  const expMap = {};
+  expected.forEach(e => { expMap[e.asset_id] = e.location; });
+
+  // Tüm konaklamaları tek sorguda al (cihaz başına sorgu N+1 olurdu)
+  const stays = await db()('asset_location_history').orderBy('id', 'asc');
+  const stayMap = {};
+  stays.forEach(s => { stayMap[s.asset_id] = s; }); // artan sıra → sonuncu kalır
+
+  const out = {
+    total: list.length,
+    dogru: 0, tasinmis: 0, guncellenen: 0, bilinmeyen: 0, baseline_yok: 0,
+    severity: { kritik: 0, uyari: 0, bilgi: 0 },
+    locations: {},
+    threshold_days: TH,
+  };
+
+  for (const a of list) {
+    const exp = expMap[a.id];
+    const stay = stayMap[a.id];
+    const seen = stay ? stay.to_location : norm(a.location);
+
+    if (seen) out.locations[seen] = (out.locations[seen] || 0) + 1;
+
+    const movedDays = stay ? daysSince(stay.first_seen_at) : null;
+    const recentlyMoved = stay && stay.from_location && movedDays !== null && movedDays <= RECENT_MOVE_DAYS;
+
+    if (!exp && !seen) { out.bilinmeyen++; continue; }
+    if (!exp) { out.baseline_yok++; continue; }
+    if (!seen) { out.bilinmeyen++; continue; }
+
+    if (sameLoc(seen, exp)) {
+      if (recentlyMoved) out.guncellenen++; else out.dogru++;
+      continue;
+    }
+
+    out.tasinmis++;
+    const d = movedDays === null ? null : Math.floor(movedDays);
+    if (d !== null && d >= CRITICAL_DRIFT_DAYS) out.severity.kritik++;
+    else if (d === null || d >= TH) out.severity.uyari++;
+    else out.severity.bilgi++;
+  }
+
+  out.location_count = Object.keys(out.locations).length;
+  return out;
+}
+
 /* İlk kurulum: mevcut envanterdeki lokasyonu "beklenen" başlangıcı olarak al (tablo boşsa). */
 async function seedExpectedFromAssets(assets) {
   const [{ n }] = await db()('asset_expected_location').count({ n: '*' });
@@ -221,5 +282,5 @@ module.exports = {
   resolveLocation, tokensConfigured, _resetTokens,
   getExpected, getAllExpected, setExpected, clearExpected,
   getCurrentStay, getHistory, recordSeen,
-  detectLocationDrift, seedExpectedFromAssets,
+  detectLocationDrift, getLocationSummary, seedExpectedFromAssets,
 };

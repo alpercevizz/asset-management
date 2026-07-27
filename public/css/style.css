@@ -618,6 +618,96 @@ body.sidebar-collapsed .sidebar-footer { padding: 14px 0 0; }
 }
 .btn-ghost:hover { background: var(--accent-glow); border-color: var(--accent); }
 
+/* ══ DASHBOARD v2: 5'li KPI + harita + şiddet + aktivite ══════════════════ */
+.kpi-grid--5 { grid-template-columns: repeat(5, 1fr); }
+.kpi--loc .kpi-value { color: var(--accent); }
+.kpi--loc .kpi-foot { align-items: center; }
+
+/* align-items:start → kartlar satırın en uzununa GERİLMEZ (aksi halde donut
+   kartında yüzlerce piksel boşluk oluşuyordu) */
+.dash-row3 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.25fr) minmax(0,1fr);
+  gap: 18px; margin-bottom: 18px; align-items: start; }
+.dash-row3--b { grid-template-columns: minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr); }
+.dash-row3 > .card { margin-bottom: 0; }
+.dash-row2 { display: grid; grid-template-columns: minmax(0,1.6fr) minmax(0,1fr); gap: 18px; margin-bottom: 18px; }
+.dash-row2 > .card { margin-bottom: 0; }
+
+.donut-body--compact { padding: 18px; gap: 18px; }
+.donut-body--vert { flex-direction: column; align-items: center; gap: 14px; padding: 20px 18px; }
+.donut-body--vert .donut-legend { width: 100%; min-width: 0; }
+.donut-wrap--sm { width: 150px; height: 150px; }
+.donut-wrap--sm + .donut-legend .dl-row { padding: 5px 0; font-size: 13px; }
+.donut-wrap--sm .donut-center b { font-size: 21px; }
+
+/* Harita */
+.map-body { padding: 12px 16px 16px; }
+#locMap { width: 100%; height: auto; display: block; max-height: 320px; }
+.map-land { fill: var(--bg-card2); stroke: var(--border-strong); stroke-width: 1; }
+.map-bubble { fill: var(--accent); fill-opacity: .28; stroke: var(--accent); stroke-width: 1.2; transition: fill-opacity .15s; }
+.map-bubble:hover { fill-opacity: .5; }
+.map-dot { fill: var(--accent); }
+.map-legend { display: flex; flex-wrap: wrap; gap: 12px 18px; padding-top: 10px; font-size: 12.5px; color: var(--text-dim); }
+.map-legend span { display: inline-flex; align-items: center; gap: 7px; }
+.map-legend i { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); display: inline-block; }
+.map-empty { padding: 30px 0; text-align: center; color: var(--text-muted); font-size: 13px; }
+
+/* Şiddet listesi */
+.sev-body { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 9px; }
+.sev-sub { font-size: 12.5px; color: var(--text-muted); margin-bottom: 2px; }
+.sev-row {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 13px 14px; border-radius: 12px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  cursor: pointer; font-family: inherit; text-align: left;
+  transition: border-color .14s, background .14s;
+}
+.sev-row:hover { border-color: var(--accent); background: var(--accent-glow); }
+.sev-ico { width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.sev-ico--red { background: var(--red-bg); color: var(--red); }
+.sev-ico--orange { background: var(--orange-bg); color: var(--orange); }
+.sev-ico--blue { background: var(--blue-bg); color: var(--blue); }
+.sev-name { flex: 1; font-size: 13.5px; font-weight: 600; color: var(--text); }
+.sev-count { font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.sev-row > svg:last-child { color: var(--text-muted); flex-shrink: 0; }
+.sev-note { font-size: 11.5px; color: var(--text-muted); line-height: 1.6; margin-top: 2px; }
+
+/* Dashboard'daki dar kolon tablosu: varsayılan 18px dolgu 5 sütunu taşırıyordu */
+.dash-row3 .asset-table th, .dash-row3 .asset-table td { padding: 11px 12px; }
+.dash-row3 .asset-table th:first-child, .dash-row3 .asset-table td:first-child { padding-left: 18px; }
+.dash-row3 .asset-table th:last-child, .dash-row3 .asset-table td:last-child { padding-right: 18px; }
+
+/* Aktivite akışı */
+.act-list { padding: 14px 18px 18px; display: flex; flex-direction: column; gap: 2px; }
+.act-item { display: flex; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--border); }
+.act-item:last-child { border-bottom: none; }
+.act-ico { width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.act-txt { flex: 1; min-width: 0; }
+.act-txt strong { display: block; font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.4; }
+.act-txt span { display: block; font-size: 12px; color: var(--text-muted); margin-top: 1px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-time { font-size: 11.5px; color: var(--text-muted); flex-shrink: 0; white-space: nowrap; }
+
+/* Kritik uyarı şeridi */
+.card--alert { border-color: rgba(239,68,68,.28); background: var(--red-bg); }
+.crit-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; padding: 16px 18px 18px; }
+.crit-chip {
+  display: flex; align-items: center; gap: 11px;
+  padding: 12px 14px; border-radius: 12px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  cursor: pointer; font-family: inherit; text-align: left;
+  transition: border-color .14s, transform .14s;
+}
+.crit-chip:hover { border-color: var(--red); transform: translateY(-1px); }
+.crit-chip .sev-ico { width: 30px; height: 30px; border-radius: 8px; }
+.crit-chip div { min-width: 0; }
+.crit-chip strong { display: block; font-size: 12.5px; font-weight: 600; color: var(--text); line-height: 1.35; }
+.crit-chip span { display: block; font-size: 11.5px; color: var(--text-muted); }
+
+/* Öneri kartı */
+.card--insight { background: var(--accent-glow); border-color: rgba(79,70,229,.25); }
+.insight-body { padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 14px; align-items: flex-start; }
+.insight-body p { font-size: 13.5px; line-height: 1.65; color: var(--text-dim); margin: 0; }
+
 /* ══ DASHBOARD: alt satır (son eklenenler + hızlı işlemler) ════════════════ */
 .dash-bottom { display: grid; grid-template-columns: minmax(0,1.85fr) minmax(0,1fr); gap: 18px; align-items: start; }
 .dash-bottom > .card { margin-bottom: 0; }
@@ -1056,9 +1146,15 @@ body.sidebar-collapsed .sidebar-footer { padding: 14px 0 0; }
 .spinning { animation: spin 0.8s linear infinite; }
 
 /* ── Responsive ── */
+@media (max-width: 1240px) {
+  .dash-row3, .dash-row3--b { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  .dash-row3 > .card:nth-child(3), .dash-row3--b > .card:nth-child(3) { grid-column: 1 / -1; }
+}
 @media (max-width: 1360px) {
-  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .kpi-grid, .kpi-grid--5 { grid-template-columns: repeat(2, 1fr); }
   .dash-bottom { grid-template-columns: 1fr; }
+  .dash-row3, .dash-row3--b, .dash-row2 { grid-template-columns: 1fr; }
+  .dash-row3 > .card:nth-child(3), .dash-row3--b > .card:nth-child(3) { grid-column: auto; }
 }
 @media (max-width: 1100px) {
   .charts-row { grid-template-columns: 1fr 1fr; }

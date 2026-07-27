@@ -880,6 +880,16 @@ app.get('/api/location-drift', async (req, res) => {
   }
 });
 
+// Dashboard lokasyon özeti (kova sayıları + şiddet dağılımı + lokasyon başına adet)
+app.get('/api/location-summary', async (req, res) => {
+  try {
+    const data = await getAllAssets({ size: 200 });
+    res.json(await locationTools.getLocationSummary(data.results || []));
+  } catch (err) {
+    res.status(500).json({ error: 'Lokasyon özeti alınamadı', detail: err.message });
+  }
+});
+
 // İlk kurulum: mevcut envanter lokasyonlarını "beklenen" olarak tohumla (tablo boşsa)
 app.post('/api/location-drift/seed', requireRole('admin'), async (req, res) => {
   try {

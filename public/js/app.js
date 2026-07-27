@@ -39,6 +39,14 @@ function fmtDate(iso) {
   return d.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+// Dashboard tablosu dar kolonda — saat olmadan (tasarım referansı da tarih-only)
+function fmtDay(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return d.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
 const CAT_CLASS = {
   'Bilgisayar': 'bilgisayar',
   'Sunucu': 'sunucu',
@@ -450,15 +458,48 @@ async function loadInsights() {
 }
 
 /* ─── Dashboard ─────────────────────────────────────────────────────────── */
+async function fetchLocationSummary() {
+  const res = await fetch('/api/location-summary');
+  if (!res.ok) throw new Error('Lokasyon özeti alınamadı');
+  return res.json();
+}
+
+const EMPTY_SUMMARY = {
+  total: 0, dogru: 0, tasinmis: 0, guncellenen: 0, bilinmeyen: 0, baseline_yok: 0,
+  severity: { kritik: 0, uyari: 0, bilgi: 0 }, locations: {}, location_count: 0, threshold_days: 7,
+};
+
 async function loadDashboard() {
   try {
-    const [assetsData, stats] = await Promise.all([fetchAssets({ size: 200 }), fetchStats()]);
+    // Lokasyon/uyarı verileri BAŞARISIZ olsa da çekirdek dashboard çizilir.
+    const [assetsData, stats, summary, lcLog, anomalies, warranty] = await Promise.all([
+      fetchAssets({ size: 200 }),
+      fetchStats(),
+      fetchLocationSummary().catch(() => ({ ...EMPTY_SUMMARY })),
+      fetchLifecycleLog(30).catch(() => ({ events: [] })),
+      fetchAnomalies().catch(() => ({})),
+      fetchWarranty().catch(() => ({})),
+    ]);
     state.assets = assetsData.results || [];
     state.stats = stats;
-    renderStats(stats);
+    state.locSummary = summary;
+
+    renderStats(stats, summary);
     renderCategoryDonut(stats.by_category || {}, stats.total || 0);
-    renderLocationDonut(state.assets);
+    applyLocViewMode(summary.locations || {});
+    renderMismatch(summary);
+    renderLocationStateDonut(summary);
     renderRecentTable(state.assets.slice(0, 5));
+    renderActivities(lcLog.events || lcLog.log || []);
+    const parts = {
+      drift:    summary.tasinmis || 0,
+      warranty: warranty.expired?.items?.length || 0,
+      uptime:   anomalies.long_uptime?.items?.length || 0,
+      disk:     anomalies.low_disk?.items?.length || 0,
+    };
+    renderCriticalStrip(parts);
+    renderInsight(summary, parts);
+
     // Eski görünümlerde kalan grafikler (elemanı yoksa sessizce atlanır)
     renderBrandChart(stats.by_brand || {});
     renderCategoryChart(stats.by_category || {});
@@ -474,7 +515,20 @@ async function loadDashboard() {
 /* KPI kartları — hepsi GERÇEK veriden; uydurma trend yüzdesi YOK.
    Toplam kart: son 14 günün kümülatif kayıt eğrisi (created_on).
    Durum kartları: toplam içindeki gerçek pay çubuğu. */
-function renderStats(stats) {
+// Harita / liste görünümü arasında geçiş (seçim korunur)
+function applyLocViewMode(locations) {
+  state.locations = locations;
+  const sel = $(`#locViewMode`);
+  const mode = sel ? sel.value : 'map';
+  const mapW = $(`#locMapWrap`), listW = $(`#locListWrap`);
+  if (mapW) mapW.classList.toggle('hidden', mode !== 'map');
+  if (listW) listW.classList.toggle('hidden', mode === 'map');
+  if (mode === 'map') renderLocationMap(locations); else renderLocationList(locations);
+}
+
+function renderStats(stats, summary) {
+  const locEl = $(`#kpiLocations`);
+  if (locEl) animateCount(locEl, summary?.location_count || 0);
   const total   = stats.total || 0;
   const online  = stats.by_status?.online  || 0;
   const storage = stats.by_status?.depoda  || 0;
@@ -543,11 +597,123 @@ function growthSpark(id, assets) {
       stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
+/* ═══ Lokasyon haritası ═══════════════════════════════════════════════════
+   Harici harita kütüphanesi YOK (kapalı devre/CSP kısıtı). Basitleştirilmiş
+   Türkiye sınırı + il koordinatları, aynı projeksiyonla çizilir → balonlar
+   gerçek coğrafi konuma oturur. Eşleşmeyen lokasyon adları "Diğer"e düşer. */
+const TR_CITIES = {
+  'istanbul': [41.01, 28.98], 'ankara': [39.93, 32.86], 'izmir': [38.42, 27.14],
+  'bursa': [40.19, 29.06], 'antalya': [36.90, 30.70], 'adana': [37.00, 35.32],
+  'konya': [37.87, 32.48], 'gaziantep': [37.07, 37.38], 'kocaeli': [40.85, 29.88],
+  'izmit': [40.77, 29.92], 'kayseri': [38.73, 35.49], 'samsun': [41.29, 36.33],
+  'trabzon': [41.00, 39.72], 'erzurum': [39.90, 41.27], 'diyarbakir': [37.91, 40.24],
+  'van': [38.49, 43.38], 'eskisehir': [39.78, 30.52], 'mersin': [36.80, 34.63],
+  'denizli': [37.78, 29.09], 'sakarya': [40.78, 30.40], 'tekirdag': [40.98, 27.51],
+  'balikesir': [39.65, 27.89], 'manisa': [38.62, 27.43], 'hatay': [36.20, 36.16],
+  'malatya': [38.35, 38.31], 'sivas': [39.75, 37.02], 'aydin': [37.85, 27.84],
+  'mugla': [37.22, 28.36], 'ordu': [40.98, 37.88], 'zonguldak': [41.45, 31.79],
+};
+/* Sınır noktaları (lon, lat). İki parça: Anadolu + Trakya (Marmara arada kalsın
+   diye ayrı çizilir — tek poligonda Türkiye tanınmaz bir bloba dönüşüyordu). */
+const TR_ANATOLIA = [
+  [29.05,41.20],[29.50,41.15],[31.40,41.10],[32.30,41.75],[33.40,42.00],[35.15,42.08],
+  [36.30,41.35],[37.90,41.02],[39.50,41.10],[40.50,41.20],[41.55,41.52],[42.80,41.55],
+  [43.45,41.20],[43.60,40.60],[43.70,40.02],[44.80,39.65],[44.35,39.40],[44.05,39.38],
+  [44.30,38.35],[44.50,37.75],[44.00,37.30],[42.80,37.32],[42.35,37.25],[41.30,37.10],
+  [40.20,36.90],[39.00,36.70],[38.20,36.90],[37.00,36.65],[36.60,36.20],[36.15,35.85],
+  [35.90,36.25],[35.50,36.60],[34.90,36.75],[34.00,36.30],[33.00,36.15],[32.00,36.10],
+  [31.00,36.25],[30.60,36.25],[30.35,36.32],[29.70,36.15],[29.00,36.50],[28.20,36.65],
+  [27.40,36.72],[27.25,37.10],[27.90,37.35],[27.25,37.70],[26.35,38.15],[26.90,38.42],
+  [26.40,38.62],[26.70,38.88],[26.20,39.50],[26.15,39.92],[26.70,40.40],[27.50,40.35],
+  [28.60,40.40],[29.30,40.75],
+];
+const TR_THRACE = [
+  [26.05,41.35],[26.35,41.72],[27.00,42.05],[28.00,41.75],[28.90,41.22],
+  [28.60,41.02],[27.50,40.98],[26.90,40.62],[26.20,40.62],
+];
+const MAP_W = 560, MAP_H = 300;
+const LON0 = 25.4, LON1 = 45.6, LAT0 = 35.6, LAT1 = 42.6;
+const projX = (lon) => ((lon - LON0) / (LON1 - LON0)) * MAP_W;
+const projY = (lat) => ((LAT1 - lat) / (LAT1 - LAT0)) * MAP_H;
+
+/* Aksanları sadeleştirip şehir adı ara ("İstanbul Depo A" → istanbul).
+   DİKKAT: 'İ'.toLowerCase() → 'i' + U+0307 (birleşik nokta) üretir; düz replace
+   zinciri bunu yakalamaz ve İstanbul HİÇ eşleşmez. NFD ile ayrıştırıp birleşik
+   işaretleri atmak tek güvenli yol ('ş','ğ','ü','ö','ç' de böyle sadeleşir).
+   'ı' ayrışmaz → ayrıca değiştirilir. */
+function trSlug(s) {
+  return String(s || '').toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/ı/g, 'i');
+}
+function cityKey(name) {
+  const s = trSlug(name);
+  for (const key of Object.keys(TR_CITIES)) if (s.includes(key)) return key;
+  return null;
+}
+
+function renderLocationMap(locations) {
+  const svg = $(`#locMap`), legend = $(`#locMapLegend`);
+  if (!svg || !legend) return;
+  const entries = Object.entries(locations || {});
+  if (!entries.length) {
+    svg.innerHTML = '';
+    legend.innerHTML = '<p class="map-empty">Lokasyon verisi yok</p>';
+    return;
+  }
+
+  // Şehir bazında topla (aynı şehirdeki birden çok depo tek balon olur)
+  const byCity = {}; const unknown = [];
+  entries.forEach(([loc, n]) => {
+    const key = cityKey(loc);
+    if (key) (byCity[key] = byCity[key] || { n: 0, names: [] }), byCity[key].n += n, byCity[key].names.push(loc);
+    else unknown.push([loc, n]);
+  });
+
+  const toPath = (pts) => pts.map(([lon, lat], i) =>
+    `${i ? 'L' : 'M'}${projX(lon).toFixed(1)} ${projY(lat).toFixed(1)}`).join(' ') + ' Z';
+  const path = toPath(TR_ANATOLIA) + ' ' + toPath(TR_THRACE);
+
+  const max = Math.max(1, ...Object.values(byCity).map(v => v.n));
+  const bubbles = Object.entries(byCity).sort((a, b) => b[1].n - a[1].n).map(([key, v]) => {
+    const [lat, lon] = TR_CITIES[key];
+    const r = 7 + Math.sqrt(v.n / max) * 22;   // alan ~ adet (yarıçap değil) → görsel yanılt­maz
+    return `<circle class="map-bubble" cx="${projX(lon).toFixed(1)}" cy="${projY(lat).toFixed(1)}" r="${r.toFixed(1)}">
+        <title>${escapeHtml(v.names.join(', '))} — ${v.n} cihaz</title></circle>
+      <circle class="map-dot" cx="${projX(lon).toFixed(1)}" cy="${projY(lat).toFixed(1)}" r="2.5"/>`;
+  }).join('');
+
+  svg.innerHTML = `<path class="map-land" d="${path}"/>${bubbles}`;
+
+  const top = Object.entries(byCity).sort((a, b) => b[1].n - a[1].n).slice(0, 4);
+  const unknownTotal = unknown.reduce((a, [, n]) => a + n, 0);
+  legend.innerHTML =
+    top.map(([key, v]) => `<span><i></i>${key.charAt(0).toUpperCase() + key.slice(1)} (${v.n})</span>`).join('') +
+    (unknownTotal ? `<span><i style="background:var(--text-muted)"></i>Haritada eşleşmeyen (${unknownTotal})</span>` : '');
+}
+
+function renderLocationList(locations) {
+  const box = $(`#locListWrap`);
+  if (!box) return;
+  const entries = Object.entries(locations || {}).sort((a, b) => b[1] - a[1]);
+  const sum = entries.reduce((a, [, n]) => a + n, 0) || 1;
+  box.innerHTML = entries.length ? entries.map(([loc, n], i) => `
+    <div class="dl-row">
+      <span class="dl-name" title="${escapeHtml(loc)}">
+        <span class="dl-dot" style="background:${donutColor(loc, i)}"></span>${escapeHtml(loc)}
+      </span>
+      <span class="dl-pct">${Math.round((n / sum) * 100)}%</span>
+      <span class="dl-count">${n}</span>
+    </div>`).join('')
+    : '<p class="map-empty">Lokasyon verisi yok</p>';
+}
+
 /* ─── Donut grafikler ───────────────────────────────────────────────────── */
 const DONUT_COLORS = ['#4f46e5', '#10b981', '#a855f7', '#ef4444', '#f59e0b', '#14b8a6', '#6366f1', '#94a3b8'];
 const DONUT_MUTED = '#94a3b8'; // "Diğer"/"Belirtilmemiş" toplayıcı dilimler nötr kalır
 const donutColor = (label, i) =>
-  (label === 'Diğer' || label === 'Belirtilmemiş') ? DONUT_MUTED : DONUT_COLORS[i % DONUT_COLORS.length];
+  LOC_STATE_COLORS[label] ||
+  ((label === 'Diğer' || label === 'Belirtilmemiş') ? DONUT_MUTED : DONUT_COLORS[i % DONUT_COLORS.length]);
 
 // entries: [[etiket, adet], ...] — tek SVG'de dash-offset ile dilimlenmiş halka
 function paintDonut(svgId, legendId, totalId, entries, centerValue, emptyText) {
@@ -588,6 +754,138 @@ function renderCategoryDonut(byCategory, total) {
   const restSum = all.slice(5).reduce((a, [, n]) => a + n, 0);
   if (restSum) top.push(['Diğer', restSum]);
   paintDonut('catDonut', 'catLegend', 'catDonutTotal', top, total, 'Kategori verisi yok');
+}
+
+/* ═══ Lokasyon uyumsuzluğu — şiddet dağılımı ══════════════════════════════
+   Şiddet SÜREDEN türer (uydurma ağırlık yok): kritik ≥30 gün · uyarı eşik-30 ·
+   bilgilendirme eşik altı (henüz uyarı üretmeyen taze sapmalar). */
+function renderMismatch(summary) {
+  const sev = summary.severity || {};
+  const set = (id, v) => { const el = $('#' + id); if (el) el.textContent = `${v} cihaz`; };
+  set('sevKritik', sev.kritik || 0);
+  set('sevUyari', sev.uyari || 0);
+  set('sevBilgi', sev.bilgi || 0);
+  setPill('mismatchPill', summary.tasinmis || 0);
+
+  // Kapsam dürüstlüğü: baseline'ı olmayan cihazlar bu tabloda GÖRÜNMEZ.
+  const note = $(`#sevNote`);
+  if (note) {
+    note.textContent = summary.baseline_yok > 0
+      ? `${summary.baseline_yok} cihazın beklenen lokasyonu tanımlı değil — bu tablonun dışındalar. Ayarlar → Lokasyon İzleme'den tanımlayın.`
+      : `Eşik: ${summary.threshold_days} gün. Kritik = 30+ gündür yerinde değil.`;
+  }
+}
+
+/* Varlık lokasyon durumu — her cihaz TEK kovada, toplam = envanter */
+function renderLocationStateDonut(summary) {
+  const entries = [
+    ['Doğru Lokasyonda', summary.dogru || 0],
+    ['Taşınmış', summary.tasinmis || 0],
+    ['Lokasyonu Güncellenen', summary.guncellenen || 0],
+    ['Baseline Yok', summary.baseline_yok || 0],
+    ['Bilinmeyen', summary.bilinmeyen || 0],
+  ].filter(([, n]) => n > 0);
+  paintDonut('locStateDonut', 'locStateLegend', 'locStateTotal', entries, summary.total, 'Lokasyon verisi yok');
+}
+
+const LOC_STATE_COLORS = {
+  'Doğru Lokasyonda': '#10b981', 'Taşınmış': '#f59e0b',
+  'Lokasyonu Güncellenen': '#4f46e5', 'Baseline Yok': '#94a3b8', 'Bilinmeyen': '#ef4444',
+};
+
+/* ═══ Son aktiviteler — yaşam döngüsü kayıtlarından (gerçek olaylar) ═══════ */
+const ACT_ICON = {
+  'Lokasyon Değişikliği': ['blue', '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>'],
+  'Bakımda': ['orange', '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>'],
+  'Hurdaya Ayrıldı': ['red', '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'],
+  'Kayıp': ['red', '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'],
+};
+const ACT_DEFAULT = ['green', '<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>'];
+
+function timeAgo(iso) {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return '—';
+  const m = Math.floor((Date.now() - t) / 60000);
+  if (m < 1) return 'az önce';
+  if (m < 60) return `${m} dk önce`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} saat önce`;
+  const d = Math.floor(h / 24);
+  return d < 30 ? `${d} gün önce` : fmtDate(iso);
+}
+
+function renderActivities(events) {
+  const box = $(`#activityList`);
+  if (!box) return;
+  const list = (events || []).slice(-6).reverse();
+  if (!list.length) { box.innerHTML = '<p class="map-empty">Henüz kayıtlı işlem yok</p>'; return; }
+  box.innerHTML = list.map((e) => {
+    const [tone, icon] = ACT_ICON[e.to_status] || ACT_DEFAULT;
+    const who = e.hostname || e.serial_number || 'Cihaz';
+    return `<div class="act-item">
+      <span class="act-ico kpi-ico--${tone}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>
+      </span>
+      <span class="act-txt">
+        <strong>${escapeHtml(who)} — ${escapeHtml(e.to_status || '')}</strong>
+        <span>${escapeHtml(e.note || e.actor || '')}</span>
+      </span>
+      <span class="act-time">${timeAgo(e.timestamp)}</span>
+    </div>`;
+  }).join('');
+}
+
+/* ═══ Kritik uyarı şeridi — mevcut tespit modüllerinden ═══════════════════ */
+function renderCriticalStrip(parts) {
+  const box = $(`#critStrip`);
+  if (!box) return;
+  const chips = [
+    { n: parts.drift,    t: 'Lokasyon Dışı Cihazlar', tone: 'red',    view: 'alerts' },
+    { n: parts.warranty, t: 'Garanti Süresi Dolan',   tone: 'orange', view: 'alerts' },
+    { n: parts.uptime,   t: 'Yeniden Başlatma Gerekli', tone: 'orange', view: 'alerts' },
+    { n: parts.disk,     t: 'Disk Alanı Düşük',       tone: 'red',    view: 'alerts' },
+  ];
+  setPill('critPill', chips.reduce((a, c) => a + c.n, 0));
+  box.innerHTML = chips.map(c => `
+    <button class="crit-chip" data-view="${c.view}">
+      <span class="sev-ico sev-ico--${c.tone}">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </span>
+      <div><strong>${c.t}</strong><span>${c.n} cihaz</span></div>
+    </button>`).join('');
+}
+
+/* ═══ Öneri — KURAL TABANLI, LLM ÇAĞRISI YOK ══════════════════════════════
+   Dashboard açılışında LLM çağırmak yavaş + küçük modelde bozuk TR üretiyor
+   (bkz. deterministik tespit kararı). En yüksek etkili sinyal seçilip
+   sabit metinle sunulur — sayılar gerçek, cümle uydurma değil. */
+function renderInsight(summary, parts) {
+  const el = $(`#insightText`), btn = $(`#insightBtn`);
+  if (!el) return;
+  let msg, go = null;
+  if (summary.baseline_yok > 0) {
+    msg = `${summary.baseline_yok} cihazın beklenen lokasyonu tanımlı değil; bu cihazlar sapma taramasının dışında kalıyor. Ayarlar → Lokasyon İzleme'den mevcut lokasyonları başlangıç olarak alabilirsiniz.`;
+    go = 'settings';
+  } else if ((summary.severity?.kritik || 0) > 0) {
+    msg = `${summary.severity.kritik} cihaz 30 günden uzun süredir ait olduğu lokasyonun dışında. Transferi resmileştirin veya cihazları yerine iade ettirin.`;
+    go = 'alerts';
+  } else if (summary.tasinmis > 0) {
+    msg = `${summary.tasinmis} cihaz farklı lokasyonda görülüyor. Lokasyonlarını güncellemenizi öneririz.`;
+    go = 'alerts';
+  } else if (parts.warranty > 0) {
+    msg = `${parts.warranty} cihazın garanti süresi dolmuş. Yenileme bütçesi için Risk & Öngörü ekranına bakın.`;
+    go = 'insights';
+  } else if (summary.bilinmeyen > 0) {
+    msg = `${summary.bilinmeyen} cihazın lokasyon bilgisi hiç yok. Lokasyon ajanı kurulumu veya QR kaydıyla bu boşluk kapanır.`;
+    go = 'assets';
+  } else {
+    msg = 'Lokasyon uyumu tam — tüm cihazlar ait olduğu yerde görünüyor.';
+  }
+  el.textContent = msg;
+  if (btn) {
+    btn.style.display = go ? '' : 'none';
+    btn.onclick = go ? () => showView(go) : null;
+  }
 }
 
 function renderLocationDonut(assets) {
@@ -1333,7 +1631,7 @@ function renderRecentTable(assets) {
       <td>${categoryBadge(a.category)}</td>
       <td>${a.location ? `<span class="location-tag">${escapeHtml(a.location)}</span>` : '—'}</td>
       <td>${statusBadge(a.status)}</td>
-      <td>${fmtDate(a.last_seen)}</td>
+      <td>${fmtDay(a.last_seen)}</td>
     </tr>`).join('');
   tbody.querySelectorAll('tr[data-asset-id]').forEach((tr) => {
     tr.addEventListener('click', () => {
@@ -2762,6 +3060,18 @@ document.addEventListener('DOMContentLoaded', () => {
   // Ayarlar kaydet butonları
   $(`#saveThresholds`)?.addEventListener('click', saveThresholds);
   $(`#seedExpectedBtn`)?.addEventListener('click', seedExpectedLocations);
+
+  // Lokasyon kartı: harita/liste geçişi + KPI kartından liste görünümüne atlama
+  $(`#locViewMode`)?.addEventListener('change', () => applyLocViewMode(state.locations || {}));
+  $(`#kpiLocCard`)?.addEventListener('click', (e) => {
+    e.preventDefault();
+    const sel = $(`#locViewMode`);
+    if (sel) { sel.value = 'list'; applyLocViewMode(state.locations || {}); }
+    $(`#locListWrap`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+
+  // Şiddet satırları → Uyarılar görünümü
+  $$('.sev-row').forEach((r) => r.addEventListener('click', () => showView('alerts')));
   $(`#saveAppearance`)?.addEventListener('click', saveAppearance);
 
   // Hat (Turkcell) modalı + CSV import
