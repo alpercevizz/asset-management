@@ -9,7 +9,7 @@ Değiştirilemez audit log · çift dijital onay · gerçek AD/LDAP girişi · c
 [![Node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![Express](https://img.shields.io/badge/express-4.x-000000?logo=express&logoColor=white)](https://expressjs.com)
 [![Database](https://img.shields.io/badge/db-SQLite%20%7C%20PostgreSQL-336791?logo=postgresql&logoColor=white)](#kurulum)
-[![Tests](https://img.shields.io/badge/tests-25%2F25%20passing-22c55e)](#test)
+[![Tests](https://img.shields.io/badge/tests-28%2F28%20passing-22c55e)](#test)
 [![License](https://img.shields.io/badge/license-see%20LICENSE-blue)](./LICENSE)
 [![Status](https://img.shields.io/badge/status-active-success)]()
 
@@ -57,6 +57,7 @@ Piyasadaki çoğu envanter aracı (Snipe-IT, Lansweeper, GLPI) cihazın **son du
 - **WORM hardened yedek** (AES-256-GCM, write-once)
 - **Gerçek AD/LDAP girişi** (`AUTH_PROVIDER=ldap`) — grup→rol eşleme
 - **Zimmet devir koruması** — resmi zimmet kilitli, sessiz devralma engellenir
+- **Lokasyon sapması** — cihaz ait olduğu yerin dışındaysa uyarı; konum geçmişi + token doğrulamalı ajan
 - Çok-kullanıcılı auth (scrypt + roller) · SQL katmanı
 
 </td>
