@@ -322,6 +322,8 @@ async function loadAiProviderInfo() {
   }
 }
 
+const ROLE_LABEL = { admin: 'Yönetici', it: 'BT Ekibi', approver: 'Onaylayıcı' };
+
 function userInitials(name) {
   const parts = String(name || '').trim().split(/[\s._\-@]+/).filter(Boolean);
   if (!parts.length) return '?';
@@ -334,10 +336,21 @@ async function loadCurrentUser() {
     const res = await fetch('/api/me');
     if (!res.ok) return;
     const data = await res.json();
+    const initials = userInitials(data.user);
+    const roleLabel = ROLE_LABEL[data.role] || data.role || '';
     const av = $(`#userAvatar`);
     if (av && data.user) {
-      av.textContent = userInitials(data.user);
-      av.title = `${data.user} · ${data.role || ''}`;
+      av.textContent = initials;
+      av.title = `${data.user} · ${roleLabel}`;
+    }
+    // Sidebar kullanıcı kartı + hesap menüsü başlığı
+    const setTxt = (id, v) => { const el = $('#' + id); if (el) el.textContent = v; };
+    if (data.user) {
+      setTxt('sbUserAv', initials);
+      setTxt('sbUserName', data.display || data.user);
+      setTxt('sbUserRole', roleLabel);
+      setTxt('menuUserName', data.display || data.user);
+      setTxt('menuUserRole', roleLabel);
     }
     state.role = data.role;
     // Ayarlar nav'ı yalnız admin'e görünür
@@ -443,26 +456,151 @@ async function loadDashboard() {
     state.assets = assetsData.results || [];
     state.stats = stats;
     renderStats(stats);
+    renderCategoryDonut(stats.by_category || {}, stats.total || 0);
+    renderLocationDonut(state.assets);
+    renderRecentTable(state.assets.slice(0, 5));
+    // Eski görünümlerde kalan grafikler (elemanı yoksa sessizce atlanır)
     renderBrandChart(stats.by_brand || {});
     renderCategoryChart(stats.by_category || {});
     renderStatusChart(stats.by_status || {});
     renderLocationChart(state.assets);
-    renderRecentTable(state.assets.slice(0, 10));
   } catch (err) {
     console.error('Dashboard load error:', err);
-    $('tbody#recentBody').innerHTML = `<tr><td colspan="9" class="loading-cell" style="color:#ef4444">Baserow bağlantısı kurulamadı. .env dosyasını kontrol edin.</td></tr>`;
+    const tb = $('tbody#recentBody');
+    if (tb) tb.innerHTML = `<tr><td colspan="5" class="loading-cell" style="color:var(--red)">Envanter kaynağına bağlanılamadı.</td></tr>`;
   }
 }
 
+/* KPI kartları — hepsi GERÇEK veriden; uydurma trend yüzdesi YOK.
+   Toplam kart: son 14 günün kümülatif kayıt eğrisi (created_on).
+   Durum kartları: toplam içindeki gerçek pay çubuğu. */
 function renderStats(stats) {
-  const total = $(`#statTotal`);
-  const online = $(`#statOnline`);
-  const newToday = $(`#statNew`);
-  const avgRam = $(`#statAvgRam`);
-  if (total) animateCount(total, stats.total || 0);
-  if (online) animateCount(online, stats.by_status?.online || 0);
-  if (newToday) animateCount(newToday, stats.new_today || 0);
-  if (avgRam) avgRam.textContent = (stats.avg_ram_gb || 0) + ' GB';
+  const total   = stats.total || 0;
+  const online  = stats.by_status?.online  || 0;
+  const storage = stats.by_status?.depoda  || 0;
+  const offline = stats.by_status?.offline || 0;
+
+  const set = (id, val) => { const el = $('#' + id); if (el) animateCount(el, val); };
+  set('kpiTotal', total); set('kpiOnline', online);
+  set('kpiStorage', storage); set('kpiOffline', offline);
+
+  const sub = (id, txt) => { const el = $('#' + id); if (el) el.textContent = txt; };
+  sub('kpiTotalSub', (stats.new_today || 0) > 0 ? `Bugün +${stats.new_today} kayıt` : 'Bugün yeni kayıt yok');
+  const pct = (n) => total ? Math.round((n / total) * 100) : 0;
+  sub('kpiOnlineSub',  `Envanterin %${pct(online)}'i`);
+  sub('kpiStorageSub', `Envanterin %${pct(storage)}'i`);
+  sub('kpiOfflineSub', `Envanterin %${pct(offline)}'i`);
+
+  shareBar('kpiOnlineSpark',  pct(online),  'var(--green)');
+  shareBar('kpiStorageSpark', pct(storage), 'var(--orange)');
+  shareBar('kpiOfflineSpark', pct(offline), 'var(--red)');
+  growthSpark('kpiTotalSpark', state.assets);
+}
+
+// Toplam içindeki payı gösteren ince çubuk (gerçek oran)
+function shareBar(id, pct, color) {
+  const el = $('#' + id);
+  if (!el) return;
+  el.innerHTML = `<svg width="84" height="10" viewBox="0 0 84 10">
+    <rect x="0" y="3" width="84" height="4" rx="2" fill="var(--bg-hover)"/>
+    <rect x="0" y="3" width="${(Math.max(0, Math.min(100, pct)) / 100) * 84}" height="4" rx="2" fill="${color}"/>
+  </svg>`;
+}
+
+// Son 14 günün kümülatif envanter büyümesi — created_on alanından hesaplanır
+function growthSpark(id, assets) {
+  const el = $('#' + id);
+  if (!el) return;
+  const STEPS = 14;
+  const dates = (assets || [])
+    .map(a => Date.parse(a.created_on || a.last_seen || ''))
+    .filter(t => !Number.isNaN(t));
+  if (dates.length < 3) { el.innerHTML = ''; return; }
+  // Tüm kayıtlar 1-3 güne sıkışmışsa eğri "L" şeklinde bozuk çıkar → hiç çizme.
+  const distinctDays = new Set(dates.map(t => Math.floor(t / 86400000))).size;
+  if (distinctDays < 4) { el.innerHTML = ''; return; }
+  // Zaman aralığı veriye göre uyarlanır: ilk kayıttan bugüne 14 eşit örnek.
+  // Sabit 14 günlük pencere eski envanterlerde düz çizgi verirdi.
+  const end = Date.now();
+  const start = Math.min(...dates);
+  if (end - start < 86400000) { el.innerHTML = ''; return; }
+  const pts = [];
+  for (let i = 0; i < STEPS; i++) {
+    const cut = start + ((end - start) * i) / (STEPS - 1);
+    pts.push(dates.filter(t => t <= cut).length);
+  }
+  const min = Math.min(...pts), max = Math.max(...pts);
+  if (max === min) { el.innerHTML = ''; return; }
+  const W = 84, H = 30;
+  const d = pts.map((v, i) => {
+    const x = (i / (pts.length - 1)) * W;
+    const y = H - ((v - min) / (max - min)) * (H - 4) - 2;
+    return `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`;
+  }).join(' ');
+  el.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img"
+    aria-label="İlk kayıttan bugüne envanter büyümesi">
+    <path d="${d}" fill="none" stroke="rgba(255,255,255,.9)" stroke-width="2"
+      stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+/* ─── Donut grafikler ───────────────────────────────────────────────────── */
+const DONUT_COLORS = ['#4f46e5', '#10b981', '#a855f7', '#ef4444', '#f59e0b', '#14b8a6', '#6366f1', '#94a3b8'];
+const DONUT_MUTED = '#94a3b8'; // "Diğer"/"Belirtilmemiş" toplayıcı dilimler nötr kalır
+const donutColor = (label, i) =>
+  (label === 'Diğer' || label === 'Belirtilmemiş') ? DONUT_MUTED : DONUT_COLORS[i % DONUT_COLORS.length];
+
+// entries: [[etiket, adet], ...] — tek SVG'de dash-offset ile dilimlenmiş halka
+function paintDonut(svgId, legendId, totalId, entries, centerValue, emptyText) {
+  const svg = $('#' + svgId), legend = $('#' + legendId), totalEl = $('#' + totalId);
+  if (!svg || !legend) return;
+  const sum = entries.reduce((a, [, n]) => a + n, 0);
+  if (totalEl) totalEl.textContent = (centerValue ?? sum).toLocaleString('tr-TR');
+  if (!sum) {
+    svg.innerHTML = `<circle cx="60" cy="60" r="42" fill="none" stroke="var(--bg-hover)" stroke-width="18"/>`;
+    legend.innerHTML = `<p style="color:var(--text-muted);font-size:13px">${emptyText}</p>`;
+    return;
+  }
+  const R = 42, C = 2 * Math.PI * R;
+  let offset = 0;
+  svg.innerHTML = entries.map(([label, n], i) => {
+    const len = (n / sum) * C;
+    const seg = `<circle class="donut-seg" cx="60" cy="60" r="${R}" fill="none"
+      stroke="${donutColor(label, i)}" stroke-width="18"
+      stroke-dasharray="${len - 1.5} ${C - len + 1.5}" stroke-dashoffset="${-offset}"/>`;
+    offset += len;
+    return seg;
+  }).join('');
+
+  legend.innerHTML = entries.map(([label, n], i) => `
+    <div class="dl-row">
+      <span class="dl-name" title="${escapeHtml(label)}">
+        <span class="dl-dot" style="background:${donutColor(label, i)}"></span>${escapeHtml(label)}
+      </span>
+      <span class="dl-pct">${Math.round((n / sum) * 100)}%</span>
+      <span class="dl-count">${n.toLocaleString('tr-TR')}</span>
+    </div>`).join('');
+}
+
+function renderCategoryDonut(byCategory, total) {
+  // İlk 5 kategori + kalanı "Diğer" altında topla (efsane okunur kalsın)
+  const all = Object.entries(byCategory).sort((a, b) => b[1] - a[1]);
+  const top = all.slice(0, 5);
+  const restSum = all.slice(5).reduce((a, [, n]) => a + n, 0);
+  if (restSum) top.push(['Diğer', restSum]);
+  paintDonut('catDonut', 'catLegend', 'catDonutTotal', top, total, 'Kategori verisi yok');
+}
+
+function renderLocationDonut(assets) {
+  const counts = {};
+  (assets || []).forEach((a) => {
+    const loc = (a.location || '').trim() || 'Belirtilmemiş';
+    counts[loc] = (counts[loc] || 0) + 1;
+  });
+  const all = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const top = all.slice(0, 5);
+  const restSum = all.slice(5).reduce((a, [, n]) => a + n, 0);
+  if (restSum) top.push(['Diğer', restSum]);
+  paintDonut('locDonut', 'locLegend', 'locDonutTotal', top, all.length, 'Lokasyon verisi yok');
 }
 
 function renderBrandChart(byBrand) {
@@ -1057,21 +1195,23 @@ function renderRecentTable(assets) {
   const tbody = $(`#recentBody`);
   if (!tbody) return;
   if (!assets.length) {
-    tbody.innerHTML = `<tr><td colspan="8" class="loading-cell">Henüz kayıt yok</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="loading-cell">Henüz kayıt yok</td></tr>`;
     return;
   }
   tbody.innerHTML = assets.map((a) => `
-    <tr>
+    <tr data-asset-id="${a.id}" style="cursor:pointer">
       <td class="hostname-cell">${fmt(a.hostname)}</td>
       <td>${categoryBadge(a.category)}</td>
-      <td>${fmt(a.brand)} ${a.model ? `<span style="color:var(--text-muted)">${a.model}</span>` : ''}</td>
-      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">${fmt(a.cpu)}</td>
-      <td>${a.ram_gb ? a.ram_gb + ' GB' : '—'}</td>
-      <td>${a.storage_gb ? a.storage_gb + ' GB' : '—'}</td>
-      <td>${fmt(a.os)}</td>
+      <td>${a.location ? `<span class="location-tag">${escapeHtml(a.location)}</span>` : '—'}</td>
       <td>${statusBadge(a.status)}</td>
       <td>${fmtDate(a.last_seen)}</td>
     </tr>`).join('');
+  tbody.querySelectorAll('tr[data-asset-id]').forEach((tr) => {
+    tr.addEventListener('click', () => {
+      const asset = state.assets.find(x => String(x.id) === tr.dataset.assetId);
+      if (asset) openDeviceModal(asset);
+    });
+  });
 }
 
 /* ─── Assets View ───────────────────────────────────────────────────────── */
@@ -1507,6 +1647,12 @@ async function loadAlerts(showLoading = true) {
 }
 
 function updateAlertsBadge(count) {
+  // Topbar zil rozeti aynı sayıyı gösterir
+  const bell = $(`#bellBadge`);
+  if (bell) {
+    bell.textContent = count > 99 ? '99+' : count;
+    bell.style.display = count > 0 ? '' : 'none';
+  }
   const badge = $(`#alertsNavBadge`);
   if (!badge) return;
   if (count > 0) {
@@ -2279,6 +2425,53 @@ document.addEventListener('DOMContentLoaded', () => {
   $(`#logoutBtn`)?.addEventListener('click', async () => {
     try { await fetch('/api/logout', { method: 'POST' }); } catch (e) {}
     window.location.href = '/login';
+  });
+
+  // Topbar tema düğmesi — Ayarlar'daki tercihle aynı anahtarı kullanır
+  $(`#themeToggle`)?.addEventListener('click', () => {
+    const cur = localStorage.getItem('theme') || 'auto';
+    const isDark = cur === 'dark' ||
+      (cur === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    const next = isDark ? 'light' : 'dark';
+    localStorage.setItem('theme', next);
+    applyTheme(next);
+    const sel = $(`#setTheme`); if (sel) sel.value = next;
+  });
+
+  // Bildirim zili → Uyarılar görünümü
+  $(`#bellBtn`)?.addEventListener('click', () => showView('alerts'));
+
+  // Hesap menüsü (topbar avatar + sidebar üç nokta)
+  const userMenu = $(`#userMenu`);
+  const toggleUserMenu = (e) => { e.stopPropagation(); userMenu?.classList.toggle('open'); };
+  $(`#userChip`)?.addEventListener('click', toggleUserMenu);
+  $(`#sbUserMenu`)?.addEventListener('click', toggleUserMenu);
+  document.addEventListener('click', (e) => {
+    if (userMenu && !e.target.closest('#userMenu')) userMenu.classList.remove('open');
+  });
+  $(`#menuSettings`)?.addEventListener('click', () => {
+    userMenu?.classList.remove('open');
+    if (state.role === 'admin') showView('settings');
+    else alert('Ayarlar yalnızca yönetici rolündeki kullanıcılara açıktır.');
+  });
+
+  // Hızlı İşlemler
+  $(`#qaAddAsset`)?.addEventListener('click', () => $(`#qrModalOverlay`)?.classList.add('open'));
+  $(`#qaBulk`)?.addEventListener('click', () => {
+    $(`#qrModalOverlay`)?.classList.add('open');
+    $(`.modal-tab[data-tab="bulk"]`)?.click();
+  });
+  $(`#qaLifecycle`)?.addEventListener('click', () => showView('lifecycle'));
+  $(`#qaReport`)?.addEventListener('click', () => showView('reports'));
+
+  // KPI kartından duruma göre filtrelenmiş Varlıklar görünümü
+  $$('.kpi[data-status]').forEach((card) => {
+    card.addEventListener('click', (e) => {
+      e.preventDefault();
+      const sel = $(`#filterStatus`);
+      if (sel) sel.value = card.dataset.status;
+      showView('assets');
+    });
   });
 
   // Sidebar daralt/genişlet (tercih localStorage'da saklanır)
