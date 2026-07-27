@@ -1027,6 +1027,25 @@
         </div>
 
         <div class="card">
+          <div class="card-header">
+            <h3>Lokasyon İzleme</h3>
+            <span class="link-small">Cihazın ait olduğu yer vs. görüldüğü yer</span>
+          </div>
+          <div class="chart-container">
+            <div id="locSetupStatus" style="font-size:13px;color:var(--text-dim);line-height:1.9">Yükleniyor...</div>
+            <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <button class="btn-add" id="seedExpectedBtn">Mevcut lokasyonları başlangıç olarak al</button>
+              <span id="seedMsg" style="font-size:12px;color:var(--green)"></span>
+            </div>
+            <p style="margin-top:12px;font-size:12px;color:var(--text-muted);line-height:1.7">
+              Her cihazın envanterdeki mevcut lokasyonunu <strong>beklenen (resmi)</strong> lokasyon olarak kaydeder.
+              Yalnız beklenen lokasyon tablosu <strong>boşken</strong> çalışır — mevcut kayıtları EZMEZ.
+              Bu yapılmadan sapma taraması tüm cihazları kapsam dışı bırakır.
+            </p>
+          </div>
+        </div>
+
+        <div class="card">
           <div class="card-header"><h3>Görünüm</h3></div>
           <div class="chart-container">
             <div class="field-sm" style="max-width:280px"><label>Tema</label>

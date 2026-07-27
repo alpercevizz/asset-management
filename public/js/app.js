@@ -912,6 +912,7 @@ async function loadSettings() {
     setV('setLocDrift', th.location_drift_days);
     setV('setTheme', data.settings?.appearance?.theme || 'auto');
     renderSystemStatus(data.system || {});
+    loadLocationSetup(data.system || {});
   } catch (err) {
     $(`#systemStatusBody`).innerHTML = `<tr><td colspan="2" class="loading-cell" style="color:var(--red)">${escapeHtml(err.message)}</td></tr>`;
   }
@@ -932,9 +933,60 @@ function renderSystemStatus(s) {
     ['Anthropic anahtarı', yn(s.integrations?.anthropic_key)],
     ['n8n bildirim', yn(s.integrations?.n8n_notify)],
     ['LDAP/AD', yn(s.integrations?.ldap)],
+    ['Lokasyon token doğrulaması', yn(s.integrations?.location_tokens)],
     ['WORM yedek', s.backup ? (s.backup.in_sync ? '<span class="badge badge--online">senkron</span>' : '<span class="badge badge--offline">senkron değil</span>') : '—'],
   ];
   tbody.innerHTML = rows.map(([k, v]) => `<tr><td style="color:var(--text-muted);width:40%">${k}</td><td class="hostname-cell">${v}</td></tr>`).join('');
+}
+
+/* Ayarlar → Lokasyon İzleme kurulum durumu.
+   Modül "açık ama görünmez" kalabilir (token yok / beklenen lokasyon tohumlanmamış)
+   → bu durumu gizlemek yerine açıkça yaz. */
+async function loadLocationSetup(system) {
+  const box = $(`#locSetupStatus`);
+  if (!box) return;
+  try {
+    const drift = await fetchLocationDrift();
+    const tokensOn = !!system?.integrations?.location_tokens;
+    const total = (drift.unassigned || 0) + (drift.count || 0);
+    const line = (ok, text) =>
+      `<div><span style="color:${ok ? 'var(--green)' : 'var(--yellow)'};font-weight:700">${ok ? '✓' : '!'}</span> ${text}</div>`;
+
+    box.innerHTML =
+      line(tokensOn,
+        tokensOn
+          ? 'Lokasyon token doğrulaması <strong>açık</strong> — ajan bildirimleri doğrulanıyor.'
+          : 'Lokasyon token doğrulaması <strong>kapalı</strong> (.env → LOCATION_TOKENS tanımsız). Webhook’tan gelen lokasyon doğrulanmıyor.') +
+      line(drift.unassigned === 0,
+        drift.unassigned === 0
+          ? 'Tüm cihazların beklenen lokasyonu tanımlı.'
+          : `<strong>${drift.unassigned}</strong> cihazın beklenen lokasyonu tanımlı değil — sapma taramasının dışındalar.`) +
+      line(true, `Sapma eşiği: <strong>${drift.threshold_days} gün</strong> · şu an <strong>${drift.count}</strong> sapma.`);
+
+    const btn = $(`#seedExpectedBtn`);
+    if (btn) btn.disabled = drift.unassigned === 0 && total > 0;
+  } catch (err) {
+    box.innerHTML = `<span style="color:var(--red)">Durum alınamadı: ${escapeHtml(err.message)}</span>`;
+  }
+}
+
+async function seedExpectedLocations() {
+  const msg = $(`#seedMsg`);
+  if (!confirm('Her cihazın envanterdeki mevcut lokasyonu, beklenen (resmi) lokasyon olarak kaydedilecek.\n\nBeklenen lokasyon tablosu boş değilse işlem atlanır — mevcut kayıtlar EZİLMEZ.\n\nDevam edilsin mi?')) return;
+  try {
+    const res = await fetch('/api/location-drift/seed', { method: 'POST' });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.detail || j.error);
+    if (msg) {
+      msg.style.color = j.skipped ? 'var(--yellow)' : 'var(--green)';
+      msg.textContent = j.skipped
+        ? 'Atlandı — beklenen lokasyonlar zaten tanımlı.'
+        : `✓ ${j.count} cihaza beklenen lokasyon atandı.`;
+    }
+    loadSettings();
+  } catch (err) {
+    if (msg) { msg.style.color = 'var(--red)'; msg.textContent = 'Hata: ' + err.message; }
+  }
 }
 
 async function saveThresholds() {
@@ -2709,6 +2761,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Ayarlar kaydet butonları
   $(`#saveThresholds`)?.addEventListener('click', saveThresholds);
+  $(`#seedExpectedBtn`)?.addEventListener('click', seedExpectedLocations);
   $(`#saveAppearance`)?.addEventListener('click', saveAppearance);
 
   // Hat (Turkcell) modalı + CSV import

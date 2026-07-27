@@ -960,6 +960,8 @@ function systemStatus() {
       anthropic_key: has(process.env.ANTHROPIC_API_KEY),
       n8n_notify: has(process.env.N8N_NOTIFY_WEBHOOK_URL),
       ldap: has(process.env.LDAP_URL) && (process.env.AUTH_PROVIDER === 'ldap'),
+      // Yalnız BOOLEAN — token'ların kendisi ASLA dışa verilmez.
+      location_tokens: locationTools.tokensConfigured(),
     },
     approval_ttl_hours: Math.round((Number(process.env.APPROVAL_TTL_MS) || 86400000) / 3600000),
     backup: (() => { try { return auditBackupStatus(); } catch { return null; } })(),
