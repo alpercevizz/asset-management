@@ -40,6 +40,28 @@ async function initDataLayer() {
     const r = await require('./agent/tools/line-tools').seedDemoIfEmpty();
     if (!r.skipped) console.log('[seed] Turkcell hat demo verisi yüklendi:', r.count, 'hat');
   } catch (e) { console.error('[seed] hat seed başarısız:', e.message); }
+  // Günlük anlık görüntü: trend hesabının TEK gerçek kaynağı. Geçmiş yoksa
+  // created_on'dan yalnız TOPLAM geriye doldurulur (durum kırılımı türetilemez).
+  try {
+    const snap = require('./agent/tools/snapshot-tools');
+    const inv = await getAllAssets({ size: 200 });
+    const assets = inv.results || [];
+    const bf = await snap.backfillTotals(assets);
+    if (!bf.skipped && bf.count) console.log('[snapshot] geriye dolduruldu:', bf.count, 'gün');
+    const st = await getStats();
+    const locs = new Set(assets.map(a => (a.location || '').trim()).filter(Boolean));
+    await snap.writeSnapshot(st, locs.size, 'scheduler');
+    // Günde bir tazele (uzun ömürlü süreçlerde gün dönümünü yakalar)
+    setInterval(async () => {
+      try {
+        const s2 = await getStats();
+        const a2 = await getAllAssets({ size: 200 });
+        const l2 = new Set((a2.results || []).map(a => (a.location || '').trim()).filter(Boolean));
+        await snap.writeSnapshot(s2, l2.size, 'scheduler');
+      } catch (e) { console.error('[snapshot] periyodik yazma hatası:', e.message); }
+    }, 6 * 60 * 60 * 1000).unref?.();
+  } catch (e) { console.error('[snapshot] başlangıç hatası:', e.message); }
+
   console.log('[db] Katman hazır — driver:', dbLayer.driver(), '| kullanıcı:', usersModule.all().length);
 }
 
@@ -877,6 +899,33 @@ app.get('/api/location-drift', async (req, res) => {
     res.json(await locationTools.detectLocationDrift(data.results || []));
   } catch (err) {
     res.status(500).json({ error: 'Lokasyon sapması taranamadı', detail: err.message });
+  }
+});
+
+// Trend: N gün öncesine göre değişim + sparkline serisi (gerçek anlık görüntülerden)
+app.get('/api/trends', async (req, res) => {
+  try {
+    const snap = require('./agent/tools/snapshot-tools');
+    const days = Math.min(365, Math.max(7, Number(req.query.days) || 30));
+    const [stats, inv] = await Promise.all([getStats(), getAllAssets({ size: 200 })]);
+    const locs = new Set((inv.results || []).map(a => (a.location || '').trim()).filter(Boolean));
+    const current = {
+      total: stats.total || 0,
+      online: stats.by_status?.online || 0,
+      offline: stats.by_status?.offline || 0,
+      depoda: stats.by_status?.depoda || 0,
+      locations: locs.size,
+    };
+    const [trends, series, sOnline, sOffline, sDepoda] = await Promise.all([
+      snap.getTrends(current, days),
+      snap.getSeries('total', days),
+      snap.getSeries('online', days),
+      snap.getSeries('offline', days),
+      snap.getSeries('depoda', days),
+    ]);
+    res.json({ current, trends, series, series_online: sOnline, series_offline: sOffline, series_depoda: sDepoda });
+  } catch (err) {
+    res.status(500).json({ error: 'Trend alınamadı', detail: err.message });
   }
 });
 

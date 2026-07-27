@@ -21,11 +21,16 @@ const state = {
   chatOpen: false,
   categoryFilter: '',
   locationFilter: '',
+  // Dashboard v2
+  allAssets: [], rawStats: null, rawSummary: null,
+  catFilter: new Set(), rangeDays: 30, mapZoom: 1,
+  trends: {}, trendSeries: [], seriesOnline: [], seriesOffline: [], seriesDepoda: [],
+  locations: {}, critParts: {},
 };
 
 /* ─── Utils ─────────────────────────────────────────────────────────────── */
 const $ = (sel) => document.querySelector(sel);
-const $$ = (sel) => document.querySelectorAll(sel);
+const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
 function fmt(val, fallback = '—') {
   if (val === null || val === undefined || val === '') return fallback;
@@ -362,7 +367,10 @@ async function loadCurrentUser() {
     }
     state.role = data.role;
     // Ayarlar nav'ı yalnız admin'e görünür
-    if (data.role === 'admin') { const n = $(`#navSettings`); if (n) n.style.display = ''; }
+    if (data.role === 'admin') {
+      const n = $(`#navSettings`); if (n) n.style.display = '';
+      const u = $(`#navUsers`);    if (u) u.style.display = '';
+    }
   } catch (_) { /* sessizce geç */ }
 }
 
@@ -384,6 +392,8 @@ function showView(name) {
   if (name === 'alerts')   loadAlerts();
   if (name === 'lifecycle') loadLifecycle();
   if (name === 'insights') loadInsights();
+  if (name === 'locations') loadLocationsView();
+  if (name === 'users') loadUsersView();
 }
 
 const RISK_LEVEL_CLASS = { 'Kritik': 'badge--offline', 'Yüksek': 'badge--offline', 'Orta': 'badge--unknown', 'Düşük': 'badge--online' };
@@ -458,6 +468,12 @@ async function loadInsights() {
 }
 
 /* ─── Dashboard ─────────────────────────────────────────────────────────── */
+async function fetchTrends(days) {
+  const res = await fetch('/api/trends?days=' + (days || 30));
+  if (!res.ok) throw new Error('Trend alınamadı');
+  return res.json();
+}
+
 async function fetchLocationSummary() {
   const res = await fetch('/api/location-summary');
   if (!res.ok) throw new Error('Lokasyon özeti alınamadı');
@@ -472,17 +488,27 @@ const EMPTY_SUMMARY = {
 async function loadDashboard() {
   try {
     // Lokasyon/uyarı verileri BAŞARISIZ olsa da çekirdek dashboard çizilir.
-    const [assetsData, stats, summary, lcLog, anomalies, warranty] = await Promise.all([
+    const [assetsData, stats, summary, trendData, lcLog, anomalies, warranty] = await Promise.all([
       fetchAssets({ size: 200 }),
       fetchStats(),
       fetchLocationSummary().catch(() => ({ ...EMPTY_SUMMARY })),
+      fetchTrends(state.rangeDays).catch(() => null),
       fetchLifecycleLog(30).catch(() => ({ events: [] })),
       fetchAnomalies().catch(() => ({})),
       fetchWarranty().catch(() => ({})),
     ]);
-    state.assets = assetsData.results || [];
+    state.allAssets = assetsData.results || [];
+    state.assets = state.allAssets;
     state.stats = stats;
+    state.rawStats = stats;
     state.locSummary = summary;
+    state.rawSummary = summary;
+    buildCategoryFilter(stats.by_category || {});
+    state.trends = trendData?.trends || {};
+    state.trendSeries = trendData?.series || [];
+    state.seriesOnline = trendData?.series_online || [];
+    state.seriesOffline = trendData?.series_offline || [];
+    state.seriesDepoda = trendData?.series_depoda || [];
 
     renderStats(stats, summary);
     renderCategoryDonut(stats.by_category || {}, stats.total || 0);
@@ -497,8 +523,10 @@ async function loadDashboard() {
       uptime:   anomalies.long_uptime?.items?.length || 0,
       disk:     anomalies.low_disk?.items?.length || 0,
     };
+    state.critParts = parts;
     renderCriticalStrip(parts);
     renderInsight(summary, parts);
+    if (state.catFilter && state.catFilter.size) applyDashFilter();
 
     // Eski görünümlerde kalan grafikler (elemanı yoksa sessizce atlanır)
     renderBrandChart(stats.by_brand || {});
@@ -515,6 +543,68 @@ async function loadDashboard() {
 /* KPI kartları — hepsi GERÇEK veriden; uydurma trend yüzdesi YOK.
    Toplam kart: son 14 günün kümülatif kayıt eğrisi (created_on).
    Durum kartları: toplam içindeki gerçek pay çubuğu. */
+/* ═══ Kategori filtresi ═══════════════════════════════════════════════════
+   Filtre İSTEMCİDE yeniden hesaplar (sunucuya ek istek yok). Trend rozetleri
+   sunucudaki filtresiz anlık görüntülerden gelir → filtre etkinken GİZLENİR,
+   yoksa "seçili kategorinin %12 artışı" gibi YANLIŞ bir okuma doğardı. */
+function buildCategoryFilter(byCategory) {
+  const box = $(`#filterCats`);
+  if (!box || box.dataset.built === '1') return;
+  const cats = Object.keys(byCategory).sort();
+  box.innerHTML = cats.map(c =>
+    `<label><input type="checkbox" class="f-cat" value="${escapeHtml(c)}"> ${escapeHtml(c)}</label>`).join('');
+  box.dataset.built = '1';
+  $$('.f-cat').forEach(cb => cb.addEventListener('change', onCatFilterChange));
+}
+
+function onCatFilterChange(e) {
+  const all = document.querySelector('.f-cat[value=""]');
+  if (e.target === all && all.checked) {
+    $$('.f-cat').forEach(cb => { if (cb !== all) cb.checked = false; });
+  } else if (e.target !== all) {
+    if (all) all.checked = false;
+  }
+  const sel = new Set($$('.f-cat').filter(cb => cb.checked && cb.value).map(cb => cb.value));
+  if (!sel.size && all) all.checked = true;
+  state.catFilter = sel;
+  applyDashFilter();
+}
+
+function applyDashFilter() {
+  const sel = state.catFilter;
+  const active = sel && sel.size > 0;
+  const list = active ? (state.allAssets || []).filter(a => sel.has(a.category || 'Diğer')) : (state.allAssets || []);
+  state.assets = list;
+
+  // İstatistikleri seçili kümeden yeniden hesapla
+  const byCategory = {}, byStatus = {}, locs = {};
+  list.forEach(a => {
+    const c = a.category || 'Diğer'; byCategory[c] = (byCategory[c] || 0) + 1;
+    const st = a.status || 'unknown'; byStatus[st] = (byStatus[st] || 0) + 1;
+    const l = (a.location || '').trim(); if (l) locs[l] = (locs[l] || 0) + 1;
+  });
+  const stats = active
+    ? { total: list.length, by_category: byCategory, by_status: byStatus, new_today: 0 }
+    : state.rawStats;
+  const summary = active
+    ? { ...state.rawSummary, locations: locs, location_count: Object.keys(locs).length }
+    : state.rawSummary;
+
+  renderStats(stats, summary);
+  renderCategoryDonut(stats.by_category || {}, stats.total || 0);
+  applyLocViewMode(active ? locs : (state.rawSummary.locations || {}));
+  renderRecentTable(list.slice(0, 5));
+
+  // Filtre etkinken trend rozetleri anlamsız → gizle
+  ['kpiTotalTrend', 'kpiOnlineTrend', 'kpiStorageTrend', 'kpiOfflineTrend'].forEach(id => {
+    const el = $('#' + id);
+    if (el && active) { el.className = 'kpi-trend kpi-trend--none'; el.textContent = 'filtre etkin'; }
+  });
+  ['kpiTotalSpark', 'kpiOnlineSpark', 'kpiStorageSpark', 'kpiOfflineSpark'].forEach(id => {
+    const el = $('#' + id); if (el && active) el.innerHTML = '';
+  });
+}
+
 // Harita / liste görünümü arasında geçiş (seçim korunur)
 function applyLocViewMode(locations) {
   state.locations = locations;
@@ -524,6 +614,36 @@ function applyLocViewMode(locations) {
   if (mapW) mapW.classList.toggle('hidden', mode !== 'map');
   if (listW) listW.classList.toggle('hidden', mode === 'map');
   if (mode === 'map') renderLocationMap(locations); else renderLocationList(locations);
+}
+
+/* KPI trend rozeti — GERÇEK anlık görüntü verisinden.
+   Karşılaştıracak geçmiş yoksa oran GÖSTERİLMEZ ("veri birikiyor") — sıfır uydurulmaz. */
+function renderTrend(id, t, windowDays) {
+  const el = $('#' + id);
+  if (!el) return;
+  if (!t) {
+    el.className = 'kpi-trend kpi-trend--none';
+    el.textContent = 'trend için veri birikiyor';
+    return;
+  }
+  const arrow = t.dir === 'up' ? '↑' : (t.dir === 'down' ? '↓' : '→');
+  const period = windowDays >= 365 ? 'bu yıl' : (windowDays >= 30 ? 'bu ay' : `${windowDays} günde`);
+  el.className = `kpi-trend kpi-trend--${t.dir === 'flat' ? 'flat' : t.dir}`;
+  el.textContent = `${arrow} %${Math.abs(t.pct)} ${period}`;
+}
+
+/* Sparkline — gerçek günlük serilerden (yoksa çizilmez) */
+function sparkFromSeries(id, series, color) {
+  const el = $('#' + id);
+  if (!el) return;
+  const pts = (series || []).map(p => p.value);
+  if (pts.length < 4) { el.innerHTML = ''; return; }
+  const min = Math.min(...pts), max = Math.max(...pts);
+  const W = 78, H = 30;
+  const y = (v) => max === min ? H / 2 : H - ((v - min) / (max - min)) * (H - 6) - 3;
+  const d = pts.map((v, i) => `${i ? 'L' : 'M'}${((i / (pts.length - 1)) * W).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
+  el.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+    <path d="${d}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
 function renderStats(stats, summary) {
@@ -538,17 +658,19 @@ function renderStats(stats, summary) {
   set('kpiTotal', total); set('kpiOnline', online);
   set('kpiStorage', storage); set('kpiOffline', offline);
 
-  const sub = (id, txt) => { const el = $('#' + id); if (el) el.textContent = txt; };
-  sub('kpiTotalSub', (stats.new_today || 0) > 0 ? `Bugün +${stats.new_today} kayıt` : 'Bugün yeni kayıt yok');
-  const pct = (n) => total ? Math.round((n / total) * 100) : 0;
-  sub('kpiOnlineSub',  `Envanterin %${pct(online)}'i`);
-  sub('kpiStorageSub', `Envanterin %${pct(storage)}'i`);
-  sub('kpiOfflineSub', `Envanterin %${pct(offline)}'i`);
+  // Trend + sparkline: /api/trends'ten gelen GERÇEK anlık görüntülerden
+  const tr = state.trends || {};
+  const win = tr.window_days || 30;
+  renderTrend('kpiTotalTrend',   tr.total,   win);
+  renderTrend('kpiOnlineTrend',  tr.online,  win);
+  renderTrend('kpiStorageTrend', tr.depoda,  win);
+  renderTrend('kpiOfflineTrend', tr.offline, win);
 
-  shareBar('kpiOnlineSpark',  pct(online),  'var(--green)');
-  shareBar('kpiStorageSpark', pct(storage), 'var(--orange)');
-  shareBar('kpiOfflineSpark', pct(offline), 'var(--red)');
-  growthSpark('kpiTotalSpark', state.assets);
+  const series = state.trendSeries || [];
+  sparkFromSeries('kpiTotalSpark',   series, 'rgba(255,255,255,.9)');
+  sparkFromSeries('kpiOnlineSpark',  state.seriesOnline  || [], '#10b981');
+  sparkFromSeries('kpiStorageSpark', state.seriesDepoda  || [], '#f59e0b');
+  sparkFromSeries('kpiOfflineSpark', state.seriesOffline || [], '#ef4444');
 }
 
 // Toplam içindeki payı gösteren ince çubuk (gerçek oran)
@@ -674,22 +796,27 @@ function renderLocationMap(locations) {
     `${i ? 'L' : 'M'}${projX(lon).toFixed(1)} ${projY(lat).toFixed(1)}`).join(' ') + ' Z';
   const path = toPath(TR_ANATOLIA) + ' ' + toPath(TR_THRACE);
 
-  const max = Math.max(1, ...Object.values(byCity).map(v => v.n));
-  const bubbles = Object.entries(byCity).sort((a, b) => b[1].n - a[1].n).map(([key, v]) => {
+  const sorted = Object.entries(byCity).sort((a, b) => b[1].n - a[1].n);
+  const max = Math.max(1, ...sorted.map(([, v]) => v.n));
+  const colorOf = (i) => DONUT_COLORS[i % DONUT_COLORS.length];
+
+  const bubbles = sorted.map(([key, v], i) => {
     const [lat, lon] = TR_CITIES[key];
-    const r = 7 + Math.sqrt(v.n / max) * 22;   // alan ~ adet (yarıçap değil) → görsel yanılt­maz
-    return `<circle class="map-bubble" cx="${projX(lon).toFixed(1)}" cy="${projY(lat).toFixed(1)}" r="${r.toFixed(1)}">
+    const r = (7 + Math.sqrt(v.n / max) * 22) * (state.mapZoom || 1); // alan ~ adet
+    const c = colorOf(i);
+    const x = projX(lon).toFixed(1), y = projY(lat).toFixed(1);
+    return `<circle class="map-bubble" cx="${x}" cy="${y}" r="${r.toFixed(1)}" fill="${c}" stroke="${c}">
         <title>${escapeHtml(v.names.join(', '))} — ${v.n} cihaz</title></circle>
-      <circle class="map-dot" cx="${projX(lon).toFixed(1)}" cy="${projY(lat).toFixed(1)}" r="2.5"/>`;
+      <circle class="map-dot" cx="${x}" cy="${y}" r="2.5" fill="${c}"/>`;
   }).join('');
 
   svg.innerHTML = `<path class="map-land" d="${path}"/>${bubbles}`;
 
-  const top = Object.entries(byCity).sort((a, b) => b[1].n - a[1].n).slice(0, 4);
   const unknownTotal = unknown.reduce((a, [, n]) => a + n, 0);
   legend.innerHTML =
-    top.map(([key, v]) => `<span><i></i>${key.charAt(0).toUpperCase() + key.slice(1)} (${v.n})</span>`).join('') +
-    (unknownTotal ? `<span><i style="background:var(--text-muted)"></i>Haritada eşleşmeyen (${unknownTotal})</span>` : '');
+    sorted.slice(0, 4).map(([key, v], i) =>
+      `<span><i style="background:${colorOf(i)}"></i>${key.charAt(0).toUpperCase() + key.slice(1)} (${v.n})</span>`).join('') +
+    (unknownTotal ? `<span><i style="background:var(--text-muted)"></i>Diğer (${unknownTotal})</span>` : '');
 }
 
 function renderLocationList(locations) {
@@ -747,6 +874,22 @@ function paintDonut(svgId, legendId, totalId, entries, centerValue, emptyText) {
     </div>`).join('');
 }
 
+/* Lokasyon durumu efsanesi tasarımdaki "1.210 (97%)" biçiminde tek sütun */
+function paintDonutCombined(svgId, legendId, totalId, entries, centerValue, emptyText) {
+  paintDonut(svgId, legendId, totalId, entries, centerValue, emptyText);
+  const legend = $('#' + legendId);
+  if (!legend) return;
+  const sum = entries.reduce((a, [, n]) => a + n, 0);
+  if (!sum) return;
+  legend.innerHTML = entries.map(([label, n], i) => `
+    <div class="dl-row dl-row--combined">
+      <span class="dl-name" title="${escapeHtml(label)}">
+        <span class="dl-dot" style="background:${donutColor(label, i)}"></span>${escapeHtml(label)}
+      </span>
+      <span class="dl-count">${n.toLocaleString('tr-TR')} <span class="dl-pct">(${Math.round((n / sum) * 100)}%)</span></span>
+    </div>`).join('');
+}
+
 function renderCategoryDonut(byCategory, total) {
   // İlk 5 kategori + kalanı "Diğer" altında topla (efsane okunur kalsın)
   const all = Object.entries(byCategory).sort((a, b) => b[1] - a[1]);
@@ -785,7 +928,7 @@ function renderLocationStateDonut(summary) {
     ['Baseline Yok', summary.baseline_yok || 0],
     ['Bilinmeyen', summary.bilinmeyen || 0],
   ].filter(([, n]) => n > 0);
-  paintDonut('locStateDonut', 'locStateLegend', 'locStateTotal', entries, summary.total, 'Lokasyon verisi yok');
+  paintDonutCombined('locStateDonut', 'locStateLegend', 'locStateTotal', entries, summary.total, 'Lokasyon verisi yok');
 }
 
 const LOC_STATE_COLORS = {
@@ -998,6 +1141,153 @@ function renderLocationChart(assets) {
   setTimeout(() => {
     container.querySelectorAll('.bar-fill').forEach((el) => { el.style.width = el.dataset.pct + '%'; });
   }, 100);
+}
+
+/* ═══ Lokasyonlar görünümü ════════════════════════════════════════════════ */
+async function loadLocationsView() {
+  const body = $(`#locationsBody`);
+  if (!body) return;
+  body.innerHTML = '<tr><td colspan="5" class="loading-cell">Yükleniyor...</td></tr>';
+  try {
+    const [assetsData, summary, drift] = await Promise.all([
+      fetchAssets({ size: 200 }),
+      fetchLocationSummary().catch(() => ({ locations: {} })),
+      fetchLocationDrift().catch(() => ({ drifted: [] })),
+    ]);
+    const assets = assetsData.results || [];
+    const expectedCounts = {};
+    (drift.drifted || []).forEach(() => {});
+    const driftByLoc = {};
+    (drift.drifted || []).forEach(d => {
+      driftByLoc[d.expected_location] = (driftByLoc[d.expected_location] || 0) + 1;
+    });
+
+    const rows = {};
+    assets.forEach(a => {
+      const loc = (a.location || '').trim();
+      if (!loc) return;
+      rows[loc] = rows[loc] || { n: 0, cats: {} };
+      rows[loc].n++;
+      const c = a.category || 'Diğer';
+      rows[loc].cats[c] = (rows[loc].cats[c] || 0) + 1;
+    });
+
+    const list = Object.entries(rows).sort((a, b) => b[1].n - a[1].n);
+    const sub = $(`#locPageSub`);
+    if (sub) sub.textContent = `${list.length} lokasyon · ${assets.length} cihaz`;
+
+    body.innerHTML = list.length ? list.map(([loc, v]) => {
+      const cats = Object.entries(v.cats).sort((a, b) => b[1] - a[1])
+        .map(([c, n]) => `${categoryBadge(c)} <span style="color:var(--text-muted);font-size:11px">${n}</span>`).join(' ');
+      const dr = driftByLoc[loc] || 0;
+      return `<tr>
+        <td class="hostname-cell">${escapeHtml(loc)}</td>
+        <td>${v.n}</td>
+        <td>${expectedCounts[loc] != null ? expectedCounts[loc] : '<span style="color:var(--text-muted)">—</span>'}</td>
+        <td>${dr ? `<span class="badge badge--offline">${dr}</span>` : '<span style="color:var(--green)">0</span>'}</td>
+        <td>${cats}</td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="5" class="loading-cell">Lokasyon kaydı yok</td></tr>';
+  } catch (err) {
+    body.innerHTML = `<tr><td colspan="5" class="loading-cell" style="color:var(--red)">${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+/* ═══ Kullanıcılar görünümü (admin) ═══════════════════════════════════════ */
+const ROLE_OPTS = [['admin', 'Yönetici'], ['it', 'BT Ekibi'], ['approver', 'Onaylayıcı']];
+
+async function loadUsersView() {
+  const body = $(`#usersBody`);
+  if (!body) return;
+  body.innerHTML = '<tr><td colspan="5" class="loading-cell">Yükleniyor...</td></tr>';
+  try {
+    const res = await fetch('/api/users');
+    if (res.status === 403) {
+      body.innerHTML = '<tr><td colspan="5" class="loading-cell">Bu sayfa yalnız yöneticiler içindir.</td></tr>';
+      return;
+    }
+    const j = await res.json();
+    const users = j.users || [];
+    const sub = $(`#usersPageSub`);
+    if (sub) sub.textContent = `${users.length} hesap`;
+    const prov = $(`#usersProvider`);
+    if (prov) prov.textContent = j.provider === 'ldap'
+      ? 'LDAP modunda roller AD grubundan gelir — buradaki değişiklik sonraki girişte ezilebilir'
+      : 'Yerel hesaplar';
+
+    body.innerHTML = users.map(u => `
+      <tr>
+        <td class="hostname-cell">${escapeHtml(u.username)}</td>
+        <td>${escapeHtml(u.display || '—')}</td>
+        <td><span class="badge badge--unknown">${ROLE_LABEL[u.role] || u.role}</span></td>
+        <td class="upn-cell">${escapeHtml(u.upn || '—')}</td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="btn-pdf" data-edit="${escapeHtml(u.username)}">Düzenle</button>
+          <button class="btn-pdf" data-del="${escapeHtml(u.username)}" style="color:var(--red)">Sil</button>
+        </td>
+      </tr>`).join('') || '<tr><td colspan="5" class="loading-cell">Hesap yok</td></tr>';
+
+    body.querySelectorAll('[data-edit]').forEach(b =>
+      b.addEventListener('click', () => editUserPrompt(users.find(x => x.username === b.dataset.edit))));
+    body.querySelectorAll('[data-del]').forEach(b =>
+      b.addEventListener('click', () => deleteUserPrompt(b.dataset.del)));
+  } catch (err) {
+    body.innerHTML = `<tr><td colspan="5" class="loading-cell" style="color:var(--red)">${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+function roleFromPrompt(current) {
+  const v = prompt(`Rol (${ROLE_OPTS.map(r => r[0]).join(' / ')}):`, current || 'it');
+  if (v === null) return null;
+  const r = String(v).trim().toLowerCase();
+  if (!ROLE_OPTS.some(x => x[0] === r)) { alert('Geçersiz rol.'); return null; }
+  return r;
+}
+
+async function createUserPrompt() {
+  const username = prompt('Kullanıcı adı:');
+  if (!username || !username.trim()) return;
+  const display = prompt('Ad Soyad (opsiyonel):') || '';
+  const role = roleFromPrompt('it');
+  if (!role) return;
+  const password = prompt('Parola (en az 8 karakter):');
+  if (!password) return;
+  try {
+    const res = await fetch('/api/users', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: username.trim(), display, role, password }),
+    });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.detail || j.error);
+    loadUsersView();
+  } catch (err) { alert('Oluşturulamadı: ' + err.message); }
+}
+
+async function editUserPrompt(u) {
+  if (!u) return;
+  const role = roleFromPrompt(u.role);
+  if (!role) return;
+  const display = prompt('Ad Soyad:', u.display || '') ?? u.display;
+  try {
+    const res = await fetch(`/api/users/${encodeURIComponent(u.username)}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role, display }),
+    });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.detail || j.error);
+    if (j.warning) alert(j.warning);
+    loadUsersView();
+  } catch (err) { alert('Güncellenemedi: ' + err.message); }
+}
+
+async function deleteUserPrompt(username) {
+  if (!confirm(`"${username}" hesabı KALICI olarak silinecek. Emin misiniz?`)) return;
+  try {
+    const res = await fetch(`/api/users/${encodeURIComponent(username)}`, { method: 'DELETE' });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.detail || j.error);
+    loadUsersView();
+  } catch (err) { alert('Silinemedi: ' + err.message); }
 }
 
 /* ─── Excel/CSV Export ──────────────────────────────────────────────────────── */
@@ -2937,6 +3227,16 @@ document.addEventListener('DOMContentLoaded', () => {
   $(`#qaLifecycle`)?.addEventListener('click', () => showView('lifecycle'));
   $(`#qaReport`)?.addEventListener('click', () => showView('reports'));
 
+  // İşlemler görünümü + Kullanıcı ekle
+  $(`#opAddAsset`)?.addEventListener('click', () => $(`#qrModalOverlay`)?.classList.add('open'));
+  $(`#opBulk`)?.addEventListener('click', () => {
+    $(`#qrModalOverlay`)?.classList.add('open');
+    $(`.modal-tab[data-tab="bulk"]`)?.click();
+  });
+  $(`#opLifecycle`)?.addEventListener('click', () => showView('lifecycle'));
+  $(`#opReport`)?.addEventListener('click', () => showView('reports'));
+  $(`#openUserModal`)?.addEventListener('click', createUserPrompt);
+
   // KPI kartından duruma göre filtrelenmiş Varlıklar görünümü
   $$('.kpi[data-status]').forEach((card) => {
     card.addEventListener('click', (e) => {
@@ -3060,6 +3360,47 @@ document.addEventListener('DOMContentLoaded', () => {
   // Ayarlar kaydet butonları
   $(`#saveThresholds`)?.addEventListener('click', saveThresholds);
   $(`#seedExpectedBtn`)?.addEventListener('click', seedExpectedLocations);
+
+  // ── Tarih aralığı seçici: trend penceresini VE zaman bazlı kartları etkiler ──
+  state.rangeDays = Number(localStorage.getItem('dashRangeDays')) || 30;
+  const rangeLbl = { 7: 'Son 7 gün', 30: 'Son 30 gün', 90: 'Son 90 gün', 365: 'Son 1 yıl' };
+  const setRangeLabel = () => {
+    const el = $(`#dateRangeLabel`); if (el) el.textContent = rangeLbl[state.rangeDays] || 'Son 30 gün';
+    $$('#dateRangeMenu button').forEach(b => b.classList.toggle('active', Number(b.dataset.days) === state.rangeDays));
+  };
+  setRangeLabel();
+  $(`#dateRangeBtn`)?.addEventListener('click', (e) => {
+    e.stopPropagation(); $(`#filterMenu`)?.classList.remove('open');
+    $(`#dateRangeMenu`)?.classList.toggle('open');
+  });
+  $$('#dateRangeMenu button').forEach((b) => b.addEventListener('click', () => {
+    state.rangeDays = Number(b.dataset.days) || 30;
+    localStorage.setItem('dashRangeDays', String(state.rangeDays));
+    setRangeLabel();
+    $(`#dateRangeMenu`)?.classList.remove('open');
+    loadDashboard();
+  }));
+
+  // ── Filtrele: kategoriye göre dashboard'ı daralt ──
+  $(`#filterBtn`)?.addEventListener('click', (e) => {
+    e.stopPropagation(); $(`#dateRangeMenu`)?.classList.remove('open');
+    $(`#filterMenu`)?.classList.toggle('open');
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.dash-toolbar')) {
+      $(`#dateRangeMenu`)?.classList.remove('open');
+      $(`#filterMenu`)?.classList.remove('open');
+    }
+  });
+
+  // ── Harita yakınlaştırma (balon ölçeği) ──
+  state.mapZoom = 1;
+  const zoom = (f) => {
+    state.mapZoom = Math.min(2.5, Math.max(0.6, (state.mapZoom || 1) * f));
+    renderLocationMap(state.locations || {});
+  };
+  $(`#mapZoomIn`)?.addEventListener('click', () => zoom(1.25));
+  $(`#mapZoomOut`)?.addEventListener('click', () => zoom(0.8));
 
   // Lokasyon kartı: harita/liste geçişi + KPI kartından liste görünümüne atlama
   $(`#locViewMode`)?.addEventListener('change', () => applyLocViewMode(state.locations || {}));
