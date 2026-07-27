@@ -1,8 +1,10 @@
 {
+  "_not": "location_token, merkezî sunucunun .env → LOCATION_TOKENS içindeki anahtarla BİREBİR aynı olmalı. Sunucu lokasyon adını TOKEN'DAN çözer; buradaki location_name yalnız yerel log içindir. Token eşleşmezse sunucu 401 döner.",
+
   "location_id":    "istanbul-merkez",
   "location_name":  "İstanbul Merkez",
   "server_url":     "http://localhost:3000/api/webhook",
-  "location_token": "loc-token-buraya-yaz",
+  "location_token": "loc-degistir-istanbul",
 
   "network": {
     "range":           "192.168.1.0/24",

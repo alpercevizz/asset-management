@@ -511,6 +511,90 @@ test('settings: init olmadan DEFAULTS; setSection kalıcı + tip doğrulama', as
   assert.equal(settingsTools.getThresholds().low_ram_gb, 16);
 });
 
+// ── Lokasyon izleme ───────────────────────────────────────────────────────────
+const locTools = require('../agent/tools/location-tools');
+
+test('lokasyon: token doğrulaması — token otoriter, sahte lokasyon reddedilir', () => {
+  const saved = process.env.LOCATION_TOKENS;
+
+  // Token yapılandırılmamış → geriye dönük uyumluluk (payload'a güvenilir ama işaretlenir)
+  delete process.env.LOCATION_TOKENS; locTools._resetTokens();
+  let r = locTools.resolveLocation({ token: null, payloadLocation: 'İstanbul Merkez' });
+  assert.equal(r.location, 'İstanbul Merkez');
+  assert.equal(r.source, 'unverified');
+
+  // Token yapılandırılmış
+  process.env.LOCATION_TOKENS = JSON.stringify({ 'loc-abc': 'İstanbul Merkez', 'loc-xyz': 'Kocaeli Depo' });
+  locTools._resetTokens();
+
+  // token'sız lokasyon bildirimi REDDEDİLİR
+  r = locTools.resolveLocation({ token: null, payloadLocation: 'Ankara' });
+  assert.equal(r.code, 'LOCATION_TOKEN_REQUIRED');
+
+  // geçersiz token REDDEDİLİR
+  r = locTools.resolveLocation({ token: 'uydurma', payloadLocation: 'Ankara' });
+  assert.equal(r.code, 'LOCATION_TOKEN_INVALID');
+
+  // geçerli token: payload'daki SAHTE lokasyon yok sayılır, token'ın adı kullanılır
+  r = locTools.resolveLocation({ token: 'loc-xyz', payloadLocation: 'Ankara Şube (sahte)' });
+  assert.equal(r.location, 'Kocaeli Depo');
+  assert.equal(r.source, 'location-agent');
+
+  // lokasyon içermeyen telemetri token'sız da geçer (collector bozulmaz)
+  r = locTools.resolveLocation({ token: null, payloadLocation: '' });
+  assert.equal(r.location, null);
+  assert.ok(!r.error);
+
+  if (saved === undefined) delete process.env.LOCATION_TOKENS; else process.env.LOCATION_TOKENS = saved;
+  locTools._resetTokens();
+});
+
+test('lokasyon: konaklama kaydı + sapma eşiği (kısa sapma sessiz, uzun sapma uyarır)', async () => {
+  await resetAll();
+  await settingsTools.init();
+  const A = { id: 9001, hostname: 'LOC-PC', serial_number: 'LOC-S1', location: 'Kocaeli Depo' };
+
+  // aynı yerde tekrar görülme → yeni konaklama AÇMAZ
+  let s = await locTools.recordSeen(A.id, { location: 'İstanbul Merkez', source: 'location-agent' });
+  assert.equal(s.changed, false); // ilk kayıt: önce yok, transfer sayılmaz
+  s = await locTools.recordSeen(A.id, { location: 'İstanbul Merkez', source: 'location-agent' });
+  assert.equal(s.changed, false);
+  assert.equal((await locTools.getHistory(A.id)).length, 1);
+
+  // yer değişti → yeni konaklama + changed
+  s = await locTools.recordSeen(A.id, { location: 'Kocaeli Depo', source: 'location-agent' });
+  assert.equal(s.changed, true);
+  assert.equal(s.from, 'İstanbul Merkez');
+  assert.equal((await locTools.getHistory(A.id)).length, 2);
+  assert.equal((await locTools.getCurrentStay(A.id)).to_location, 'Kocaeli Depo');
+
+  // beklenen lokasyon yokken sapma üretilmez
+  let d = await locTools.detectLocationDrift([A]);
+  assert.equal(d.count, 0);
+  assert.equal(d.unassigned, 1);
+
+  // beklenen = İstanbul, görülen = Kocaeli ama daha bugün taşındı → eşik altında SESSİZ
+  await locTools.setExpected(A.id, { location: 'İstanbul Merkez', by: 'admin' });
+  d = await locTools.detectLocationDrift([A]);
+  assert.equal(d.count, 0, 'kısa süreli sapma gürültü yapmamalı');
+
+  // konaklamayı 10 gün geriye al → eşiği (7) aşar, uyarı çıkar
+  const past = new Date(Date.now() - 10 * 86400000).toISOString();
+  const cur = await locTools.getCurrentStay(A.id);
+  await dbLayer.db()('asset_location_history').where({ id: cur.id }).update({ first_seen_at: past });
+  d = await locTools.detectLocationDrift([A]);
+  assert.equal(d.count, 1);
+  assert.equal(d.drifted[0].expected_location, 'İstanbul Merkez');
+  assert.equal(d.drifted[0].seen_location, 'Kocaeli Depo');
+  assert.ok(d.drifted[0].days >= 9);
+
+  // eşik UI'dan büyütülünce uyarı susar (restart gerekmez)
+  await settingsTools.setSection('thresholds', { location_drift_days: 30 }, 'admin');
+  d = await locTools.detectLocationDrift([A]);
+  assert.equal(d.count, 0);
+  await settingsTools.setSection('thresholds', { location_drift_days: 7 }, 'admin');
+});
+
 // ── SNMP ağ keşfi (saf fonksiyonlar — ağ gerekmez) ────────────────────────────
 const snmpd = require('../agent/tools/snmp-discovery');
 test('snmp: CIDR genişletme + marka/kategori çıkarımı + parseDevice', () => {

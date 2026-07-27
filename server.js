@@ -262,11 +262,22 @@ app.post('/api/webhook', async (req, res) => {
       return res.status(400).json({ error: 'serial_number veya hostname zorunludur' });
     }
 
+    // GÜVENLİK: lokasyon token ile doğrulanır. Token yapılandırılmışsa payload'daki
+    // location metnine GÜVENİLMEZ — token'ın eşlendiği ad kullanılır (bkz location-tools).
+    const locTools = require('./agent/tools/location-tools');
+    const loc = locTools.resolveLocation({
+      token: req.get('X-Location-Token'),
+      payloadLocation: payload.location,
+    });
+    if (loc.error) return res.status(401).json({ error: loc.error, code: loc.code });
+
     const enriched = {
       ...payload,
       last_seen: new Date().toISOString(),
       status: 'online',
     };
+    if (loc.location) enriched.location = loc.location;
+    else delete enriched.location;
 
     let existing = null;
     if (payload.serial_number) {
@@ -291,7 +302,35 @@ app.post('/api/webhook', async (req, res) => {
       console.log(`[WEBHOOK] Created: ${payload.hostname || payload.serial_number}`);
     }
 
-    res.json({ success: true, action: existing ? 'updated' : 'created', id: result.id });
+    // Lokasyon konaklama kaydı — yer değiştiyse denetim zincirine de mühürlenir.
+    let locationChanged = null;
+    if (loc.location) {
+      try {
+        const seen = await locTools.recordSeen(result.id, {
+          location: loc.location, source: loc.source,
+          serial_number: enriched.serial_number || null,
+          hostname: enriched.hostname || null,
+        });
+        if (seen.changed) {
+          locationChanged = seen;
+          console.warn(`[LOKASYON] ${enriched.hostname || result.id}: "${seen.from}" → "${seen.to}"`);
+          try {
+            await lifecycleModule.recordEvent({
+              asset_id: result.id, hostname: enriched.hostname || null,
+              serial_number: enriched.serial_number || null,
+              to_status: 'Lokasyon Değişikliği',
+              note: `Otomatik tespit: "${seen.from}" → "${seen.to}" (kaynak: ${loc.source})`,
+              actor: `location-agent/${loc.source}`, approval_status: 'n/a',
+            });
+          } catch (e) { console.warn('[LOKASYON] olay kaydedilemedi:', e.message); }
+        }
+      } catch (e) { console.warn('[LOKASYON] konaklama kaydı hatası:', e.message); }
+    }
+
+    res.json({
+      success: true, action: existing ? 'updated' : 'created', id: result.id,
+      ...(locationChanged ? { location_changed: { from: locationChanged.from, to: locationChanged.to } } : {}),
+    });
   } catch (err) {
     console.error('[POST /api/webhook]', err.message);
     res.status(500).json({ error: 'Webhook işleme hatası', detail: err.message });
@@ -776,6 +815,68 @@ app.get('/api/assignments/mismatches', async (req, res) => {
     res.json({ mismatches: await assignmentTools.listMismatches(data.results || []) });
   } catch (err) {
     res.status(500).json({ error: 'Uyuşmazlık taranamadı', detail: err.message });
+  }
+});
+
+// ─── Lokasyon İzleme ─────────────────────────────────────────────────────────
+// Beklenen (resmi) lokasyon KİLİTLİ: yalnız buradan değişir, PUBLIC webhook dokunmaz.
+// Görülen lokasyon telemetriden gelir; ikisi eşikten uzun süre farklıysa sapma uyarısı.
+const locationTools = require('./agent/tools/location-tools');
+
+app.get('/api/assets/:id/location', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const [expected, current, history] = await Promise.all([
+      locationTools.getExpected(id),
+      locationTools.getCurrentStay(id),
+      locationTools.getHistory(id, 30),
+    ]);
+    res.json({ expected: expected || null, current: current || null, history });
+  } catch (err) {
+    res.status(500).json({ error: 'Lokasyon bilgisi alınamadı', detail: err.message });
+  }
+});
+
+app.put('/api/assets/:id/expected-location', requireRole('it', 'admin'), async (req, res) => {
+  try {
+    const { location, hostname, note } = req.body || {};
+    const me = currentUser(req);
+    const row = await locationTools.setExpected(req.params.id, {
+      location, hostname: hostname || null, note: note || null,
+      by: me ? me.username : 'system',
+    });
+    res.json({ success: true, expected: row });
+  } catch (err) {
+    res.status(400).json({ error: 'Beklenen lokasyon kaydedilemedi', detail: err.message });
+  }
+});
+
+app.delete('/api/assets/:id/expected-location', requireRole('it', 'admin'), async (req, res) => {
+  try {
+    await locationTools.clearExpected(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: 'Beklenen lokasyon silinemedi', detail: err.message });
+  }
+});
+
+// Lokasyon sapması: beklenen ≠ görülen ve eşik günden uzun süredir öyle
+app.get('/api/location-drift', async (req, res) => {
+  try {
+    const data = await getAllAssets({ size: 200 });
+    res.json(await locationTools.detectLocationDrift(data.results || []));
+  } catch (err) {
+    res.status(500).json({ error: 'Lokasyon sapması taranamadı', detail: err.message });
+  }
+});
+
+// İlk kurulum: mevcut envanter lokasyonlarını "beklenen" olarak tohumla (tablo boşsa)
+app.post('/api/location-drift/seed', requireRole('admin'), async (req, res) => {
+  try {
+    const data = await getAllAssets({ size: 200 });
+    res.json(await locationTools.seedExpectedFromAssets(data.results || []));
+  } catch (err) {
+    res.status(500).json({ error: 'Tohumlama başarısız', detail: err.message });
   }
 });
 

@@ -5,6 +5,8 @@ const path = require('path');
 const { detectAnomalies, detectOfflineDevices, detectLicenseCompliance, detectShadowIT, detectEolOs, detectWarranty } = require('./anomaly-tools');
 const { detectLifecycleConflicts } = require('./lifecycle-tools');
 const { scanNetwork } = require('./network-discovery');
+const { detectLocationDrift } = require('./location-tools');
+const { getAllAssets } = require('./baserow-tools');
 
 // ── Konfigürasyon (.env) ──────────────────────────────────────────────────────
 // N8N_NOTIFY_WEBHOOK_URL : n8n webhook adresi (İÇ AĞ — kapalı devre korunur).
@@ -38,6 +40,14 @@ async function buildAlertDigest(orgId) {
     scanNetwork(orgId),
   ]);
 
+  // Lokasyon sapması: beklenen ≠ görülen ve eşik günden uzun süredir öyle
+  let drift = { count: 0, drifted: [], threshold_days: 7 };
+  try {
+    const inv = await getAllAssets({ orgId, size: 200 });
+    drift = await detectLocationDrift(inv.results || []);
+  } catch (err) { console.warn('[notify] lokasyon sapması taranamadı:', err.message); }
+  const driftIt = drift.drifted || [];
+
   const lowRam    = anomalies.low_ram?.items     || [];
   const lowDisk   = anomalies.low_disk?.items    || [];
   const uptime    = anomalies.long_uptime?.items || [];
@@ -63,9 +73,11 @@ async function buildAlertDigest(orgId) {
     warranty_issues: warranty.total_issues || 0,
     lifecycle_conflicts: lifecycle.total_conflicts || 0,
     network_alarms:  netscan.findings?.count || 0,
+    location_drift:  drift.count || 0,
   };
   summary.total = summary.total_anomalies + summary.offline_alerts + summary.license_issues
-    + summary.shadow_it + summary.eol_os + summary.warranty_issues + summary.lifecycle_conflicts + summary.network_alarms;
+    + summary.shadow_it + summary.eol_os + summary.warranty_issues + summary.lifecycle_conflicts
+    + summary.network_alarms + summary.location_drift;
 
   // İnsan-okur Türkçe özet (n8n bunu doğrudan mail/Telegram gövdesine koyabilir)
   const lines = [];
@@ -104,6 +116,13 @@ async function buildAlertDigest(orgId) {
     lifeConf.forEach(c => lines.push(`   ${c.message}`)); // mesaj kritik ön ekini zaten içerir
     lines.push('   Öneri: Audit log ile fiili durumu karşılaştırıp çelişkili cihazları fiziksel olarak doğrulayın.');
   }
+  if (driftIt.length) {
+    lines.push(`• [LOKASYON] ${driftIt.length} cihaz ${drift.threshold_days}+ gündür ait olduğu lokasyonun DIŞINDA görülüyor:`);
+    driftIt.forEach(d => lines.push(
+      `   ${d.hostname || d.asset_id}: beklenen "${d.expected_location}" → görülen "${d.seen_location}"` +
+      (d.days === null ? ' (süre bilinmiyor)' : ` (${d.days} gündür)`)));
+    lines.push('   Öneri: Transferi resmileştirin (beklenen lokasyonu güncelleyin) veya cihazı yerine iade ettirin.');
+  }
   if (summary.total === 0) lines.push('Aktif uyarı yok — tüm sistemler normal.');
 
   return {
@@ -119,6 +138,7 @@ async function buildAlertDigest(orgId) {
       warranty: { expired: warrExp, expiring_soon: warrSoon },
       lifecycle: lifeConf,
       network_discovery: netFind,
+      location_drift: driftIt,
     },
     message: lines.join('\n'),
   };
@@ -138,6 +158,7 @@ function computeSignature(digest) {
   s.license.expired.forEach(l     => ids.push(`exp:${l.software_name}|${l.hostname}`));
   s.license.expiring_soon.forEach(l => ids.push(`soon:${l.software_name}|${l.hostname}`));
   s.shadow_it.forEach(d => ids.push(`shadow:${d.mac || d.ip}`));
+  (s.location_drift || []).forEach(d => ids.push(`loc:${d.asset_id}|${d.seen_location}`));
   (s.eol_os?.eol || []).forEach(d         => ids.push(`eol:${d.hostname}|${d.os_family}`));
   (s.eol_os?.approaching || []).forEach(d => ids.push(`eolsoon:${d.hostname}|${d.os_family}`));
   (s.warranty?.expired || []).forEach(d      => ids.push(`warr:${d.hostname}`));

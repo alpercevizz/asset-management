@@ -477,6 +477,9 @@ Register-ScheduledTask -TaskName "AssetCollector" -Action $action -Trigger $trig
 | `GET /api/risk-scores` · `forecast` | auth | Risk & FinOps (canlı ECB kuru) |
 | `GET /api/lines` · `POST /api/lines/import` | auth / it | Turkcell hat/SIM envanteri + CSV |
 | `POST /api/assets/:id/assign` · `release` | it / admin | Resmi zimmet devri (409 koruma) |
+| `GET /api/assets/:id/location` | auth | Beklenen + görülen lokasyon, konum geçmişi |
+| `PUT /api/assets/:id/expected-location` | it / admin | Cihazın ait olduğu resmi lokasyon (kilitli) |
+| `GET /api/location-drift` | auth | Lokasyon sapması (beklenen ≠ görülen, N+ gündür) |
 | `GET /api/settings` · `PUT /api/settings/:section` | admin | Runtime ayarlar (eşikler, tema) |
 | `POST /api/chat` | auth | AI agent sohbeti |
 

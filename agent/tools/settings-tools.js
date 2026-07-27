@@ -12,6 +12,7 @@ const DEFAULTS = {
     old_uptime_days: 30,  // üstü = yeniden başlatma önerilir
     offline_hours: 24,    // üstü = çevrimdışı
     stale_days: 7,        // üstü = kayıp/terk şüphesi
+    location_drift_days: 7, // beklenen≠görülen lokasyon bu kadar gün sürerse uyarı
   },
   notify: {
     enabled: false,       // zamanlanmış bildirim (env NOTIFY_ENABLED override eder — aşağıya bak)

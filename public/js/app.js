@@ -909,6 +909,7 @@ async function loadSettings() {
     const setV = (id, v) => { const el = $(`#${id}`); if (el) el.value = v; };
     setV('setLowRam', th.low_ram_gb); setV('setLowDisk', th.low_disk_gb);
     setV('setUptime', th.old_uptime_days); setV('setOffline', th.offline_hours); setV('setStale', th.stale_days);
+    setV('setLocDrift', th.location_drift_days);
     setV('setTheme', data.settings?.appearance?.theme || 'auto');
     renderSystemStatus(data.system || {});
   } catch (err) {
@@ -940,6 +941,7 @@ async function saveThresholds() {
   const body = {
     low_ram_gb: $(`#setLowRam`)?.value, low_disk_gb: $(`#setLowDisk`)?.value,
     old_uptime_days: $(`#setUptime`)?.value, offline_hours: $(`#setOffline`)?.value, stale_days: $(`#setStale`)?.value,
+    location_drift_days: $(`#setLocDrift`)?.value,
   };
   const msg = $(`#thresholdsMsg`);
   try {
@@ -999,6 +1001,7 @@ function openDeviceModal(asset) {
       ${row('Son Görülme', fmtDate(asset.last_seen))}
     </div>
     <div id="deviceAssignBox" style="margin-bottom:18px"></div>
+    <div id="deviceLocationBox" style="margin-bottom:18px"></div>
     ${asset.category === 'Telefon' ? '<div id="deviceLineBox" style="margin-bottom:18px"></div>' : ''}
     <h4 style="font-size:13px;font-weight:600;margin:0 0 10px;color:var(--text)">Yaşam Döngüsü Geçmişi</h4>
     <div id="deviceHistory" style="font-size:12.5px;color:var(--text-muted)">Yükleniyor...</div>`;
@@ -1007,7 +1010,81 @@ function openDeviceModal(asset) {
   overlay.classList.add('open');
   loadDeviceHistory(asset);
   loadDeviceAssignment(asset);
+  loadDeviceLocation(asset);
   if (asset.category === 'Telefon' && asset.id != null) loadDeviceLine(asset.id);
+}
+
+/* Cihaz modalı — lokasyon kutusu.
+   BEKLENEN (resmi, kilitli) vs GÖRÜLEN (telemetri) ayrımı ekranda da korunur. */
+async function loadDeviceLocation(asset) {
+  const box = $(`#deviceLocationBox`);
+  if (!box || asset.id == null) { if (box) box.innerHTML = ''; return; }
+  try {
+    const res = await fetch(`/api/assets/${asset.id}/location`);
+    const j = await res.json();
+    const exp = j.expected?.location || null;
+    const seen = j.current?.to_location || (asset.location || '').trim() || null;
+    const drift = exp && seen && exp.toLowerCase() !== seen.toLowerCase();
+    const since = j.current?.first_seen_at;
+    const days = since ? Math.floor((Date.now() - new Date(since).getTime()) / 86400000) : null;
+
+    const hist = (j.history || []).slice(0, 6).map(h => `
+      <div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+        <div style="width:8px;height:8px;border-radius:50%;background:var(--accent);margin-top:5px;flex-shrink:0"></div>
+        <div style="flex:1">
+          <div style="color:var(--text);font-weight:500">
+            ${h.from_location ? `${escapeHtml(h.from_location)} → ` : ''}${escapeHtml(h.to_location)}
+          </div>
+          <div style="color:var(--text-muted);font-size:11px;margin-top:1px">
+            ${fmtDate(h.first_seen_at)} — ${fmtDate(h.last_seen_at)} · kaynak: ${escapeHtml(h.source)}
+          </div>
+        </div>
+      </div>`).join('') || '<p style="padding:4px 0;color:var(--text-muted)">Konum geçmişi kaydı yok.</p>';
+
+    box.innerHTML = `
+      <h4 style="font-size:13px;font-weight:600;margin:0 0 10px;color:var(--text)">Lokasyon</h4>
+      <div style="background:var(--bg-card2);border:1px solid ${drift ? 'var(--red)' : 'var(--border)'};
+                  border-radius:var(--radius-sm);padding:14px">
+        <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:10px">
+          <div><div style="font-size:11px;color:var(--text-muted)">Beklenen (resmi)</div>
+            <div style="font-weight:600;color:var(--text)">${exp ? escapeHtml(exp) : '<span style="color:var(--text-muted);font-weight:400">tanımlı değil</span>'}</div></div>
+          <div><div style="font-size:11px;color:var(--text-muted)">Görülen (telemetri)</div>
+            <div style="font-weight:600;color:${drift ? 'var(--red)' : 'var(--text)'}">
+              ${seen ? escapeHtml(seen) : '—'}${days !== null ? ` <span style="font-weight:400;color:var(--text-muted)">(${days} gündür)</span>` : ''}</div></div>
+        </div>
+        ${drift ? `<p style="color:var(--red);font-size:12px;margin:0 0 10px">
+          ⚠ Cihaz ait olduğu lokasyonun dışında görülüyor. Transferi resmileştirin veya cihazı yerine iade ettirin.</p>` : ''}
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn-pdf" id="locSetExpected">${exp ? 'Beklenen lokasyonu değiştir' : 'Beklenen lokasyonu belirle'}</button>
+          ${drift ? `<button class="btn-pdf" id="locAcceptMove">Transferi resmileştir (görüleni beklenen yap)</button>` : ''}
+        </div>
+      </div>
+      <div style="margin-top:12px;font-size:12.5px">${hist}</div>`;
+
+    $(`#locSetExpected`)?.addEventListener('click', () => setExpectedLocationPrompt(asset, exp));
+    $(`#locAcceptMove`)?.addEventListener('click', () => saveExpectedLocation(asset, seen));
+  } catch (err) {
+    box.innerHTML = `<p style="color:var(--red);font-size:12px">Lokasyon bilgisi alınamadı: ${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function setExpectedLocationPrompt(asset, current) {
+  const v = prompt('Cihazın ait olduğu (resmi) lokasyon:', current || asset.location || '');
+  if (v === null) return;
+  if (!v.trim()) { alert('Lokasyon boş olamaz.'); return; }
+  saveExpectedLocation(asset, v.trim());
+}
+
+async function saveExpectedLocation(asset, location) {
+  try {
+    const res = await fetch(`/api/assets/${asset.id}/expected-location`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ location, hostname: asset.hostname || null }),
+    });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.detail || j.error);
+    loadDeviceLocation(asset);
+  } catch (err) { alert('Kaydedilemedi: ' + err.message); }
 }
 
 async function loadDeviceAssignment(asset) {
@@ -1452,6 +1529,44 @@ function humanDuration(hours) {
   return `${days} gün`;
 }
 
+async function fetchLocationDrift() {
+  const res = await fetch('/api/location-drift');
+  if (!res.ok) throw new Error('Lokasyon sapması alınamadı');
+  return res.json();
+}
+
+function renderLocationDrift(drift) {
+  const items = drift.drifted || [];
+  setPill('locDriftPill', items.length);
+  const hint = $(`#locDriftHint`);
+  if (hint) {
+    // Kapsam dürüstlüğü: beklenen lokasyonu tanımsız cihazlar taramanın DIŞINDA kalır.
+    // Bunu gizlemek "sapma yok ✓" ifadesini yanıltıcı yapardı.
+    const scope = drift.unassigned > 0
+      ? ` · ${drift.unassigned} cihaz kapsam dışı (beklenen lokasyon tanımsız)` : '';
+    hint.textContent = `${drift.threshold_days}+ gündür ait olduğu lokasyonun dışında${scope}`;
+  }
+  const body = $(`#locDriftBody`);
+  if (!body) return;
+  body.innerHTML = items.length ? items.map(d => `
+    <tr data-asset-id="${d.asset_id}" style="cursor:pointer">
+      <td class="hostname-cell">${fmt(d.hostname)}</td>
+      <td>${categoryBadge(d.category)}</td>
+      <td><span class="location-tag">${escapeHtml(d.expected_location)}</span></td>
+      <td><span class="location-tag" style="background:var(--red-bg);color:var(--red)">${escapeHtml(d.seen_location)}</span></td>
+      <td>${d.days === null ? '<span style="color:var(--text-muted)">bilinmiyor</span>' : d.days + ' gün'}</td>
+      <td style="color:var(--text-muted)">${escapeHtml(d.source)}</td>
+    </tr>`).join('')
+    : `<tr><td colspan="6" class="loading-cell" style="color:var(--green)">Lokasyon sapması yok ✓</td></tr>`;
+
+  body.querySelectorAll('tr[data-asset-id]').forEach((tr) => {
+    tr.addEventListener('click', () => {
+      const asset = state.assets.find(x => String(x.id) === tr.dataset.assetId);
+      if (asset) openDeviceModal(asset);
+    });
+  });
+}
+
 async function loadAlerts(showLoading = true) {
   // Reset bodies to loading (arka plan tazelemede atlanır → titreme olmaz)
   if (showLoading) {
@@ -1464,21 +1579,24 @@ async function loadAlerts(showLoading = true) {
     setLoading('shadowBody', 4);
     setLoading('eolBody', 5);
     setLoading('warrantyBody', 5);
+    setLoading('locDriftBody', 6);
   }
 
   try {
-    const [anomalies, offline, compliance, shadow, eol, warranty] = await Promise.all([
+    const [anomalies, offline, compliance, shadow, eol, warranty, drift] = await Promise.all([
       fetchAnomalies(),
       fetchOfflineAlerts(),
       fetchLicenseCompliance(),
       fetchShadowIT().catch(() => ({ shadow: { count: 0, items: [] } })),
       fetchEolOs().catch(() => ({ total_issues: 0, eol: { items: [] }, approaching: { items: [] } })),
       fetchWarranty().catch(() => ({ total_issues: 0, expired: { items: [] }, expiring_soon: { items: [] } })),
+      fetchLocationDrift().catch(() => ({ count: 0, drifted: [], threshold_days: 7, unassigned: 0 })),
     ]);
 
     const shadowCount = shadow.shadow?.count || 0;
     const eolCount = eol.total_issues || 0;
     const warrantyCount = warranty.total_issues || 0;
+    const driftCount = drift.count || 0;
 
     // Summary cards — kartlar birbirinden bağımsız ve nav rozetine tam toplanır
     const elA = $(`#alertTotalAnomalies`); if (elA) animateCount(elA, anomalies.total_anomalies || 0);
@@ -1487,11 +1605,15 @@ async function loadAlerts(showLoading = true) {
     const elS = $(`#alertShadowCount`);     if (elS) animateCount(elS, shadowCount);
     const elE = $(`#alertEolCount`);        if (elE) animateCount(elE, eolCount);
     const elW = $(`#alertWarrantyCount`);   if (elW) animateCount(elW, warrantyCount);
+    const elD = $(`#alertLocDriftCount`);   if (elD) animateCount(elD, driftCount);
 
     // Nav badge = total actionable alerts
     const totalAlerts = (anomalies.total_anomalies || 0) + (offline.total_alerts || 0)
-      + (compliance.total_issues || 0) + shadowCount + eolCount + warrantyCount;
+      + (compliance.total_issues || 0) + shadowCount + eolCount + warrantyCount + driftCount;
     updateAlertsBadge(totalAlerts);
+
+    // ── Lokasyon sapması ──
+    renderLocationDrift(drift);
 
     // ── Offline table ──
     const offItems = [...(offline.stale?.items || []), ...(offline.offline?.items || [])];
@@ -1666,15 +1788,16 @@ function updateAlertsBadge(count) {
 // Sessiz arka plan: uyarı sayısını başlangıçta yükle (sidebar rozeti için)
 async function preloadAlertsBadge() {
   try {
-    const [anomalies, offline, compliance, shadow, eol, warranty] = await Promise.all([
+    const [anomalies, offline, compliance, shadow, eol, warranty, drift] = await Promise.all([
       fetchAnomalies(), fetchOfflineAlerts(), fetchLicenseCompliance(),
       fetchShadowIT().catch(() => ({ shadow: { count: 0 } })),
       fetchEolOs().catch(() => ({ total_issues: 0 })),
       fetchWarranty().catch(() => ({ total_issues: 0 })),
+      fetchLocationDrift().catch(() => ({ count: 0 })),
     ]);
     const total = (anomalies.total_anomalies || 0) + (offline.total_alerts || 0)
       + (compliance.total_issues || 0) + (shadow.shadow?.count || 0)
-      + (eol.total_issues || 0) + (warranty.total_issues || 0);
+      + (eol.total_issues || 0) + (warranty.total_issues || 0) + (drift.count || 0);
     updateAlertsBadge(total);
   } catch (_) { /* sessiz */ }
 }

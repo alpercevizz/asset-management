@@ -615,6 +615,29 @@
               <span class="stat-value" id="alertWarrantyCount">—</span>
             </div>
           </div>
+          <div class="stat-card">
+            <div class="stat-icon stat-icon--purple">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            </div>
+            <div class="stat-info">
+              <span class="stat-label">Lokasyon Sapması</span>
+              <span class="stat-value" id="alertLocDriftCount">—</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Lokasyon Sapması -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Lokasyon Sapması <span class="count-pill" id="locDriftPill">0</span></h3>
+            <span class="link-small" id="locDriftHint">Ait olduğu lokasyonun dışında görülen cihazlar</span>
+          </div>
+          <div class="table-wrap">
+            <table class="asset-table">
+              <thead><tr><th>Hostname</th><th>Kategori</th><th>Beklenen Lokasyon</th><th>Görülen Lokasyon</th><th>Süre</th><th>Kaynak</th></tr></thead>
+              <tbody id="locDriftBody"><tr><td colspan="6" class="loading-cell">Yükleniyor...</td></tr></tbody>
+            </table>
+          </div>
         </div>
 
         <!-- Offline Devices -->
@@ -994,6 +1017,7 @@
               <div class="field-sm"><label>Uzun Uptime (gün)</label><input type="number" min="0" id="setUptime" class="select-sm"></div>
               <div class="field-sm"><label>Çevrimdışı eşiği (saat)</label><input type="number" min="0" id="setOffline" class="select-sm"></div>
               <div class="field-sm"><label>Kayıp/terk şüphesi (gün)</label><input type="number" min="0" id="setStale" class="select-sm"></div>
+              <div class="field-sm"><label>Lokasyon sapması (gün)</label><input type="number" min="0" id="setLocDrift" class="select-sm"></div>
             </div>
             <div style="margin-top:16px;display:flex;gap:10px;align-items:center">
               <button class="btn-add" id="saveThresholds">Eşikleri Kaydet</button>

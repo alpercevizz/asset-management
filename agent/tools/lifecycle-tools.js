@@ -15,6 +15,7 @@ const LIFECYCLE_STATES = [
   'Satın Alındı', 'Aktif - Zimmetlendi', 'Zimmet Değişikliği',
   'Depodan Çıkış', 'Depoya Kaldırıldı',
   'Ayrılan Personelden Teslim Alındı', 'Bakımda',
+  'Lokasyon Değişikliği',
   'Kayıp', 'Belirsiz', 'Hurdaya Ayrıldı',
 ];
 const STORAGE_STATES  = new Set(['Depoya Kaldırıldı']);
