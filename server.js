@@ -942,6 +942,47 @@ app.get('/api/trends', async (req, res) => {
   }
 });
 
+// Lokasyon koordinatları — harita için. Dış geocoding YOK.
+app.get('/api/locations/geo', async (req, res) => {
+  try {
+    const [geo, inv] = await Promise.all([
+      locationTools.getAllGeo(),
+      getAllAssets({ size: 200 }),
+    ]);
+    const adlar = [...new Set((inv.results || []).map(a => (a.location || '').trim()).filter(Boolean))];
+    res.json({ geo, locations: adlar, missing: adlar.filter(a => !geo[a]) });
+  } catch (err) {
+    res.status(500).json({ error: 'Koordinatlar alınamadı', detail: err.message });
+  }
+});
+
+app.put('/api/locations/geo', requireRole('it', 'admin'), async (req, res) => {
+  try {
+    const { location, lat, lon, label } = req.body || {};
+    const me = currentUser(req);
+    const row = await locationTools.setGeo(location, { lat, lon, label, by: me ? me.username : 'system' });
+    res.json({ success: true, geo: row });
+  } catch (err) {
+    res.status(400).json({ error: 'Koordinat kaydedilemedi', detail: err.message });
+  }
+});
+
+app.delete('/api/locations/geo/:location', requireRole('it', 'admin'), async (req, res) => {
+  try { await locationTools.deleteGeo(req.params.location); res.json({ success: true }); }
+  catch (err) { res.status(400).json({ error: 'Silinemedi', detail: err.message }); }
+});
+
+// İl adı geçen lokasyonları otomatik tohumla (elle girilenler EZİLMEZ)
+app.post('/api/locations/geo/seed', requireRole('it', 'admin'), async (req, res) => {
+  try {
+    const inv = await getAllAssets({ size: 200 });
+    const adlar = [...new Set((inv.results || []).map(a => (a.location || '').trim()).filter(Boolean))];
+    res.json(await locationTools.seedGeoFromNames(adlar));
+  } catch (err) {
+    res.status(500).json({ error: 'Tohumlama başarısız', detail: err.message });
+  }
+});
+
 // Dashboard lokasyon özeti (kova sayıları + şiddet dağılımı + lokasyon başına adet)
 app.get('/api/location-summary', async (req, res) => {
   try {

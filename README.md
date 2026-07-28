@@ -481,6 +481,7 @@ Register-ScheduledTask -TaskName "AssetCollector" -Action $action -Trigger $trig
 | `GET /api/assets/:id/location` | auth | Beklenen + görülen lokasyon, konum geçmişi |
 | `PUT /api/assets/:id/expected-location` | it / admin | Cihazın ait olduğu resmi lokasyon (kilitli) |
 | `GET /api/location-drift` | auth | Lokasyon sapması (beklenen ≠ görülen, N+ gündür) |
+| `GET /api/locations/geo` · `PUT` · `POST .../seed` | auth / it | Lokasyon koordinatları (harita) |
 | `GET /api/settings` · `PUT /api/settings/:section` | admin | Runtime ayarlar (eşikler, tema) |
 | `POST /api/chat` | auth | AI agent sohbeti |
 

@@ -261,6 +261,100 @@ async function getLocationSummary(assets) {
   return out;
 }
 
+
+/* ══ Lokasyon koordinatları ════════════════════════════════════════════════
+   Harita için gereken lat/lon. DIŞ GEOCODING SERVİSİ KULLANILMAZ — kapalı
+   devre ilkesi. Adı bilinen bir Türk iliyle eşleşenler otomatik tohumlanır;
+   "Ana Depo" gibi yer adı olmayanlar Ayarlar'dan elle girilir. */
+const TR_IL = {
+  adana: [37.00, 35.32], adiyaman: [37.76, 38.28], afyon: [38.76, 30.54],
+  agri: [39.72, 43.05], aksaray: [38.37, 34.03], amasya: [40.65, 35.83],
+  ankara: [39.93, 32.86], antalya: [36.90, 30.70], ardahan: [41.11, 42.70],
+  artvin: [41.18, 41.82], aydin: [37.85, 27.84], balikesir: [39.65, 27.89],
+  bartin: [41.64, 32.34], batman: [37.89, 41.13], bayburt: [40.26, 40.23],
+  bilecik: [40.15, 29.98], bingol: [38.88, 40.50], bitlis: [38.40, 42.11],
+  bolu: [40.74, 31.61], burdur: [37.72, 30.29], bursa: [40.19, 29.06],
+  canakkale: [40.15, 26.41], cankiri: [40.60, 33.62], corum: [40.55, 34.95],
+  denizli: [37.78, 29.09], diyarbakir: [37.91, 40.24], duzce: [40.84, 31.16],
+  edirne: [41.68, 26.56], elazig: [38.68, 39.22], erzincan: [39.75, 39.49],
+  erzurum: [39.90, 41.27], eskisehir: [39.78, 30.52], gaziantep: [37.07, 37.38],
+  giresun: [40.91, 38.39], gumushane: [40.46, 39.48], hakkari: [37.57, 43.74],
+  hatay: [36.20, 36.16], igdir: [39.92, 44.04], isparta: [37.76, 30.55],
+  istanbul: [41.01, 28.98], izmir: [38.42, 27.14], izmit: [40.77, 29.92],
+  kahramanmaras: [37.58, 36.93], karabuk: [41.20, 32.63], karaman: [37.18, 33.22],
+  kars: [40.60, 43.10], kastamonu: [41.39, 33.78], kayseri: [38.73, 35.49],
+  kilis: [36.72, 37.12], kirikkale: [39.85, 33.52], kirklareli: [41.74, 27.22],
+  kirsehir: [39.15, 34.16], kocaeli: [40.85, 29.88], konya: [37.87, 32.48],
+  kutahya: [39.42, 29.98], malatya: [38.35, 38.31], manisa: [38.62, 27.43],
+  mardin: [37.31, 40.74], mersin: [36.80, 34.63], mugla: [37.22, 28.36],
+  mus: [38.73, 41.49], nevsehir: [38.62, 34.71], nigde: [37.97, 34.68],
+  ordu: [40.98, 37.88], osmaniye: [37.07, 36.25], rize: [41.02, 40.52],
+  sakarya: [40.78, 30.40], samsun: [41.29, 36.33], sanliurfa: [37.16, 38.80],
+  siirt: [37.93, 41.94], sinop: [42.03, 35.15], sivas: [39.75, 37.02],
+  sirnak: [37.52, 42.45], tekirdag: [40.98, 27.51], tokat: [40.31, 36.55],
+  trabzon: [41.00, 39.72], tunceli: [39.11, 39.55], usak: [38.68, 29.41],
+  van: [38.49, 43.38], yalova: [40.65, 29.28], yozgat: [39.82, 34.81],
+  zonguldak: [41.45, 31.79],
+};
+
+/* Türkçe 'İ' toLowerCase'te birleşik nokta üretir → düz replace tutmaz.
+   NFD ile birleşik işaretler ayıklanır ('ş','ğ','ü','ö','ç' de sadeleşir). */
+function trSlugTR(x) {
+  return String(x || '').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/ı/g, 'i');
+}
+
+function tahminEt(ad) {
+  const t = trSlugTR(ad);
+  for (const [il, koord] of Object.entries(TR_IL)) {
+    if (t.includes(il)) return { lat: koord[0], lon: koord[1], label: il.charAt(0).toUpperCase() + il.slice(1) };
+  }
+  return null;
+}
+
+async function getAllGeo() {
+  const rows = await db()('location_geo').select('*');
+  const map = {};
+  rows.forEach(r => { map[r.location] = { lat: r.lat, lon: r.lon, label: r.label, source: r.source }; });
+  return map;
+}
+
+async function setGeo(location, { lat, lon, label = null, by = 'system', source = 'manuel' }) {
+  const ad = norm(location);
+  const la = Number(lat), lo = Number(lon);
+  if (!ad) throw new Error('Lokasyon adı boş olamaz.');
+  if (!Number.isFinite(la) || la < -90 || la > 90) throw new Error('Enlem -90 ile 90 arasında olmalı.');
+  if (!Number.isFinite(lo) || lo < -180 || lo > 180) throw new Error('Boylam -180 ile 180 arasında olmalı.');
+  const row = { location: ad, lat: la, lon: lo, label, source, set_at: nowIso(), set_by: by };
+  const k = db();
+  const varMi = await k('location_geo').where({ location: ad }).first();
+  if (varMi) await k('location_geo').where({ location: ad }).update(row);
+  else await k('location_geo').insert(row);
+  return row;
+}
+
+async function deleteGeo(location) {
+  await db()('location_geo').where({ location: norm(location) }).del();
+}
+
+/* Envanterdeki lokasyon adlarından, il adı geçenleri otomatik tohumla.
+   Zaten kaydı olanlara DOKUNMAZ (elle girilen koordinat ezilmez). */
+async function seedGeoFromNames(locations) {
+  const mevcut = await getAllGeo();
+  let eklendi = 0;
+  const eslesmeyen = [];
+  for (const ad of locations || []) {
+    const a = norm(ad);
+    if (!a || mevcut[a]) continue;
+    const t = tahminEt(a);
+    if (!t) { eslesmeyen.push(a); continue; }
+    await setGeo(a, { ...t, by: 'seed', source: 'seed' });
+    eklendi++;
+  }
+  return { eklendi, eslesmeyen };
+}
+
 /* İlk kurulum: mevcut envanterdeki lokasyonu "beklenen" başlangıcı olarak al (tablo boşsa). */
 async function seedExpectedFromAssets(assets) {
   const [{ n }] = await db()('asset_expected_location').count({ n: '*' });
@@ -283,4 +377,5 @@ module.exports = {
   getExpected, getAllExpected, setExpected, clearExpected,
   getCurrentStay, getHistory, recordSeen,
   detectLocationDrift, getLocationSummary, seedExpectedFromAssets,
+  getAllGeo, setGeo, deleteGeo, seedGeoFromNames,
 };

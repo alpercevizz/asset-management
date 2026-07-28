@@ -690,17 +690,7 @@ function tvxKpis() {
 function tvxMap() {
   const locs = state.locSummary?.locations || {};
   // Haritayı mevcut çizici ile aynı mantıkta çiz (tek kaynak)
-  const svg = $(`#tvxMap`), legend = $(`#tvxMapLegend`);
-  if (svg && legend) {
-    const eski = { m: $(`#locMap`), l: $(`#locMapLegend`) };
-    svg.id = 'locMap'; legend.id = 'locMapLegend';
-    if (eski.m && eski.m !== svg) eski.m.id = '_locMapDash';
-    if (eski.l && eski.l !== legend) eski.l.id = '_locMapLegendDash';
-    renderLocationMap(locs);
-    svg.id = 'tvxMap'; legend.id = 'tvxMapLegend';
-    if (eski.m && eski.m !== svg) eski.m.id = 'locMap';
-    if (eski.l && eski.l !== legend) eski.l.id = 'locMapLegend';
-  }
+  renderWorldMap(locs, 'tvxMap', 'tvxMapLegend');
 
   // En yoğun 5 lokasyon
   const top = Object.entries(locs).sort((a, b) => b[1] - a[1]).slice(0, 5);
@@ -970,7 +960,7 @@ function applyLocViewMode(locations) {
   const mapW = $(`#locMapWrap`), listW = $(`#locListWrap`);
   if (mapW) mapW.classList.toggle('hidden', mode !== 'map');
   if (listW) listW.classList.toggle('hidden', mode === 'map');
-  if (mode === 'map') renderLocationMap(locations); else renderLocationList(locations);
+  if (mode === 'map') renderWorldMap(locations); else renderLocationList(locations);
 }
 
 /* KPI trend rozeti — GERÇEK anlık görüntü verisinden.
@@ -1076,112 +1066,142 @@ function growthSpark(id, assets) {
       stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
-/* ═══ Lokasyon haritası ═══════════════════════════════════════════════════
-   Harici harita kütüphanesi YOK (kapalı devre/CSP kısıtı). Basitleştirilmiş
-   Türkiye sınırı + il koordinatları, aynı projeksiyonla çizilir → balonlar
-   gerçek coğrafi konuma oturur. Eşleşmeyen lokasyon adları "Diğer"e düşer. */
-const TR_CITIES = {
-  'istanbul': [41.01, 28.98], 'ankara': [39.93, 32.86], 'izmir': [38.42, 27.14],
-  'bursa': [40.19, 29.06], 'antalya': [36.90, 30.70], 'adana': [37.00, 35.32],
-  'konya': [37.87, 32.48], 'gaziantep': [37.07, 37.38], 'kocaeli': [40.85, 29.88],
-  'izmit': [40.77, 29.92], 'kayseri': [38.73, 35.49], 'samsun': [41.29, 36.33],
-  'trabzon': [41.00, 39.72], 'erzurum': [39.90, 41.27], 'diyarbakir': [37.91, 40.24],
-  'van': [38.49, 43.38], 'eskisehir': [39.78, 30.52], 'mersin': [36.80, 34.63],
-  'denizli': [37.78, 29.09], 'sakarya': [40.78, 30.40], 'tekirdag': [40.98, 27.51],
-  'balikesir': [39.65, 27.89], 'manisa': [38.62, 27.43], 'hatay': [36.20, 36.16],
-  'malatya': [38.35, 38.31], 'sivas': [39.75, 37.02], 'aydin': [37.85, 27.84],
-  'mugla': [37.22, 28.36], 'ordu': [40.98, 37.88], 'zonguldak': [41.45, 31.79],
-};
-/* Sınır noktaları (lon, lat). İki parça: Anadolu + Trakya (Marmara arada kalsın
-   diye ayrı çizilir — tek poligonda Türkiye tanınmaz bir bloba dönüşüyordu). */
-const TR_ANATOLIA = [
-  [29.05,41.20],[29.50,41.15],[31.40,41.10],[32.30,41.75],[33.40,42.00],[35.15,42.08],
-  [36.30,41.35],[37.90,41.02],[39.50,41.10],[40.50,41.20],[41.55,41.52],[42.80,41.55],
-  [43.45,41.20],[43.60,40.60],[43.70,40.02],[44.80,39.65],[44.35,39.40],[44.05,39.38],
-  [44.30,38.35],[44.50,37.75],[44.00,37.30],[42.80,37.32],[42.35,37.25],[41.30,37.10],
-  [40.20,36.90],[39.00,36.70],[38.20,36.90],[37.00,36.65],[36.60,36.20],[36.15,35.85],
-  [35.90,36.25],[35.50,36.60],[34.90,36.75],[34.00,36.30],[33.00,36.15],[32.00,36.10],
-  [31.00,36.25],[30.60,36.25],[30.35,36.32],[29.70,36.15],[29.00,36.50],[28.20,36.65],
-  [27.40,36.72],[27.25,37.10],[27.90,37.35],[27.25,37.70],[26.35,38.15],[26.90,38.42],
-  [26.40,38.62],[26.70,38.88],[26.20,39.50],[26.15,39.92],[26.70,40.40],[27.50,40.35],
-  [28.60,40.40],[29.30,40.75],
-];
-const TR_THRACE = [
-  [26.05,41.35],[26.35,41.72],[27.00,42.05],[28.00,41.75],[28.90,41.22],
-  [28.60,41.02],[27.50,40.98],[26.90,40.62],[26.20,40.62],
-];
-const MAP_W = 560, MAP_H = 300;
-const LON0 = 25.4, LON1 = 45.6, LAT0 = 35.6, LAT1 = 42.6;
-const projX = (lon) => ((lon - LON0) / (LON1 - LON0)) * MAP_W;
-const projY = (lat) => ((LAT1 - lat) / (LAT1 - LAT0)) * MAP_H;
-
-/* Aksanları sadeleştirip şehir adı ara ("İstanbul Depo A" → istanbul).
-   DİKKAT: 'İ'.toLowerCase() → 'i' + U+0307 (birleşik nokta) üretir; düz replace
-   zinciri bunu yakalamaz ve İstanbul HİÇ eşleşmez. NFD ile ayrıştırıp birleşik
-   işaretleri atmak tek güvenli yol ('ş','ğ','ü','ö','ç' de böyle sadeleşir).
-   'ı' ayrışmaz → ayrıca değiştirilir. */
+/* Türkçe 'İ' toLowerCase'te birleşik nokta (U+0307) üretir; düz replace
+   zinciri yakalamaz. NFD ile birleşik işaretler ayıklanır. Arama/eşleştirmede
+   DAİMA bu kullanılır. */
 function trSlug(s) {
   return String(s || '').toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/ı/g, 'i');
 }
-function cityKey(name) {
-  const s = trSlug(name);
-  for (const key of Object.keys(TR_CITIES)) if (s.includes(key)) return key;
-  return null;
+
+/* ═══ Dünya haritası (ÇEVRİMDIŞI) ═════════════════════════════════════════
+   Altlık public/data/world-110m.json'dan gelir — KENDİ sunucumuzdan, dış
+   servis yok (kapalı-devre ilkesi). scripts/build-world-map.js ile üretilir.
+
+   Konum artık ADDAN TAHMİN EDİLMEZ: location_geo tablosundaki gerçek lat/lon
+   kullanılır. Koordinatı olmayan lokasyon haritada gösterilmez, "haritada
+   yok (N)" olarak sayılır — sessizce kaybolmaz.
+
+   Projeksiyon: equirectangular. Görünüm, koordinatı olan lokasyonların
+   sınırlayıcı kutusuna otomatik oturur → tek şehirdeyse yakınlaşır,
+   kıtalara yayılıysa dünyayı gösterir. Aynı kod, iki müşteri profili. */
+let _worldGeo = null;      // { polygons: [[[lon,lat],...], ...] }
+let _worldYukleniyor = null;
+
+async function loadWorld() {
+  if (_worldGeo) return _worldGeo;
+  if (_worldYukleniyor) return _worldYukleniyor;
+  _worldYukleniyor = fetch('/data/world-110m.json')
+    .then(r => { if (!r.ok) throw new Error('harita verisi alınamadı'); return r.json(); })
+    .then(j => { _worldGeo = j; return j; })
+    .catch(err => { console.error('[harita]', err.message); _worldGeo = { polygons: [] }; return _worldGeo; });
+  return _worldYukleniyor;
 }
 
-function renderLocationMap(locations) {
-  const svg = $(`#locMap`), legend = $(`#locMapLegend`);
-  if (!svg || !legend) return;
-  const entries = Object.entries(locations || {});
-  if (!entries.length) {
-    svg.innerHTML = '';
-    legend.innerHTML = '<p class="map-empty">Lokasyon verisi yok</p>';
-    return;
-  }
+async function loadLocationGeo() {
+  if (state.locGeo) return state.locGeo;
+  try {
+    const r = await fetch('/api/locations/geo');
+    const j = r.ok ? await r.json() : { geo: {}, missing: [] };
+    state.locGeo = j.geo || {};
+    state.locGeoMissing = j.missing || [];
+  } catch { state.locGeo = {}; state.locGeoMissing = []; }
+  return state.locGeo;
+}
 
-  // Şehir bazında topla (aynı şehirdeki birden çok depo tek balon olur)
-  const byCity = {}; const unknown = [];
-  entries.forEach(([loc, n]) => {
-    const key = cityKey(loc);
-    if (key) (byCity[key] = byCity[key] || { n: 0, names: [] }), byCity[key].n += n, byCity[key].names.push(loc);
-    else unknown.push([loc, n]);
+/* Sınırlayıcı kutu + kenar payı → görünüm penceresi.
+   Tek nokta varsa çevresine makul bir kutu açılır (aşırı yakınlaşma olmasın). */
+function worldViewport(noktalar) {
+  if (!noktalar.length) return { lon0: -170, lon1: 190, lat0: -58, lat1: 84 };
+  const lats = noktalar.map(p => p.lat), lons = noktalar.map(p => p.lon);
+  let lat0 = Math.min(...lats), lat1 = Math.max(...lats);
+  let lon0 = Math.min(...lons), lon1 = Math.max(...lons);
+  const enPay = Math.max((lon1 - lon0) * 0.35, 6);
+  const boyPay = Math.max((lat1 - lat0) * 0.35, 4);
+  lon0 -= enPay; lon1 += enPay; lat0 -= boyPay; lat1 += boyPay;
+  // En-boy oranını kabaca koru (equirectangular'da 1° boylam < 1° enlem)
+  const w = lon1 - lon0, h = lat1 - lat0;
+  const hedef = 560 / 300;
+  if (w / h < hedef) { const ek = (h * hedef - w) / 2; lon0 -= ek; lon1 += ek; }
+  else { const ek = (w / hedef - h) / 2; lat0 -= ek; lat1 += ek; }
+  return {
+    lon0: Math.max(-180, lon0), lon1: Math.min(180, lon1),
+    lat0: Math.max(-85, lat0), lat1: Math.min(85, lat1),
+  };
+}
+
+/* Dünya haritasını çiz. hedefSvg/hedefLegend id'leri verilir. */
+async function renderWorldMap(locations, svgId = 'locMap', legendId = 'locMapLegend') {
+  const svg = document.getElementById(svgId), legend = document.getElementById(legendId);
+  if (!svg || !legend) return;
+
+  const [world, geo] = await Promise.all([loadWorld(), loadLocationGeo()]);
+  const girdiler = Object.entries(locations || {});
+
+  // Koordinatı olan / olmayan ayrımı — olmayan GİZLENMEZ, sayılır
+  const yerlesik = [];
+  let koordsuz = 0;
+  girdiler.forEach(([ad, n]) => {
+    const g = geo[ad];
+    if (g) yerlesik.push({ ad, n, lat: g.lat, lon: g.lon, label: g.label || ad });
+    else koordsuz += n;
   });
 
-  const toPath = (pts) => pts.map(([lon, lat], i) =>
-    `${i ? 'L' : 'M'}${projX(lon).toFixed(1)} ${projY(lat).toFixed(1)}`).join(' ') + ' Z';
-  const path = toPath(TR_ANATOLIA) + ' ' + toPath(TR_THRACE);
+  const W = 560, H = 300;
+  const vp = worldViewport(yerlesik);
+  const px = (lon) => ((lon - vp.lon0) / (vp.lon1 - vp.lon0)) * W;
+  const py = (lat) => ((vp.lat1 - lat) / (vp.lat1 - vp.lat0)) * H;
 
-  const sorted = Object.entries(byCity).sort((a, b) => b[1].n - a[1].n);
-  const max = Math.max(1, ...sorted.map(([, v]) => v.n));
-  const colorOf = (i) => DONUT_COLORS[i % DONUT_COLORS.length];
-
-  // Etiketler: balon yeterince büyükse sayı İÇİNE, şehir adı ÜSTÜNE yazılır
-  // (tasarım referansı). Küçük balonlarda yazı okunmaz → yalnız nokta kalır.
-  const bubbles = sorted.map(([key, v], i) => {
-    const [lat, lon] = TR_CITIES[key];
-    const r = (7 + Math.sqrt(v.n / max) * 22) * (state.mapZoom || 1); // alan ~ adet
-    const c = colorOf(i);
-    const x = +projX(lon).toFixed(1), y = +projY(lat).toFixed(1);
-    const ad = key.charAt(0).toUpperCase() + key.slice(1);
-    const buyuk = r >= 13;
-    return `<circle class="map-bubble" cx="${x}" cy="${y}" r="${r.toFixed(1)}" fill="${c}" stroke="${c}">
-        <title>${escapeHtml(v.names.join(', '))} — ${v.n} cihaz</title></circle>` +
-      (buyuk
-        ? `<text class="map-count" x="${x}" y="${y + 4}" fill="#fff">${v.n}</text>
-           <text class="map-city" x="${x}" y="${(y - r - 7).toFixed(1)}">${escapeHtml(ad)}</text>`
-        : `<circle class="map-dot" cx="${x}" cy="${y}" r="2.5" fill="${c}"/>
-           <text class="map-city map-city--sm" x="${x}" y="${(y - r - 5).toFixed(1)}">${escapeHtml(ad)}</text>`);
+  // Kara parçaları — görünüm dışındakiler atlanır (DOM şişmesin)
+  const kara = (world.polygons || []).map(ring => {
+    let gorunur = false;
+    const d = ring.map(([lon, lat], i) => {
+      const x = px(lon), y = py(lat);
+      if (x > -60 && x < W + 60 && y > -60 && y < H + 60) gorunur = true;
+      return `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`;
+    }).join(' ');
+    return gorunur ? `<path class="map-land" d="${d} Z"/>` : '';
   }).join('');
 
-  svg.innerHTML = `<path class="map-land" d="${path}"/>${bubbles}`;
+  // Balonlar — alan ∝ adet
+  const sirali = yerlesik.sort((a, b) => b.n - a.n);
+  const max = Math.max(1, ...sirali.map(v => v.n));
+  const renk = (i) => DONUT_COLORS[i % DONUT_COLORS.length];
+  // Etiket çakışma önleme: yakın lokasyonlarda (ör. İstanbul–Kocaeli, 90 km)
+  // yazılar üst üste biniyordu. Zaten yazılmış bir etikete çok yakınsa atlanır —
+  // balon ve sayı kalır, ad tooltip'te görünür.
+  const yazilan = [];
+  const cakisiyor = (x, y) => yazilan.some(p => Math.abs(p.x - x) < 46 && Math.abs(p.y - y) < 15);
 
-  const unknownTotal = unknown.reduce((a, [, n]) => a + n, 0);
+  const balonlar = sirali.map((v, i) => {
+    const r = (6 + Math.sqrt(v.n / max) * 20) * (state.mapZoom || 1);
+    const c = renk(i);
+    const x = +px(v.lon).toFixed(1), y = +py(v.lat).toFixed(1);
+    if (x < -40 || x > W + 40 || y < -40 || y > H + 40) return '';
+    const buyuk = r >= 13;
+    const ly = +(y - r - (buyuk ? 7 : 5)).toFixed(1);
+    const etiketOk = !cakisiyor(x, ly);
+    if (etiketOk) yazilan.push({ x, y: ly });
+    const etiket = etiketOk
+      ? `<text class="map-city${buyuk ? '' : ' map-city--sm'}" x="${x}" y="${ly}">${escapeHtml(v.label)}</text>`
+      : '';
+    return `<circle class="map-bubble" cx="${x}" cy="${y}" r="${r.toFixed(1)}" fill="${c}" stroke="${c}">
+        <title>${escapeHtml(v.ad)} — ${v.n} cihaz</title></circle>` +
+      (buyuk
+        ? `<text class="map-count" x="${x}" y="${y + 4}" fill="#fff">${v.n}</text>${etiket}`
+        : `<circle class="map-dot" cx="${x}" cy="${y}" r="2.5" fill="${c}"/>${etiket}`);
+  }).join('');
+
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = kara + balonlar;
+
   legend.innerHTML =
-    sorted.slice(0, 4).map(([key, v], i) =>
-      `<span><i style="background:${colorOf(i)}"></i>${key.charAt(0).toUpperCase() + key.slice(1)} (${v.n})</span>`).join('') +
-    (unknownTotal ? `<span><i style="background:var(--text-muted)"></i>Diğer (${unknownTotal})</span>` : '');
+    sirali.slice(0, 4).map((v, i) =>
+      `<span><i style="background:${renk(i)}"></i>${escapeHtml(v.label)} (${v.n})</span>`).join('') +
+    (koordsuz
+      ? `<span title="Bu lokasyonların koordinatı tanımlı değil — Ayarlar → Lokasyon Koordinatları"><i style="background:var(--text-muted)"></i>Haritada yok (${koordsuz})</span>`
+      : '');
 }
 
 function renderLocationList(locations) {
@@ -1506,6 +1526,93 @@ function renderLocationChart(assets) {
   setTimeout(() => {
     container.querySelectorAll('.bar-fill').forEach((el) => { el.style.width = el.dataset.pct + '%'; });
   }, 100);
+}
+
+
+/* ═══ Lokasyon koordinatları (Ayarlar) ════════════════════════════════════ */
+async function loadGeoTable() {
+  const body = $(`#geoBody`);
+  if (!body) return;
+  try {
+    const r = await fetch('/api/locations/geo');
+    if (r.status === 403) { body.innerHTML = '<tr><td colspan="5" class="loading-cell">Yetki yok.</td></tr>'; return; }
+    const j = await r.json();
+    const geo = j.geo || {};
+    const adlar = (j.locations || []).slice().sort((a, b) => a.localeCompare(b, 'tr'));
+    if (!adlar.length) { body.innerHTML = '<tr><td colspan="5" class="loading-cell">Envanterde lokasyon yok</td></tr>'; return; }
+    body.innerHTML = adlar.map(ad => {
+      const g = geo[ad];
+      return `<tr>
+        <td class="hostname-cell">${escapeHtml(ad)}</td>
+        <td>${g ? g.lat.toFixed(3) : '<span style="color:var(--orange)">tanımsız</span>'}</td>
+        <td>${g ? g.lon.toFixed(3) : '<span style="color:var(--orange)">tanımsız</span>'}</td>
+        <td style="color:var(--text-muted)">${g ? (g.source === 'seed' ? 'otomatik' : 'elle') : '—'}</td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="btn-pdf" data-geo="${escapeHtml(ad)}">${g ? 'Düzenle' : 'Koordinat gir'}</button>
+          ${g ? `<button class="btn-pdf" data-geodel="${escapeHtml(ad)}" style="color:var(--red)">Sil</button>` : ''}
+        </td></tr>`;
+    }).join('');
+    body.querySelectorAll('[data-geo]').forEach(b =>
+      b.addEventListener('click', () => geoPrompt(b.dataset.geo, geo[b.dataset.geo])));
+    body.querySelectorAll('[data-geodel]').forEach(b =>
+      b.addEventListener('click', () => geoDelete(b.dataset.geodel)));
+  } catch (err) {
+    body.innerHTML = `<tr><td colspan="5" class="loading-cell" style="color:var(--red)">${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+function geoPrompt(ad, mevcut) {
+  const v = prompt(
+    `"${ad}" için koordinat\n\nEnlem, Boylam biçiminde girin (ör. 41.01, 28.98).\n` +
+    `Bir haritadan (OpenStreetMap/Google Maps) sağ tıkla kopyalayabilirsiniz.`,
+    mevcut ? `${mevcut.lat}, ${mevcut.lon}` : '');
+  if (v === null) return;
+  const parca = String(v).split(/[,;\s]+/).filter(Boolean);
+  if (parca.length < 2) { alert('İki sayı girin: enlem, boylam'); return; }
+  const lat = Number(parca[0].replace(',', '.')), lon = Number(parca[1].replace(',', '.'));
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) { alert('Geçersiz sayı.'); return; }
+  const label = prompt('Haritada görünecek kısa ad (boş bırakılabilir):', mevcut?.label || ad) ?? null;
+  geoSave(ad, lat, lon, label);
+}
+
+async function geoSave(location, lat, lon, label) {
+  try {
+    const r = await fetch('/api/locations/geo', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ location, lat, lon, label }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || j.error);
+    state.locGeo = null;                      // önbelleği düşür → harita tazelensin
+    loadGeoTable();
+  } catch (err) { alert('Kaydedilemedi: ' + err.message); }
+}
+
+async function geoDelete(location) {
+  if (!confirm(`"${location}" koordinatı silinsin mi? Bu lokasyon haritada görünmeyecek.`)) return;
+  try {
+    const r = await fetch('/api/locations/geo/' + encodeURIComponent(location), { method: 'DELETE' });
+    if (!r.ok) throw new Error((await r.json()).detail || 'silinemedi');
+    state.locGeo = null;
+    loadGeoTable();
+  } catch (err) { alert('Silinemedi: ' + err.message); }
+}
+
+async function geoSeed() {
+  const msg = $(`#geoMsg`);
+  try {
+    const r = await fetch('/api/locations/geo/seed', { method: 'POST' });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || j.error);
+    if (msg) {
+      msg.style.color = 'var(--green)';
+      msg.textContent = j.eklendi
+        ? `✓ ${j.eklendi} lokasyon dolduruldu` + (j.eslesmeyen.length ? ` · ${j.eslesmeyen.length} tanesi elle girilmeli` : '')
+        : 'Otomatik eşleşen yeni lokasyon yok — kalanları elle girin.';
+    }
+    state.locGeo = null;
+    loadGeoTable();
+  } catch (err) { if (msg) { msg.style.color = 'var(--red)'; msg.textContent = 'Hata: ' + err.message; } }
 }
 
 /* ═══ Lokasyonlar görünümü ════════════════════════════════════════════════ */
@@ -1866,6 +1973,7 @@ async function loadSettings() {
     setV('setTheme', data.settings?.appearance?.theme || 'auto');
     renderSystemStatus(data.system || {});
     loadLocationSetup(data.system || {});
+    loadGeoTable();
   } catch (err) {
     $(`#systemStatusBody`).innerHTML = `<tr><td colspan="2" class="loading-cell" style="color:var(--red)">${escapeHtml(err.message)}</td></tr>`;
   }
@@ -4149,6 +4257,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Ayarlar kaydet butonları
   $(`#saveThresholds`)?.addEventListener('click', saveThresholds);
   $(`#seedExpectedBtn`)?.addEventListener('click', seedExpectedLocations);
+  $(`#geoSeedBtn`)?.addEventListener('click', geoSeed);
 
   /* Tarih aralığı + Filtrele: tasarımda ≥901px'te TOPBAR'da, mobilde başlık
      altında duruyor. CSS iki farklı kapsayıcı arasında taşıyamaz → tek öğe
@@ -4201,7 +4310,7 @@ document.addEventListener('DOMContentLoaded', () => {
   state.mapZoom = 1;
   const zoom = (f) => {
     state.mapZoom = Math.min(2.5, Math.max(0.6, (state.mapZoom || 1) * f));
-    renderLocationMap(state.locations || {});
+    renderWorldMap(state.locations || {});
   };
   $(`#mapZoomIn`)?.addEventListener('click', () => zoom(1.25));
   $(`#mapZoomOut`)?.addEventListener('click', () => zoom(0.8));
