@@ -884,7 +884,7 @@ function paintDonutCombined(svgId, legendId, totalId, entries, centerValue, empt
   legend.innerHTML = entries.map(([label, n], i) => `
     <div class="dl-row dl-row--combined">
       <span class="dl-name" title="${escapeHtml(label)}">
-        <span class="dl-dot" style="background:${donutColor(label, i)}"></span>${escapeHtml(label)}
+        <span class="dl-dot" style="background:${donutColor(label, i)}"></span><span class="dl-txt">${escapeHtml(label)}</span>
       </span>
       <span class="dl-count">${n.toLocaleString('tr-TR')} <span class="dl-pct">(${Math.round((n / sum) * 100)}%)</span></span>
     </div>`).join('');

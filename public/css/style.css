@@ -678,6 +678,41 @@ body.sidebar-collapsed .sidebar-footer { padding: 14px 0 0; }
 .donut-body--vert .donut-wrap { width: 128px; height: 128px; flex: 0 0 128px; }
 .donut-body--vert .donut-center b { font-size: 19px; }
 .donut-body--vert .dl-row { padding: 4px 0; font-size: 12.5px; gap: 8px; }
+/* Birleşik satırda ("12 (41%)") 2 çocuk var; .dl-row'un 3 kolonlu şablonu
+   ad sütununu sıkıştırıp "Doğru Lokasy…" diye kırpıyordu. */
+.dl-row--combined { grid-template-columns: minmax(0,1fr) auto; align-items: start; }
+.dl-row--combined .dl-count { min-width: 0; white-space: nowrap; }
+.dl-row--combined .dl-pct { min-width: 0; color: var(--text-muted); font-weight: 500; }
+/* Dar kolonda etiketi KIRPMA — sar. "Lokasyonu Güncellenen" gibi uzun etiketler
+   ellipsis'te okunamaz hale geliyordu; iki satır olması bilgi kaybından iyidir. */
+.dl-row--combined .dl-name {
+  white-space: normal; overflow: visible; text-overflow: clip;
+  align-items: flex-start; line-height: 1.35;
+}
+.dl-row--combined .dl-dot { margin-top: 4px; }
+/* Çıplak text node flex öğesi olarak küçülemez → sarmaz. Span'e alınıp
+   min-width:0 verilir ki dar kolonda satır kırılabilsin. */
+/* overflow-wrap:anywhere → yalnız GEREKİRSE kelime içinden kırar
+   ("Güncellenen" gibi uzun tek kelimeler dar kolonda taşıyordu). */
+.dl-row--combined .dl-txt { min-width: 0; flex: 1 1 auto; overflow-wrap: anywhere; }
+/* 3 kolonlu satırda kart daraldıkça donut yer bırakmıyordu (1440'ta efsaneye
+   yalnız 139px kalıyor, "Lokasyonda" kelimesi bölünemediği için taşıyordu).
+   Donut kademeli küçülür — efsane okunur kalır. */
+@media (max-width: 1700px) and (min-width: 1501px) {
+  .donut-body--vert { gap: 12px; padding: 16px; }
+  .donut-body--vert .donut-wrap { width: 104px; height: 104px; flex: 0 0 104px; }
+  .donut-body--vert .donut-center b { font-size: 17px; }
+  .donut-body--vert .donut-center span { font-size: 11px; }
+  .donut-body--vert .dl-row { font-size: 12px; }
+}
+/* ≤1500px: 3 kolonlu satırda kart öyle daralıyor ki yan yana düzende etiketler
+   kelime ORTASINDAN kırılıyordu ("Lokasyond|a"). Burada alt alta geçilir —
+   efsane kartın tam genişliğini kullanır, kırılma olmaz. */
+@media (max-width: 1500px) and (min-width: 1241px) {
+  .donut-body--vert { flex-direction: column; align-items: center; gap: 14px; padding: 18px; }
+  .donut-body--vert .donut-wrap { width: 118px; height: 118px; flex: 0 0 118px; }
+  .donut-body--vert .donut-legend { width: 100%; flex: 0 0 auto; }
+}
 /* DİKKAT: .donut-legend'in yatay düzendeki `flex: 1 1 220px` tanımı, dikey
    varyantta flex-basis'i YÜKSEKLİK olarak uygular → 2 satırlık efsane 220px yer
    kaplıyor ve kart boş boş uzuyordu. Dikeyde flex sıfırlanır. */
