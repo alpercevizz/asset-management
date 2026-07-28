@@ -384,6 +384,9 @@ function showView(name) {
   const navItem = $(`.nav-item[data-view="${name}"]`);
   if (navItem) navItem.classList.add('active');
 
+  // Alt sekme çubuğu: doğrudan karşılığı olmayan görünümlerde hiçbiri aktif olmaz
+  $$('.tab[data-view]').forEach((t) => t.classList.toggle('active', t.dataset.view === name));
+
   state.currentView = name;
   if (name === 'assets')   renderAssetsTable();
   if (name === 'licenses') loadLicenses();
@@ -2415,6 +2418,11 @@ function updateAlertsBadge(count) {
     bell.textContent = count > 99 ? '99+' : count;
     bell.style.display = count > 0 ? '' : 'none';
   }
+  const tabB = $(`#tabAlertBadge`);
+  if (tabB) {
+    tabB.textContent = count > 99 ? '99+' : count;
+    tabB.style.display = count > 0 ? '' : 'none';
+  }
   const badge = $(`#alertsNavBadge`);
   if (!badge) return;
   if (count > 0) {
@@ -3251,10 +3259,33 @@ document.addEventListener('DOMContentLoaded', () => {
   if (localStorage.getItem('sidebarCollapsed') === '1') {
     document.body.classList.add('sidebar-collapsed');
   }
+  // Masaüstünde daralt/genişlet, mobilde drawer aç/kapa (aynı düğme)
+  const isMobile = () => window.matchMedia('(max-width: 900px)').matches;
+  const openDrawer = () => {
+    document.body.classList.add('drawer-open');
+    const sc = $(`#drawerScrim`); if (sc) sc.hidden = false;
+  };
+  const closeDrawer = () => document.body.classList.remove('drawer-open');
+
   $(`#sidebarToggle`)?.addEventListener('click', () => {
+    if (isMobile()) {
+      document.body.classList.contains('drawer-open') ? closeDrawer() : openDrawer();
+      return;
+    }
     const collapsed = document.body.classList.toggle('sidebar-collapsed');
     localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0');
   });
+  $(`#drawerClose`)?.addEventListener('click', closeDrawer);
+  $(`#drawerScrim`)?.addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
+  // Menüden bir sayfa seçilince drawer kapanır
+  $$('.nav-item[data-view]').forEach((n) => n.addEventListener('click', () => { if (isMobile()) closeDrawer(); }));
+  // Masaüstüne dönülürse drawer durumu temizlenir
+  window.addEventListener('resize', () => { if (!isMobile()) closeDrawer(); });
+
+  // Alt sekme çubuğu
+  $$('.tab[data-view]').forEach((t) => t.addEventListener('click', () => showView(t.dataset.view)));
+  $(`#tabMore`)?.addEventListener('click', openDrawer);
 
   // Search
   $(`#searchInput`)?.addEventListener('input', (e) => {
