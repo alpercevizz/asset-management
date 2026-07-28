@@ -662,12 +662,21 @@ body.sidebar-collapsed .sidebar-footer { padding: 14px 0 0; }
 .kpi-trend--flat, .kpi-trend--none { color: var(--text-muted); font-weight: 500; }
 .kpi--primary .kpi-trend { color: rgba(255,255,255,.92); }
 
-/* align-items:start → kartlar satırın en uzununa GERİLMEZ (aksi halde donut
-   kartında yüzlerce piksel boşluk oluşuyordu) */
+/* Tasarımda satırdaki kartların ÜST ve ALT kenarları hizalı → stretch.
+   (Daha önce start kullanılmıştı çünkü efsanenin flex-basis hatası kartı
+   şişiriyordu; o hata giderildi. Şimdi eşit yükseklik güvenli.)
+   Gerilen kartlarda iç gövde flex:1 alır, içerik ÜSTTEN akar → ölü boşluk
+   kartın altında toplanır, ortada garip aralık oluşmaz. */
 .dash-row3 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.25fr) minmax(0,1fr);
-  gap: 18px; margin-bottom: 18px; align-items: start; }
+  gap: 18px; margin-bottom: 18px; align-items: stretch; }
 .dash-row3--b { grid-template-columns: minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr); }
-.dash-row3 > .card { margin-bottom: 0; }
+.dash-row3 > .card { margin-bottom: 0; display: flex; flex-direction: column; }
+.dash-row3 > .card > .table-wrap,
+.dash-row3 > .card > .act-list,
+.dash-row3 > .card > .sev-body,
+.dash-row3 > .card > .map-body { flex: 1 1 auto; }
+/* Donut gövdesi gerilirse içerik dikeyde ortalanır (üstte asılı kalmasın) */
+.dash-row3 > .card > .donut-body { flex: 1 1 auto; align-content: center; }
 .dash-row2 { display: grid; grid-template-columns: minmax(0,1.6fr) minmax(0,1fr); gap: 18px; margin-bottom: 18px; }
 .dash-row2 > .card { margin-bottom: 0; }
 
@@ -776,7 +785,8 @@ body.sidebar-collapsed .sidebar-footer { padding: 14px 0 0; }
 .act-item:last-child { border-bottom: none; }
 .act-ico { width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
 .act-txt { flex: 1; min-width: 0; }
-.act-txt strong { display: block; font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.4; }
+.act-txt strong { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.4;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .act-txt span { display: block; font-size: 12px; color: var(--text-muted); margin-top: 1px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .act-time { font-size: 11.5px; color: var(--text-muted); flex-shrink: 0; white-space: nowrap; }

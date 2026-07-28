@@ -960,7 +960,7 @@ function timeAgo(iso) {
 function renderActivities(events) {
   const box = $(`#activityList`);
   if (!box) return;
-  const list = (events || []).slice(-6).reverse();
+  const list = (events || []).slice(-5).reverse();
   if (!list.length) { box.innerHTML = '<p class="map-empty">Henüz kayıtlı işlem yok</p>'; return; }
   box.innerHTML = list.map((e) => {
     const [tone, icon] = ACT_ICON[e.to_status] || ACT_DEFAULT;
