@@ -1027,8 +1027,8 @@ function timeAgo(iso) {
   return d < 30 ? `${d} gün önce` : fmtDate(iso);
 }
 
-function renderActivities(events) {
-  const box = $(`#activityList`);
+function renderActivities(events, hedef = 'activityList') {
+  const box = $('#' + hedef);
   if (!box) return;
   const list = (events || []).slice(-5).reverse();
   if (!list.length) { box.innerHTML = '<p class="map-empty">Henüz kayıtlı işlem yok</p>'; return; }
@@ -2048,11 +2048,16 @@ async function renderAssetsTable() {
   if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="loading-cell">Yükleniyor...</td></tr>`;
   try {
     // Envanter + resmi zimmetler TEK seferde (cihaz başına istek N+1 olurdu)
-    const [data, asg, trendData] = await Promise.all([
+    const [data, asg, trendData, lcLog, locSum, anom, warr] = await Promise.all([
       fetchAssets({ size: 200 }),
       fetch('/api/assignments').then(r => r.ok ? r.json() : { assignments: {} }).catch(() => ({ assignments: {} })),
       // Dashboard'a hiç uğranmadan gelinirse trendler boş kalmasın
       state.trendSeries?.length ? Promise.resolve(null) : fetchTrends(state.rangeDays).catch(() => null),
+      // Sağ ray verisi (yalnız bir kez)
+      state.railEvents ? Promise.resolve(null) : fetchLifecycleLog(30).catch(() => ({ events: [] })),
+      state.locSummary ? Promise.resolve(null) : fetchLocationSummary().catch(() => ({ ...EMPTY_SUMMARY })),
+      state.critParts?.warranty !== undefined ? Promise.resolve(null) : fetchAnomalies().catch(() => ({})),
+      state.critParts?.warranty !== undefined ? Promise.resolve(null) : fetchWarranty().catch(() => ({})),
     ]);
     if (trendData) {
       state.trends = trendData.trends || {};
@@ -2060,6 +2065,17 @@ async function renderAssetsTable() {
       state.seriesOnline = trendData.series_online || [];
       state.seriesOffline = trendData.series_offline || [];
       state.seriesDepoda = trendData.series_depoda || [];
+    }
+    if (lcLog) state.railEvents = lcLog.events || lcLog.log || [];
+    if (locSum) state.locSummary = locSum;
+    if (anom || warr) {
+      state.critParts = {
+        drift:    state.locSummary?.tasinmis || 0,
+        warranty: warr?.expired?.items?.length || 0,
+        uptime:   anom?.long_uptime?.items?.length || 0,
+        disk:     anom?.low_disk?.items?.length || 0,
+        offline:  0,
+      };
     }
     state.allAssets = data.results || [];
     state.assets = state.allAssets;
@@ -2104,6 +2120,49 @@ function catIcon(cat) {
     <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${path}</svg></span>`;
 }
 
+/* Geniş ekran bağlam rayı — dashboard ile AYNI veriden, dikey liste sunumu.
+   Veri yoksa (Varlıklar'a doğrudan gelinmişse) sessizce boş kalır, hata vermez. */
+function renderAssetsRail() {
+  const parts = state.critParts || {};
+  const chips = [
+    { n: parts.drift || 0,    t: 'Lokasyon Dışı Cihazlar', tone: 'red' },
+    { n: parts.warranty || 0, t: 'Garanti Süresi Dolan',   tone: 'orange' },
+    { n: parts.uptime || 0,   t: 'Bakım Süresi Geçen',     tone: 'orange' },
+    { n: parts.disk || 0,     t: 'Disk Alanı Düşük',       tone: 'red' },
+  ];
+  setPill('railCritPill', chips.reduce((a, c) => a + c.n, 0));
+  const crit = $(`#railCrit`);
+  if (crit) {
+    crit.innerHTML = chips.map(c => `
+      <button class="sev-row" data-view="alerts">
+        <span class="sev-ico sev-ico--${c.tone}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </span>
+        <span class="sev-name">${c.t}<small>${c.n} cihaz</small></span>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>`).join('');
+    crit.querySelectorAll('.sev-row').forEach(r => r.addEventListener('click', () => showView('alerts')));
+  }
+
+  renderActivities(state.railEvents || [], 'railActivity');
+
+  // Öneri metni dashboard ile aynı kuraldan
+  const el = $(`#railInsightText`), btn = $(`#railInsightBtn`);
+  if (el && state.locSummary) {
+    const tmpText = $(`#insightText`), tmpBtn = $(`#insightBtn`);
+    const yedek = tmpText ? tmpText.textContent : null;
+    renderInsight(state.locSummary, parts);
+    if (tmpText) {
+      el.textContent = tmpText.textContent;
+      if (btn && tmpBtn) {
+        btn.style.display = tmpBtn.style.display;
+        btn.onclick = tmpBtn.onclick;
+      }
+      if (yedek !== null && state.currentView !== 'dashboard') tmpText.textContent = yedek;
+    }
+  }
+}
+
 /* Varlık durum kartları — tablet/masaüstünde tam KPI kartı, mobilde mini şerit.
    Tek fonksiyon, tek veri; sunumu CSS ayırır. Trend GERÇEK anlık görüntülerden
    (yoksa 'veri birikiyor' der — sıfır uydurmaz, dashboard ile aynı kural). */
@@ -2127,6 +2186,10 @@ function renderMiniStats() {
     { k: 'offline', ad: 'Kullanım Dışı', n: say('offline'), tone: 'red', renk: 'var(--red)',
       t: tr.offline, seri: state.seriesOffline, sc: '#ef4444',
       ico: '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>' },
+    // 5. kart yalnız geniş ekranda görünür (CSS); dashboard'la AYNI veri
+    { k: null, ad: 'Lokasyon', n: state.locSummary?.location_count ?? 0, tone: 'blue',
+      renk: 'var(--accent)', alt: 'Aktif lokasyon', git: 'locations',
+      ico: '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>' },
   ];
   box.innerHTML = kartlar.map((c, i) => `
     <button class="ms-card kpi" data-st="${c.k}" data-i="${i}">
@@ -2138,17 +2201,20 @@ function renderMiniStats() {
       </span>
       <span class="ms-value kpi-value" style="color:${c.renk}">${c.n}</span>
       <span class="kpi-foot">
-        <span class="kpi-trend" id="msTrend${i}"></span>
-        <span class="kpi-spark" id="msSpark${i}"></span>
+        ${c.alt ? `<span class="kpi-sub">${c.alt}</span>`
+                : `<span class="kpi-trend" id="msTrend${i}"></span>
+                   <span class="kpi-spark" id="msSpark${i}"></span>`}
       </span>
     </button>`).join('');
 
   kartlar.forEach((c, i) => {
+    if (c.alt) return;                       // Lokasyon kartında trend yok
     renderTrend(`msTrend${i}`, c.t, win);
     sparkFromSeries(`msSpark${i}`, c.seri || [], c.sc);
   });
 
-  box.querySelectorAll('.ms-card').forEach(b => b.addEventListener('click', () => {
+  box.querySelectorAll('.ms-card').forEach((b, i) => b.addEventListener('click', () => {
+    if (kartlar[i].git) { showView(kartlar[i].git); return; }
     const sel = $(`#filterStatus`); if (sel) sel.value = b.dataset.st;
     state.assetPage = 1; state.mobileShown = 0; paintAssetsTable();
   }));
@@ -2292,6 +2358,7 @@ function paintAssetsTable() {
   updateBulkBar();
   paintAssetCards(list, per);
   renderMiniStats();
+  renderAssetsRail();
 }
 
 /* Sayfalama — 1 2 … n-1 [n] n+1 … son */

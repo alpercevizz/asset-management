@@ -510,6 +510,8 @@
         <!-- Durum kartları — tasarımda filtre çubuğunun ÜSTÜNDE -->
         <div class="mini-stats" id="miniStats"></div>
 
+        <div class="assets-layout">
+        <div class="assets-main">
         <!-- Filtre çubuğu -->
         <div class="filter-bar">
           <div class="fb-search">
@@ -587,6 +589,35 @@
             <nav class="pager" id="assetsPager" aria-label="Sayfalama"></nav>
           </div>
         </div>
+        </div><!-- /assets-main -->
+
+        <!-- Geniş ekran bağlam rayı (tasarım referansı) -->
+        <aside class="assets-rail">
+          <div class="card">
+            <div class="card-header">
+              <h3>Son Aktiviteler</h3>
+              <button class="btn-ghost" data-view="lifecycle">Tümünü Gör</button>
+            </div>
+            <div class="act-list" id="railActivity"><p class="loading-cell">Yükleniyor...</p></div>
+          </div>
+
+          <div class="card card--alert">
+            <div class="card-header">
+              <h3 style="color:var(--red)">Kritik Uyarılar <span class="count-pill" id="railCritPill">0</span></h3>
+              <button class="btn-ghost" data-view="alerts">Tümünü Gör</button>
+            </div>
+            <div class="sev-body" id="railCrit"></div>
+          </div>
+
+          <div class="card card--insight">
+            <div class="card-header"><h3>AI Önerisi</h3></div>
+            <div class="insight-body">
+              <p id="railInsightText">Değerlendiriliyor...</p>
+              <button class="btn-add" id="railInsightBtn" style="display:none">İncele</button>
+            </div>
+          </div>
+        </aside>
+        </div><!-- /assets-layout -->
       </div>
 
       <!-- Licenses View -->
