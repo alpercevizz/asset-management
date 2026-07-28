@@ -672,11 +672,16 @@ body.sidebar-collapsed .sidebar-footer { padding: 14px 0 0; }
 .dash-row2 > .card { margin-bottom: 0; }
 
 .donut-body--compact { padding: 18px; gap: 18px; }
-.donut-body--vert { flex-direction: column; align-items: center; gap: 14px; padding: 20px 18px; }
+/* Tasarımda efsane donut'un SAĞINDA (altında değil) — dikey düzen kartı
+   gereksiz uzatıyordu. Dar kolona sığması için donut ve efsane küçültüldü. */
+.donut-body--vert { flex-direction: row; align-items: center; gap: 16px; padding: 18px; flex-wrap: nowrap; }
+.donut-body--vert .donut-wrap { width: 128px; height: 128px; flex: 0 0 128px; }
+.donut-body--vert .donut-center b { font-size: 19px; }
+.donut-body--vert .dl-row { padding: 4px 0; font-size: 12.5px; gap: 8px; }
 /* DİKKAT: .donut-legend'in yatay düzendeki `flex: 1 1 220px` tanımı, dikey
    varyantta flex-basis'i YÜKSEKLİK olarak uygular → 2 satırlık efsane 220px yer
    kaplıyor ve kart boş boş uzuyordu. Dikeyde flex sıfırlanır. */
-.donut-body--vert .donut-legend { flex: 0 0 auto; width: 100%; min-width: 0; }
+.donut-body--vert .donut-legend { flex: 1 1 auto; width: auto; min-width: 0; }
 .donut-wrap--sm { width: 150px; height: 150px; }
 .donut-wrap--sm + .donut-legend .dl-row { padding: 5px 0; font-size: 13px; }
 .donut-wrap--sm .donut-center b { font-size: 21px; }
