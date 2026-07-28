@@ -87,6 +87,9 @@ app.use(cors());
 // Model görselleri base64 data URL olarak gelir (2 MB dosya ≈ 2.7 MB gövde).
 // Dış dosya yükleme servisi/multipart bağımlılığı eklemek yerine bu yol seçildi.
 app.use(express.json({ limit: '4mb' }));
+// Klasik form gönderimi: JS'i çalışmayan/eski tarayıcılarda (bazı TV/kiosk
+// tarayıcıları) giriş yine de tamamlanabilsin diye.
+app.use(express.urlencoded({ extended: false }));
 app.use((req, res, next) => { res.setTimeout(360000); next(); }); // 6 dk Express timeout
 
 // ── Güvenlik başlıkları (Helmet yerine minimal, dış bağımlılık yok) ──────────
@@ -103,23 +106,16 @@ app.use((req, res, next) => {
 });
 
 // ── Login rate limit: IP başına 15 dakikada 10 deneme (brute-force koruması) ─
-const loginAttempts = new Map(); // ip → { count, resetAt }
-const LOGIN_WINDOW_MS = 15 * 60 * 1000;
-const LOGIN_MAX = 10;
+const { createLoginRateLimit } = require('./auth/login-rate-limit');
+const loginGuard = createLoginRateLimit();
+const loginFailed    = (req) => loginGuard.fail(loginGuard.clientIp(req));
+const loginSucceeded = (req) => loginGuard.succeed(loginGuard.clientIp(req));
+
 function loginRateLimit(req, res, next) {
-  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
-  const now = Date.now();
-  let rec = loginAttempts.get(ip);
-  if (!rec || rec.resetAt < now) rec = { count: 0, resetAt: now + LOGIN_WINDOW_MS };
-  rec.count++;
-  loginAttempts.set(ip, rec);
-  // Basit kova periyodik temizlik
-  if (loginAttempts.size > 5000) {
-    for (const [k, v] of loginAttempts) if (v.resetAt < now) loginAttempts.delete(k);
-  }
-  if (rec.count > LOGIN_MAX) {
-    const retryAfter = Math.ceil((rec.resetAt - now) / 1000);
+  const retryAfter = loginGuard.blockedFor(loginGuard.clientIp(req));
+  if (retryAfter > 0) {
     res.setHeader('Retry-After', String(retryAfter));
+    if (wantsHtml(req)) return res.redirect('/login?err=3&s=' + retryAfter);
     return res.status(429).json({ error: 'Çok fazla deneme. Lütfen daha sonra tekrar deneyin.', retry_after: retryAfter });
   }
   next();
@@ -199,15 +195,21 @@ app.post('/api/login', async (req, res) => {
   try {
     const user = await authenticateAsync(username, password);
     if (user) {
+      loginSucceeded(req);   // başarılı giriş kilit sayacını sıfırlar
       // "Beni hatırla": token exp'i ve cookie ömrü birlikte uzar (yalnız biri yetmez).
       const ttl = (req.body && req.body.remember) ? REMEMBER_MS : SESSION_MS;
       res.setHeader('Set-Cookie',
         `${COOKIE_NAME}=${makeToken(user, ttl)}; HttpOnly; Path=/; Max-Age=${ttl / 1000}; SameSite=Lax`);
+      // Form gönderimi (JS yok/bozuk) → yönlendir; XHR/fetch → JSON döndür.
+      if (wantsHtml(req)) return res.redirect(safeNext(req.body && req.body.next));
       return res.json({ success: true, user: { username: user.username, display: user.display, role: user.role } });
     }
+    loginFailed(req);        // yalnız BAŞARISIZ deneme sayılır
+    if (wantsHtml(req)) return res.redirect('/login?err=1');
     return res.status(401).json({ error: 'Kullanıcı adı veya parola hatalı' });
   } catch (err) {
     console.error('[POST /api/login]', err.message);
+    if (wantsHtml(req)) return res.redirect('/login?err=2');
     return res.status(503).json({ error: 'Kimlik doğrulama servisine ulaşılamadı' });
   }
 });
@@ -222,6 +224,23 @@ app.get('/api/me', (req, res) => {
   if (u) return res.json({ authenticated: true, user: u.username, display: u.display, role: u.role, upn: u.upn });
   return res.status(401).json({ authenticated: false });
 });
+
+/* İstek tarayıcı sayfa gezintisi mi (form POST), yoksa fetch/XHR mi?
+   Form gönderiminde JSON değil YÖNLENDİRME döneriz. */
+function wantsHtml(req) {
+  if (req.get('X-Requested-With')) return false;
+  const ct = String(req.get('Content-Type') || '');
+  if (ct.includes('application/json')) return false;
+  return String(req.get('Accept') || '').includes('text/html');
+}
+
+/* Açık yönlendirme (open redirect) koruması: yalnız site içi tek eğik çizgili
+   yol; /login'e geri dönüş engellenir (sonsuz döngü olurdu). */
+function safeNext(n) {
+  const v = String(n || '');
+  if (v.charAt(0) === '/' && v.charAt(1) !== '/' && v.indexOf('/login') !== 0) return v;
+  return '/';
+}
 
 // Login sayfası (public). Zaten girişliyse panele yönlendir.
 app.get('/login', (req, res) => {

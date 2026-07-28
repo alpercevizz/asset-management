@@ -635,3 +635,37 @@ test('snmp: CIDR genişletme + marka/kategori çıkarımı + parseDevice', () =>
 test('db: DATABASE_URL sqlite:./x.db → sqlite driver', () => {
   assert.equal(dbLayer.driver(), 'sqlite');
 });
+
+// ── Login brute-force koruması ─────────────────────────────────────────────────
+test('login rate limit: yalnız başarısız denemeler sayılır, başarı sıfırlar', () => {
+  const { createLoginRateLimit } = require('../auth/login-rate-limit');
+  let simdi = 1_000_000;
+  const g = createLoginRateLimit({ windowMs: 900_000, max: 10, now: () => simdi });
+  const ip = '10.0.0.7';
+
+  // 1) Başarılı girişler HİÇ saymaz — tek NAT IP'si arkasındaki ofis kilitlenmemeli
+  for (let i = 0; i < 50; i++) { g.succeed(ip); assert.equal(g.blockedFor(ip), 0); }
+
+  // 2) 10 başarısız deneme → kilit (brute-force koruması duruyor)
+  for (let i = 0; i < 9; i++) g.fail(ip);
+  assert.equal(g.blockedFor(ip), 0, '9 denemede kilit olmamalı');
+  g.fail(ip);
+  assert.ok(g.blockedFor(ip) > 0, '10. denemede kilitlenmeli');
+
+  // 3) Farklı IP etkilenmez
+  assert.equal(g.blockedFor('10.0.0.8'), 0);
+
+  // 4) Pencere dolunca kilit kalkar
+  simdi += 900_001;
+  assert.equal(g.blockedFor(ip), 0, 'pencere sonunda serbest kalmalı');
+
+  // 5) Kilitlenmeden önceki başarı sayacı sıfırlar
+  for (let i = 0; i < 9; i++) g.fail(ip);
+  g.succeed(ip);
+  for (let i = 0; i < 9; i++) g.fail(ip);
+  assert.equal(g.blockedFor(ip), 0, 'başarılı giriş sayacı sıfırlamalı');
+
+  // 6) x-forwarded-for önceliklidir (Traefik arkasında gerçek istemci IP'si)
+  assert.equal(g.clientIp({ headers: { 'x-forwarded-for': '1.2.3.4, 5.6.7.8' }, socket: { remoteAddress: '9.9.9.9' } }), '1.2.3.4');
+  assert.equal(g.clientIp({ headers: {}, socket: { remoteAddress: '9.9.9.9' } }), '9.9.9.9');
+});

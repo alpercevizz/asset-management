@@ -43,3 +43,11 @@ Thumbs.db
 
 # Yüklenen cihaz model görselleri — kurulum verisi, repoya girmez
 data/device-images/
+
+# Yerel tasarım referansları ve tek seferlik yardımcı scriptler (depoya girmez)
+Tasarım/
+*.pptx
+clk.js
+deck.js
+rep.js
+sen.js

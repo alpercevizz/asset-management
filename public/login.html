@@ -548,7 +548,9 @@
           </div>
         </div>
 
-        <form id="loginForm" novalidate>
+        <form id="loginForm" method="post" action="/api/login" novalidate>
+          <!-- JS çalışmazsa formun kendisi POST edilir; hedef bu alanla taşınır. -->
+          <input type="hidden" id="nextField" name="next" value="" />
           <div class="note err" id="errBox" role="alert"></div>
           <div class="note info" id="infoBox"></div>
 
@@ -581,7 +583,7 @@
 
           <div class="row">
             <label class="remember">
-              <input type="checkbox" id="remember" checked />
+              <input type="checkbox" id="remember" name="remember" checked />
               <span class="box">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
               </span>
@@ -667,8 +669,29 @@
       $('errBox').classList.remove('show');
     });
 
+    /* ── Sayfa açılışı: hedefi gizli alana taşı, sunucu hata kodunu göster ──
+       (JS'siz form gönderimi de doğru sayfaya dönebilsin diye.) */
+    (function () {
+      try {
+        const q = location.search || '';
+        const m = /[?&]next=([^&]+)/.exec(q);
+        if (m) $('nextField').value = decodeURIComponent(m[1]);
+        if (/[?&]err=/.test(q)) {
+          const e = $('errBox');
+          const s = /[?&]s=(\d+)/.exec(q);
+          e.textContent = /err=2/.test(q) ? 'Kimlik doğrulama servisine ulaşılamadı.'
+            : /err=3/.test(q) ? 'Çok fazla başarısız deneme. ' + (s ? Math.ceil(s[1] / 60) + ' dakika ' : '') + 'sonra tekrar deneyin.'
+            : 'Kullanıcı adı veya parola hatalı';
+          e.classList.add('show');
+        }
+      } catch (_) { /* eski tarayıcı: sessizce geç */ }
+    })();
+
     /* ── Giriş ── */
     $('loginForm').addEventListener('submit', async (e) => {
+      /* fetch yoksa (çok eski TV/kiosk tarayıcıları) araya girme: formun kendisi
+         POST edilsin, sunucu yönlendirsin. preventDefault ETMİYORUZ. */
+      if (typeof fetch !== 'function') return;
       e.preventDefault();
       const btn = $('submitBtn'), err = $('errBox');
       err.classList.remove('show');
@@ -688,8 +711,21 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Giriş başarısız');
-        const next = new URLSearchParams(location.search).get('next');
-        window.location.href = (next && next.startsWith('/')) ? next : '/';
+
+        /* Yönlendirme, giriş BAŞARILI olduktan sonra hiçbir koşulda atlanmamalı.
+           Eski TV/kiosk tarayıcılarında URLSearchParams bulunmayabiliyor; orada
+           istisna fırlayınca oturum açılmış olmasına rağmen kullanıcı login
+           ekranında kalıyordu. Hedef ayrıştırma kendi try/catch'inde ve
+           URLSearchParams yerine düz regex ile yapılıyor. */
+        let hedef = '/';
+        try {
+          const m = /[?&]next=([^&]+)/.exec(location.search || '');
+          const n = m ? decodeURIComponent(m[1]) : '';
+          // Yalnız site içi, tek eğik çizgili yollar (açık yönlendirme koruması)
+          if (n && n.charAt(0) === '/' && n.charAt(1) !== '/' && n.indexOf('/login') !== 0) hedef = n;
+        } catch (_) { hedef = '/'; }
+        window.location.replace(hedef);
+        return;
       } catch (ex) {
         err.textContent = ex.message;
         err.classList.add('show');

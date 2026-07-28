@@ -561,7 +561,14 @@ async function loadDashboard() {
    Ekran GENİŞLİĞİNDEN "bu bir TV" sonucu çıkarılamaz (4K TV tarayıcıları dPR 2
    ile 1920 CSS px raporlar). Bu yüzden AÇIK TERCİH; yalnız ilk açılışta
    ≥2200px ise önerilen varsayılan olarak açılır. */
+const TV_MIN_WIDTH = 1000;   // altında duvar ekranı düzeni okunmuyor
+
 function applyTvMode(on) {
+  /* Telefon/küçük tablette TV modu ANLAMSIZ: operasyon merkezi 4-6 kolonluk
+     duvar düzeni, 390px'te taşıyor. Kayıtlı tercih '1' kalmış bir cihaz dar
+     ekranda açılırsa burada kapatılır (localStorage cihaza özel → kalıcı kapat
+     doğru davranış; geniş ekranda kullanıcı yeniden açar). */
+  if (on && window.innerWidth < TV_MIN_WIDTH) on = false;
   document.body.classList.toggle('tv-mode', !!on);
   localStorage.setItem('tvMode', on ? '1' : '0');
   const btn = $(`#tvToggle`);
@@ -4312,6 +4319,10 @@ document.addEventListener('DOMContentLoaded', () => {
   applyTvMode(savedTv === null ? window.matchMedia('(min-width: 2200px)').matches : savedTv === '1');
   $(`#tvToggle`)?.addEventListener('click', () =>
     applyTvMode(!document.body.classList.contains('tv-mode')));
+  // Ekran daraldıysa (döndürme / pencere küçültme) TV modundan otomatik çık
+  window.addEventListener('resize', () => {
+    if (document.body.classList.contains('tv-mode') && window.innerWidth < TV_MIN_WIDTH) applyTvMode(false);
+  });
 
   // Hesap menüsü (topbar avatar + sidebar üç nokta)
   const userMenu = $(`#userMenu`);
