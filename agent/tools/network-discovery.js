@@ -95,7 +95,11 @@ async function scanSegment(seg, activeByMac, activeByIp) {
           live_ip: (live && live.ip) || a.ip_address || '—',
           live_mac: (live && live.mac) || a.mac_address || '—',
           evidence: live ? 'ağ taramasında yanıt veriyor' : 'envanter durumu=online',
-          message: `KRİTİK GÜVENLİK İHLALİ: '${cur.status}' statüsündeki ${a.hostname || a.serial_number} cihazı CANLI AĞDA AKTİF! (${(live && live.ip) || '—'} / ${(live && live.mac) || '—'}) — fiziksel konum ile kayıt çelişiyor. [VLAN ${seg.vlan}]`,
+          // Ağ beslemesi yoksa (live=null) adres bilgisi de yoktur → boş "(— / —)"
+          // yazmak yerine kanıtın envanter durumundan geldiğini söyle.
+          message: `KRİTİK GÜVENLİK İHLALİ: '${cur.status}' statüsündeki ${a.hostname || a.serial_number} cihazı CANLI AĞDA AKTİF! ` +
+            (live ? `(${live.ip || '—'} / ${live.mac || '—'})` : '(envanter durumu: online)') +
+            ` — fiziksel konum ile kayıt çelişiyor. [VLAN ${seg.vlan}]`,
         });
       }
     }
