@@ -1772,35 +1772,50 @@ body.tv-mode .page-header h1 { font-size: 34px; }
    7 sütunluk tablo 390px'e sığmıyor; yatay kaydırma telefonda kötü bir
    deneyim. Aynı veriden kart listesi çizilir (tasarım referansı).
    Masaüstünde kartlar, mobilde tablo GİZLİ — tek kaynak, iki sunum. */
-.asset-cards, .cards-foot, .mini-stats { display: none; }
+.asset-cards, .cards-foot { display: none; }
+
+/* Varlık durum kartları — tasarımda tablet ve mobilde var.
+   ≥901: 4 kolonluk tam KPI kartı · ≤900: yatay kaydırılan mini şerit. */
+.mini-stats {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 14px; margin-bottom: 16px;
+}
+.mini-stats .ms-card {
+  text-align: left; cursor: pointer; font-family: inherit;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 16px; padding: 16px 18px 14px;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow .2s, transform .2s;
+  display: block;
+}
+.mini-stats .ms-card:hover { box-shadow: var(--shadow); transform: translateY(-2px); }
+.mini-stats .kpi-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.mini-stats .ms-value { display: block; font-family: var(--font-display); font-size: 30px;
+  font-weight: 800; line-height: 1; letter-spacing: -.035em; margin-bottom: 10px; }
+.mini-stats .kpi-foot { display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 10px; min-height: 24px; }
 
 @media (max-width: 900px) {
-  /* Tablo ve sayfalama gizlenir, kart listesi görünür */
-  #view-assets .table-wrap, #view-assets .table-foot { display: none; }
-  .asset-cards { display: block; }
-  .cards-foot { display: block; padding: 14px 16px 18px; }
-
-  /* Mini durum şeridi — yatay kaydırılabilir */
+  /* Mini durum şeridi — yatay kaydırılabilir (kart yapısı sadeleşir) */
   .mini-stats {
     display: flex; gap: 10px; margin-bottom: 14px;
     overflow-x: auto; scrollbar-width: none; padding-bottom: 2px;
   }
+  .mini-stats .kpi-foot { display: none; }          /* mobilde trend/sparkline yok */
+  .mini-stats .kpi-top { flex-direction: column; gap: 5px; margin-bottom: 5px; }
   .mini-stats::-webkit-scrollbar { display: none; }
-  .ms-card {
-    flex: 1 0 86px; min-width: 86px;
-    background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: 14px; padding: 12px 10px;
-    display: flex; flex-direction: column; align-items: center; gap: 5px;
-    box-shadow: var(--shadow-sm); cursor: pointer;
-    font-family: inherit; text-align: center;
+  .mini-stats .ms-card {
+    flex: 1 0 86px; min-width: 86px; padding: 12px 8px;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    text-align: center; border-radius: 14px;
   }
+  .mini-stats .ms-card:hover { transform: none; }
   .ms-card:active { transform: scale(.97); }
   .ms-ico { width: 32px; height: 32px; border-radius: 10px;
     display: flex; align-items: center; justify-content: center; }
   .ms-label { font-size: 11px; font-weight: 600; line-height: 1.25;
     text-align: center; white-space: normal; }
-  .ms-value { font-family: var(--font-display); font-size: 21px; font-weight: 800;
-    letter-spacing: -.03em; line-height: 1; }
+  .mini-stats .ms-value { font-size: 21px; margin-bottom: 0; }
 
   /* Kart satırı */
   .ac-item {
@@ -1846,6 +1861,38 @@ body.tv-mode .page-header h1 { font-size: 34px; }
   .fb-sel { flex: 1 1 calc(50% - 6px); }
   #clearFiltersBtn { flex: 1 1 100%; justify-content: center; }
   .page-header--assets .count-chip { font-size: 12px; padding: 5px 12px; }
+}
+
+/* ── Varlıklar TABLET (1101–1440): tablo sığsın diye kompaktlaştırma ──────
+   1180px'te tablo 981px istiyordu, kap 890px → yatay kaydırma oluşuyordu. */
+@media (min-width: 1101px) and (max-width: 1440px) {
+  .mini-stats { gap: 12px; margin-bottom: 14px; }
+  .mini-stats .ms-card { padding: 13px 14px 12px; border-radius: 14px; }
+  .mini-stats .ms-value { font-size: 25px; margin-bottom: 8px; }
+  .mini-stats .kpi-label { font-size: 12px; }
+  .mini-stats .kpi-ico { width: 30px; height: 30px; }
+  .mini-stats .kpi-trend { font-size: 11px; white-space: nowrap; }
+  .mini-stats .kpi-spark svg { width: 46px; height: 22px; }
+
+  .filter-bar { gap: 10px; margin-bottom: 14px; }
+  .fb-sel { flex: 0 1 160px; padding: 10px 12px; font-size: 13px; }
+  .fb-search { padding: 9px 12px; }
+
+  .asset-table--v2 th { padding: 12px 8px; font-size: 10.5px; letter-spacing: .02em; }
+  .asset-table--v2 td { padding: 11px 8px; font-size: 12.5px; }
+  .asset-table--v2 th:first-child, .asset-table--v2 td:first-child { padding-left: 14px; }
+  .asset-table--v2 th:last-child, .asset-table--v2 td:last-child { padding-right: 14px; }
+  .asset-table--v2 .code-cell { max-width: 150px; font-size: 11.5px; }
+  .asset-table--v2 .col-actions { width: 112px; }
+  .ra-btn { width: 29px; height: 29px; }
+}
+
+/* ── ≤1100px: 8 sütunlu tablo artık sığmaz (1024'te kap 710px) → KART listesi.
+   Kenar çubuğu 901–1100 arası hâlâ görünür; yalnız tablo sunumu değişir. ── */
+@media (max-width: 1100px) {
+  #view-assets .table-wrap, #view-assets .table-foot { display: none; }
+  .asset-cards { display: block; }
+  .cards-foot { display: block; padding: 14px 16px 18px; }
 }
 
 /* ── Cihaz modalı mobilde ALT SAYFA (bottom sheet) ── */

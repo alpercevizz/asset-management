@@ -2048,10 +2048,19 @@ async function renderAssetsTable() {
   if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="loading-cell">Yükleniyor...</td></tr>`;
   try {
     // Envanter + resmi zimmetler TEK seferde (cihaz başına istek N+1 olurdu)
-    const [data, asg] = await Promise.all([
+    const [data, asg, trendData] = await Promise.all([
       fetchAssets({ size: 200 }),
       fetch('/api/assignments').then(r => r.ok ? r.json() : { assignments: {} }).catch(() => ({ assignments: {} })),
+      // Dashboard'a hiç uğranmadan gelinirse trendler boş kalmasın
+      state.trendSeries?.length ? Promise.resolve(null) : fetchTrends(state.rangeDays).catch(() => null),
     ]);
+    if (trendData) {
+      state.trends = trendData.trends || {};
+      state.trendSeries = trendData.series || [];
+      state.seriesOnline = trendData.series_online || [];
+      state.seriesOffline = trendData.series_offline || [];
+      state.seriesDepoda = trendData.series_depoda || [];
+    }
     state.allAssets = data.results || [];
     state.assets = state.allAssets;
     state.assignments = asg.assignments || {};
@@ -2095,30 +2104,50 @@ function catIcon(cat) {
     <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${path}</svg></span>`;
 }
 
-/* Mobil mini durum şeridi — gerçek sayılar, tıklayınca durum filtresi uygular */
+/* Varlık durum kartları — tablet/masaüstünde tam KPI kartı, mobilde mini şerit.
+   Tek fonksiyon, tek veri; sunumu CSS ayırır. Trend GERÇEK anlık görüntülerden
+   (yoksa 'veri birikiyor' der — sıfır uydurmaz, dashboard ile aynı kural). */
 function renderMiniStats() {
   const box = $(`#miniStats`);
   if (!box) return;
   const all = state.allAssets || [];
   const say = (st) => all.filter(a => (a.status || '') === st).length;
+  const tr = state.trends || {};
+  const win = tr.window_days || 30;
   const kartlar = [
-    { k: '',        ad: 'Toplam',        n: all.length,      tone: 'blue',
+    { k: '', ad: 'Toplam Varlık', n: all.length, tone: 'blue', renk: 'var(--accent)',
+      t: tr.total, seri: state.trendSeries, sc: '#4f46e5',
       ico: '<path d="M12 2l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5"/>' },
-    { k: 'online',  ad: 'Çevrimiçi',     n: say('online'),   tone: 'green',
+    { k: 'online', ad: 'Aktif', n: say('online'), tone: 'green', renk: 'var(--green)',
+      t: tr.online, seri: state.seriesOnline, sc: '#10b981',
       ico: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/>' },
-    { k: 'depoda',  ad: 'Depoda',        n: say('depoda'),   tone: 'orange',
+    { k: 'depoda', ad: 'Depoda', n: say('depoda'), tone: 'orange', renk: 'var(--orange)',
+      t: tr.depoda, seri: state.seriesDepoda, sc: '#f59e0b',
       ico: '<path d="M3 9l9-6 9 6v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21V12h6v9"/>' },
-    { k: 'offline', ad: 'Çevrimdışı',    n: say('offline'),  tone: 'red',
+    { k: 'offline', ad: 'Kullanım Dışı', n: say('offline'), tone: 'red', renk: 'var(--red)',
+      t: tr.offline, seri: state.seriesOffline, sc: '#ef4444',
       ico: '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>' },
   ];
-  box.innerHTML = kartlar.map(c => `
-    <button class="ms-card" data-st="${c.k}">
-      <span class="ms-ico kpi-ico--${c.tone}">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.ico}</svg>
+  box.innerHTML = kartlar.map((c, i) => `
+    <button class="ms-card kpi" data-st="${c.k}" data-i="${i}">
+      <span class="kpi-top">
+        <span class="ms-ico kpi-ico kpi-ico--${c.tone}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.ico}</svg>
+        </span>
+        <span class="ms-label kpi-label" style="color:${c.renk}">${c.ad}</span>
       </span>
-      <span class="ms-label kpi--${c.tone === 'blue' ? 'loc' : c.tone}" style="color:var(--${c.tone === 'blue' ? 'accent' : c.tone})">${c.ad}</span>
-      <span class="ms-value" style="color:var(--${c.tone === 'blue' ? 'accent' : c.tone})">${c.n}</span>
+      <span class="ms-value kpi-value" style="color:${c.renk}">${c.n}</span>
+      <span class="kpi-foot">
+        <span class="kpi-trend" id="msTrend${i}"></span>
+        <span class="kpi-spark" id="msSpark${i}"></span>
+      </span>
     </button>`).join('');
+
+  kartlar.forEach((c, i) => {
+    renderTrend(`msTrend${i}`, c.t, win);
+    sparkFromSeries(`msSpark${i}`, c.seri || [], c.sc);
+  });
+
   box.querySelectorAll('.ms-card').forEach(b => b.addEventListener('click', () => {
     const sel = $(`#filterStatus`); if (sel) sel.value = b.dataset.st;
     state.assetPage = 1; state.mobileShown = 0; paintAssetsTable();
