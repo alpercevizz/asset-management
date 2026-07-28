@@ -84,7 +84,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(express.json());
+// Model görselleri base64 data URL olarak gelir (2 MB dosya ≈ 2.7 MB gövde).
+// Dış dosya yükleme servisi/multipart bağımlılığı eklemek yerine bu yol seçildi.
+app.use(express.json({ limit: '4mb' }));
 app.use((req, res, next) => { res.setTimeout(360000); next(); }); // 6 dk Express timeout
 
 // ── Güvenlik başlıkları (Helmet yerine minimal, dış bağımlılık yok) ──────────
@@ -939,6 +941,99 @@ app.get('/api/trends', async (req, res) => {
     res.json({ current, trends, series, series_online: sOnline, series_offline: sOffline, series_depoda: sDepoda });
   } catch (err) {
     res.status(500).json({ error: 'Trend alınamadı', detail: err.message });
+  }
+});
+
+// ─── Varlık Detayı: ek alanlar + model görselleri ────────────────────────────
+const detailTools = require('./agent/tools/asset-detail-tools');
+
+// Model görselleri statik servis edilir (kendi sunucumuzdan — dış CDN yok)
+app.use('/device-images', express.static(detailTools.IMG_DIR, {
+  maxAge: '7d',
+  setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff'),
+}));
+
+// Tek varlığın tüm detayı: envanter + ek alanlar + zimmet + lokasyon + görsel
+app.get('/api/assets/:id/detail', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const [inv, detail, images, asg, exp, stay] = await Promise.all([
+      getAllAssets({ size: 200 }),
+      detailTools.getDetail(id),
+      detailTools.listImages(),
+      assignmentTools.getAssignment(id).catch(() => null),
+      locationTools.getExpected(id).catch(() => null),
+      locationTools.getCurrentStay(id).catch(() => null),
+    ]);
+    const asset = (inv.results || []).find(a => String(a.id) === String(id));
+    if (!asset) return res.status(404).json({ error: 'Varlık bulunamadı' });
+    const img = detailTools.matchImage(images, asset);
+    res.json({
+      asset,
+      detail: detail || null,
+      usage: detailTools.kullanimSuresi(detail && detail.purchase_date),
+      image: img ? { url: '/device-images/' + img.file, match: img.model_key ? 'model' : (img.brand_key ? 'marka' : 'kategori') } : null,
+      assignment: asg || null,
+      expected_location: exp || null,
+      current_stay: stay || null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Detay alınamadı', detail: err.message });
+  }
+});
+
+app.put('/api/assets/:id/detail', requireRole('it', 'admin'), async (req, res) => {
+  try {
+    const me = currentUser(req);
+    const row = await detailTools.setDetail(req.params.id, req.body || {}, me ? me.username : 'system');
+    res.json({ success: true, detail: row });
+  } catch (err) {
+    res.status(400).json({ error: 'Kaydedilemedi', detail: err.message });
+  }
+});
+
+// ─── Model görselleri ────────────────────────────────────────────────────────
+app.get('/api/device-images', async (req, res) => {
+  try {
+    const [rows, inv] = await Promise.all([detailTools.listImages(), getAllAssets({ size: 200 })]);
+    // Envanterdeki benzersiz marka+model listesi — hangi modele görsel eksik, görünsün
+    const modeller = {};
+    (inv.results || []).forEach(a => {
+      const k = detailTools.normKey(a.brand) + '|' + detailTools.normKey(a.model);
+      if (!modeller[k]) modeller[k] = {
+        brand: a.brand || '', model: a.model || '', category: a.category || 'Diğer', count: 0,
+      };
+      modeller[k].count++;
+    });
+    const liste = Object.values(modeller).map(m => ({
+      ...m,
+      image: (() => {
+        const i = detailTools.matchImage(rows, m);
+        return i ? { id: i.id, url: '/device-images/' + i.file, match: i.model_key ? 'model' : (i.brand_key ? 'marka' : 'kategori') } : null;
+      })(),
+    })).sort((a, b) => b.count - a.count);
+    res.json({ images: rows.map(r => ({ ...r, url: '/device-images/' + r.file })), models: liste });
+  } catch (err) {
+    res.status(500).json({ error: 'Görseller alınamadı', detail: err.message });
+  }
+});
+
+app.post('/api/device-images', requireRole('it', 'admin'), async (req, res) => {
+  try {
+    const me = currentUser(req);
+    const row = await detailTools.saveImage({ ...(req.body || {}), by: me ? me.username : 'system' });
+    res.json({ success: true, image: { ...row, url: '/device-images/' + row.file } });
+  } catch (err) {
+    res.status(400).json({ error: 'Görsel kaydedilemedi', detail: err.message });
+  }
+});
+
+app.delete('/api/device-images/:id', requireRole('it', 'admin'), async (req, res) => {
+  try {
+    const ok = await detailTools.deleteImage(req.params.id);
+    res.json({ success: ok });
+  } catch (err) {
+    res.status(400).json({ error: 'Silinemedi', detail: err.message });
   }
 });
 

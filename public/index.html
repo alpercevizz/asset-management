@@ -1475,6 +1475,32 @@
 
         <div class="card">
           <div class="card-header">
+            <h3>Cihaz Model Görselleri</h3>
+            <span class="link-small">Görsel modele bağlanır — o modeldeki tüm cihazlarda görünür</span>
+          </div>
+          <div class="chart-container">
+            <p style="font-size:12.5px;color:var(--text-muted);line-height:1.7;margin-bottom:12px">
+              Eşleşme sırası: <strong>tam model → model ailesi → marka+kategori → kategori</strong>.
+              Örneğin <em>Zebra TC57</em> yüklerseniz <em>TC57 Touch Computer</em> de onu kullanır.
+              Görseli olmayan cihazlarda yerleşik kategori çizimi gösterilir — sayfa boş kalmaz.
+              PNG / JPEG / WebP, en fazla 2 MB. Görseller kendi sunucunuzda saklanır, dışarı istek yapılmaz.
+            </p>
+            <div class="table-wrap">
+              <table class="asset-table">
+                <thead><tr><th>Görsel</th><th>Marka / Model</th><th>Kategori</th><th>Cihaz</th><th>Eşleşme</th><th></th></tr></thead>
+                <tbody id="imgBody"><tr><td colspan="6" class="loading-cell">Yükleniyor...</td></tr></tbody>
+              </table>
+            </div>
+            <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <button class="btn-pdf" id="imgCatBtn">Kategori geneli görsel yükle</button>
+              <span id="imgMsg" style="font-size:12px;color:var(--green)"></span>
+            </div>
+            <input type="file" id="imgFile" accept="image/png,image/jpeg,image/webp" hidden>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
             <h3>Lokasyon Koordinatları</h3>
             <span class="link-small">Harita için — dış geocoding servisi kullanılmaz</span>
           </div>
@@ -1709,7 +1735,8 @@
 
   <!-- Cihaz Detay & Geçmiş Modalı -->
   <div class="modal-overlay" id="deviceModalOverlay">
-    <div class="modal" style="max-width:560px;">
+    <!-- Genişlik CSS'ten yönetilir (satır içi stil, medya sorgularını eziyordu) -->
+    <div class="modal">
       <div class="modal-header">
         <h3 id="deviceModalTitle">Cihaz Detayı</h3>
         <button class="btn-icon" id="closeDeviceModal">

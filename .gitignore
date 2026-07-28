@@ -40,3 +40,6 @@ location-agent/config.json
 .idea/
 .DS_Store
 Thumbs.db
+
+# Yüklenen cihaz model görselleri — kurulum verisi, repoya girmez
+data/device-images/

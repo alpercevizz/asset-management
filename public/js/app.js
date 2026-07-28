@@ -1529,6 +1529,94 @@ function renderLocationChart(assets) {
 }
 
 
+
+/* ═══ Cihaz model görselleri (Ayarlar) ════════════════════════════════════
+   Görsel MODELE bağlanır. Dosya tarayıcıda base64'e çevrilip JSON ile gönderilir
+   (multipart bağımlılığı eklemeye gerek kalmadı); sunucu tür ve boyut doğrular.
+   SVG kabul EDİLMEZ — panelde gösterilecek, içinde script taşıyabilir. */
+let _imgHedef = null;   // { brand, model, category } | { category } (kategori geneli)
+
+async function loadImageTable() {
+  const body = $(`#imgBody`);
+  if (!body) return;
+  try {
+    const r = await fetch('/api/device-images');
+    if (r.status === 403) { body.innerHTML = '<tr><td colspan="6" class="loading-cell">Yetki yok.</td></tr>'; return; }
+    const j = await r.json();
+    const modeller = j.models || [];
+    if (!modeller.length) { body.innerHTML = '<tr><td colspan="6" class="loading-cell">Envanterde model yok</td></tr>'; return; }
+    const rozet = { model: 'tam model', marka: 'marka+kategori', kategori: 'kategori geneli' };
+    body.innerHTML = modeller.map((m, i) => `
+      <tr>
+        <td>${m.image
+          ? `<img src="${m.image.url}" alt="" style="width:44px;height:44px;object-fit:contain;border-radius:8px;background:var(--bg-card2)">`
+          : '<span style="color:var(--text-muted);font-size:11.5px">yok</span>'}</td>
+        <td class="hostname-cell">${escapeHtml((m.brand + ' ' + m.model).trim() || '(marka/model boş)')}</td>
+        <td>${categoryBadge(m.category)}</td>
+        <td>${m.count}</td>
+        <td>${m.image
+          ? `<span class="badge badge--online">${rozet[m.image.match] || m.image.match}</span>`
+          : '<span class="badge badge--unknown">çizim</span>'}</td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="btn-pdf" data-img="${i}">${m.image && m.image.match === 'model' ? 'Değiştir' : 'Görsel yükle'}</button>
+          ${m.image && m.image.match === 'model' ? `<button class="btn-pdf" data-imgdel="${m.image.id}" style="color:var(--red)">Sil</button>` : ''}
+        </td>
+      </tr>`).join('');
+    body.querySelectorAll('[data-img]').forEach(b => b.addEventListener('click', () => {
+      const m = modeller[Number(b.dataset.img)];
+      _imgHedef = { brand: m.brand, model: m.model, category: m.category };
+      $(`#imgFile`)?.click();
+    }));
+    body.querySelectorAll('[data-imgdel]').forEach(b =>
+      b.addEventListener('click', () => imageDelete(b.dataset.imgdel)));
+  } catch (err) {
+    body.innerHTML = `<tr><td colspan="6" class="loading-cell" style="color:var(--red)">${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+function imageCategoryPrompt() {
+  const kat = prompt('Hangi kategori için genel görsel? (Bilgisayar, Sunucu, Telefon, Tablet, El Terminali, Yazıcı, Ağ Aygıtı, Çevre Aygıtı)');
+  if (!kat || !kat.trim()) return;
+  _imgHedef = { brand: '', model: '', category: kat.trim() };
+  $(`#imgFile`)?.click();
+}
+
+async function imageUpload(file) {
+  const msg = $(`#imgMsg`);
+  if (!_imgHedef || !file) return;
+  if (file.size > 2 * 1024 * 1024) {
+    if (msg) { msg.style.color = 'var(--red)'; msg.textContent = `Görsel çok büyük (${Math.round(file.size / 1024)} KB, en fazla 2 MB).`; }
+    return;
+  }
+  const dataUrl = await new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => res(fr.result);
+    fr.onerror = () => rej(new Error('Dosya okunamadı'));
+    fr.readAsDataURL(file);
+  });
+  try {
+    const r = await fetch('/api/device-images', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ..._imgHedef, dataUrl }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || j.error);
+    if (msg) { msg.style.color = 'var(--green)'; msg.textContent = '✓ Görsel yüklendi'; setTimeout(() => msg.textContent = '', 3000); }
+    loadImageTable();
+  } catch (err) {
+    if (msg) { msg.style.color = 'var(--red)'; msg.textContent = 'Hata: ' + err.message; }
+  } finally { _imgHedef = null; }
+}
+
+async function imageDelete(id) {
+  if (!confirm('Bu model görseli silinsin mi? Cihazlar yerleşik kategori çizimine döner.')) return;
+  try {
+    const r = await fetch('/api/device-images/' + id, { method: 'DELETE' });
+    if (!r.ok) throw new Error((await r.json()).detail || 'silinemedi');
+    loadImageTable();
+  } catch (err) { alert('Silinemedi: ' + err.message); }
+}
+
 /* ═══ Lokasyon koordinatları (Ayarlar) ════════════════════════════════════ */
 async function loadGeoTable() {
   const body = $(`#geoBody`);
@@ -1585,6 +1673,7 @@ async function geoSave(location, lat, lon, label) {
     if (!r.ok) throw new Error(j.detail || j.error);
     state.locGeo = null;                      // önbelleği düşür → harita tazelensin
     loadGeoTable();
+    loadImageTable();
   } catch (err) { alert('Kaydedilemedi: ' + err.message); }
 }
 
@@ -1595,6 +1684,7 @@ async function geoDelete(location) {
     if (!r.ok) throw new Error((await r.json()).detail || 'silinemedi');
     state.locGeo = null;
     loadGeoTable();
+    loadImageTable();
   } catch (err) { alert('Silinemedi: ' + err.message); }
 }
 
@@ -1612,6 +1702,7 @@ async function geoSeed() {
     }
     state.locGeo = null;
     loadGeoTable();
+    loadImageTable();
   } catch (err) { if (msg) { msg.style.color = 'var(--red)'; msg.textContent = 'Hata: ' + err.message; } }
 }
 
@@ -1974,6 +2065,7 @@ async function loadSettings() {
     renderSystemStatus(data.system || {});
     loadLocationSetup(data.system || {});
     loadGeoTable();
+    loadImageTable();
   } catch (err) {
     $(`#systemStatusBody`).innerHTML = `<tr><td colspan="2" class="loading-cell" style="color:var(--red)">${escapeHtml(err.message)}</td></tr>`;
   }
@@ -2086,46 +2178,250 @@ function applyTheme(theme) {
 /* ─── Cihaz Detay & Geçmiş Modalı ───────────────────────────────────────────── */
 let _deviceModalAsset = null;
 
-function openDeviceModal(asset) {
-  _deviceModalAsset = asset;
-  const overlay = $(`#deviceModalOverlay`);
-  const title = $(`#deviceModalTitle`);
-  const body = $(`#deviceModalBody`);
-  if (!overlay || !body) return;
-  if (title) title.textContent = asset.hostname || asset.serial_number || 'Cihaz Detayı';
+/* ═══ Varlık Detayı ══════════════════════════════════════════════════════════
+   Görsel MODELE bağlıdır (cihaza değil): bir kez yüklenen görsel o modeldeki
+   tüm cihazlarda görünür. Eşleşme 4 kademeli (sunucuda): tam model → model
+   ailesi → marka+kategori → kategori. Hiçbiri yoksa aşağıdaki YERLEŞİK
+   kategori çizimi kullanılır — sayfa asla boş görünmez.
+   Görseller kendi sunucumuzdan servis edilir; dış CDN/görsel API'si YOK. */
+const KAT_CIZIM = {
+  'Bilgisayar': `<rect x="10" y="16" width="60" height="38" rx="4"/><path d="M4 60h72l-6-6H10z"/><rect x="16" y="22" width="48" height="26" rx="2" opacity=".35"/>`,
+  'Sunucu': `<rect x="14" y="12" width="52" height="16" rx="3"/><rect x="14" y="32" width="52" height="16" rx="3"/><rect x="14" y="52" width="52" height="12" rx="3"/><circle cx="22" cy="20" r="2.2" opacity=".55"/><circle cx="22" cy="40" r="2.2" opacity=".55"/>`,
+  'Telefon': `<rect x="26" y="8" width="28" height="56" rx="5"/><rect x="30" y="14" width="20" height="40" rx="2" opacity=".35"/><circle cx="40" cy="59" r="2"/>`,
+  'Tablet': `<rect x="18" y="10" width="44" height="54" rx="4"/><rect x="22" y="15" width="36" height="42" rx="2" opacity=".35"/><circle cx="40" cy="60" r="1.8"/>`,
+  'El Terminali': `<rect x="24" y="6" width="32" height="62" rx="5"/><rect x="28" y="12" width="24" height="26" rx="2" opacity=".35"/><rect x="29" y="43" width="8" height="6" rx="1" opacity=".55"/><rect x="43" y="43" width="8" height="6" rx="1" opacity=".55"/><rect x="29" y="53" width="22" height="6" rx="1" opacity=".55"/>`,
+  'Yazıcı': `<path d="M22 10h36v16H22z"/><rect x="10" y="26" width="60" height="24" rx="4"/><path d="M22 44h36v22H22z" opacity=".35"/><circle cx="60" cy="34" r="2.5" opacity=".7"/>`,
+  'Ağ Aygıtı': `<rect x="8" y="40" width="64" height="20" rx="4"/><circle cx="18" cy="50" r="2.4" opacity=".7"/><circle cx="27" cy="50" r="2.4" opacity=".7"/><circle cx="36" cy="50" r="2.4" opacity=".7"/><path d="M40 40V22M28 14l12-8 12 8" stroke-width="4" fill="none"/>`,
+  'Çevre Aygıtı': `<path d="M14 34a26 26 0 0 1 52 0v16a6 6 0 0 1-6 6h-8V34h14"/><path d="M14 50V34h14v22h-8a6 6 0 0 1-6-6z"/>`,
+  'Diğer': `<rect x="12" y="16" width="56" height="44" rx="5"/><path d="M12 30h56" opacity=".5"/>`,
+};
 
-  const row = (label, val) => `<div style="display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;">
-      <span style="color:var(--text-muted)">${label}</span>
-      <span style="color:var(--text);font-weight:500;text-align:right">${val}</span></div>`;
+function katCizim(kategori) {
+  const p = KAT_CIZIM[kategori] || KAT_CIZIM['Diğer'];
+  return `<svg viewBox="0 0 80 76" fill="currentColor" stroke="currentColor" stroke-width="0"
+    aria-hidden="true" class="ad-illus">${p}</svg>`;
+}
+
+function trTarih(v) {
+  if (!v) return '—';
+  const d = new Date(v);
+  return isNaN(d) ? v : d.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+function trPara(v, cur) {
+  if (v === null || v === undefined || v === '') return '—';
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '—';
+  const sim = { TRY: '₺', USD: '$', EUR: '€' }[cur || 'TRY'] || '';
+  return sim + n.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+async function openDeviceModal(asset) {
+  const overlay = $(`#deviceModalOverlay`);
+  if (!overlay || !asset) return;
+  _deviceModalAsset = asset;
+  $(`#deviceModalTitle`).textContent = 'Varlık Detayı';
+  const body = $(`#deviceModalBody`);
+  body.innerHTML = '<p class="loading-cell">Yükleniyor...</p>';
+  overlay.classList.add('open');
+  const pdfBtn = $(`#handoverPdfBtn`); if (pdfBtn) pdfBtn.style.display = '';
+
+  let d = { asset, detail: null, usage: null, image: null, assignment: null };
+  try {
+    const r = await fetch(`/api/assets/${asset.id}/detail`);
+    if (r.ok) d = await r.json();
+  } catch { /* çevrimdışı: yalnız listedeki alanlarla çiz */ }
+
+  const a = d.asset || asset;
+  const det = d.detail || {};
+  const gorsel = d.image
+    ? `<img src="${d.image.url}" alt="${escapeHtml(a.model || a.hostname || '')}" class="ad-img">`
+    : katCizim(a.category);
+
+  const satir = (k, v, cls = '') => `<div class="ad-row"><span>${k}</span><b class="${cls}">${v}</b></div>`;
 
   body.innerHTML = `
-    <div style="margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      ${categoryBadge(asset.category)} ${statusBadge(asset.status)}
-      ${asset.location ? `<span class="location-tag">${escapeHtml(asset.location)}</span>` : ''}
-    </div>
-    <div style="margin-bottom:18px">
-      ${row('Marka / Model', `${fmt(asset.brand)} ${fmt(asset.model, '')}`)}
-      ${row('Seri No', `<span class="serial-cell">${fmt(asset.serial_number)}</span>`)}
-      ${row('Son gören kullanıcı (telemetri)', fmt(asset.username, '—'))}
-      ${row('CPU', fmt(asset.cpu))}
-      ${row('RAM / Disk', `${asset.ram_gb ? asset.ram_gb + ' GB' : '—'} / ${asset.storage_gb ? asset.storage_gb + ' GB' : '—'}`)}
-      ${row('IP / MAC', `<span class="serial-cell">${fmt(asset.ip_address)} · ${fmt(asset.mac_address)}</span>`)}
-      ${row('İşletim Sistemi', fmt(asset.os))}
-      ${row('Son Görülme', fmtDate(asset.last_seen))}
-    </div>
-    <div id="deviceAssignBox" style="margin-bottom:18px"></div>
-    <div id="deviceLocationBox" style="margin-bottom:18px"></div>
-    ${asset.category === 'Telefon' ? '<div id="deviceLineBox" style="margin-bottom:18px"></div>' : ''}
-    <h4 style="font-size:13px;font-weight:600;margin:0 0 10px;color:var(--text)">Yaşam Döngüsü Geçmişi</h4>
-    <div id="deviceHistory" style="font-size:12.5px;color:var(--text-muted)">Yükleniyor...</div>`;
+    <div class="ad-grid">
+      <!-- Sol: görsel + kimlik + QR + zimmet -->
+      <div class="ad-left">
+        <div class="ad-photo${d.image ? '' : ' ad-photo--illus'}">
+          ${gorsel}
+          ${statusBadge(a.status)}
+        </div>
+        <h3 class="ad-name">${fmt(a.hostname)}</h3>
+        <div class="ad-ident">
+          <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5h8v2"/></svg>${fmt(a.serial_number)}</span>
+          <span>${categoryBadge(a.category)}</span>
+          <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>${escapeHtml((a.location || '').trim() || 'Lokasyon yok')}</span>
+          <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>${escapeHtml(d.assignment?.assigned_to || 'Zimmetsiz')}</span>
+        </div>
 
-  const pdfBtn = $(`#handoverPdfBtn`); if (pdfBtn) pdfBtn.style.display = '';
-  overlay.classList.add('open');
-  loadDeviceHistory(asset);
-  loadDeviceAssignment(asset);
-  loadDeviceLocation(asset);
-  if (asset.category === 'Telefon' && asset.id != null) loadDeviceLine(asset.id);
+        <div class="ad-qr">
+          <img id="adQr" alt="QR etiketi">
+          <div>
+            <b>${fmt(a.serial_number)}</b>
+            <button class="btn-pdf" id="adPrintLabel">Etiket Yazdır</button>
+          </div>
+        </div>
+
+        <div id="deviceAssignBox"></div>
+        <div id="deviceLocationBox"></div>
+        ${a.category === 'Telefon' ? '<div id="deviceLineBox"></div>' : ''}
+      </div>
+
+      <!-- Orta: temel bilgiler -->
+      <div class="ad-card">
+        <div class="ad-card-h"><h4>Temel Bilgiler</h4>
+          ${state.role === 'admin' || state.role === 'it' ? '<button class="btn-pdf" id="adEditBasic">Düzenle</button>' : ''}</div>
+        ${satir('Varlık Kodu', `<span class="serial-cell">${fmt(a.serial_number)}</span>`)}
+        ${satir('Marka / Model', `${fmt(a.brand)} ${fmt(a.model, '')}`)}
+        ${satir('Kategori', escapeHtml(a.category || 'Diğer'))}
+        ${satir('İşletim Sistemi', fmt(a.os))}
+        ${satir('CPU', fmt(a.cpu))}
+        ${satir('RAM / Disk', `${a.ram_gb ? a.ram_gb + ' GB' : '—'} / ${a.storage_gb ? a.storage_gb + ' GB' : '—'}`)}
+        ${satir('IP / MAC', `<span class="serial-cell">${fmt(a.ip_address)} · ${fmt(a.mac_address)}</span>`)}
+        ${satir('Satın Alma Tarihi', trTarih(det.purchase_date))}
+        ${satir('Satın Alma Bedeli', trPara(det.purchase_price, det.currency))}
+        ${satir('Tedarikçi', fmt(det.supplier))}
+        ${satir('Garanti Bitiş', trTarih(a.warranty_expiry))}
+      </div>
+
+      <!-- Sağ: durum bilgileri -->
+      <div class="ad-card">
+        <div class="ad-card-h"><h4>Durum Bilgileri</h4>${statusBadge(a.status)}</div>
+        ${satir('Lokasyon', escapeHtml((a.location || '').trim() || '—'))}
+        ${satir('Sorumlu Kişi', escapeHtml(d.assignment?.assigned_to || '—'))}
+        ${satir('Son gören kullanıcı', fmt(a.username))}
+        ${satir('Kullanım Süresi', d.usage || '—')}
+        ${satir('Son Bakım', trTarih(det.last_maintenance))}
+        ${satir('Sonraki Bakım', trTarih(det.next_maintenance), bakimGecti(det.next_maintenance) ? 'ad-warn' : '')}
+        ${satir('Son Görülme', fmtDate(a.last_seen))}
+        ${satir('Not', det.note ? escapeHtml(det.note) : '—')}
+      </div>
+
+      <!-- Alt: sekmeler -->
+      <div class="ad-tabs-wrap">
+        <div class="ad-tabs">
+          <button class="ad-tab active" data-t="lifecycle">İşlem Geçmişi</button>
+          <button class="ad-tab" data-t="maint">Bakım</button>
+          <button class="ad-tab" data-t="docs">Belgeler</button>
+          <button class="ad-tab" data-t="note">Notlar</button>
+        </div>
+        <div class="ad-pane" id="adPane"></div>
+      </div>
+    </div>`;
+
+  // QR (yerel üretim, dış servis yok)
+  const qr = $(`#adQr`);
+  if (qr) qr.src = `/api/qr?data=${encodeURIComponent(a.serial_number || a.hostname || '')}`;
+  $(`#adPrintLabel`)?.addEventListener('click', () => printAssetLabel(a));
+  $(`#adEditBasic`)?.addEventListener('click', () => editAssetDetail(a, det));
+
+  // Sekmeler
+  const paneler = {
+    lifecycle: () => '<div id="deviceHistory" class="ad-hist">Yükleniyor...</div>',
+    maint: () => `
+      <div class="ad-maint">
+        ${satir('Son Bakım', trTarih(det.last_maintenance))}
+        ${satir('Sonraki Bakım', trTarih(det.next_maintenance), bakimGecti(det.next_maintenance) ? 'ad-warn' : '')}
+        ${satir('Garanti Bitiş', trTarih(a.warranty_expiry))}
+        <p class="ad-hint">Bakım kaydı geçmişi ayrı tutulmuyor; tarih alanları güncellenir.
+        Kalıcı bakım günlüğü isterseniz yaşam döngüsüne <em>Bakımda</em> olayı kaydedin — imzalı ve denetlenebilir olur.</p>
+      </div>`,
+    docs: () => `
+      <div class="ad-docs">
+        <button class="ad-doc" id="adDocHandover">
+          <span class="qa-ico kpi-ico--red"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>
+          <span><strong>Zimmet Teslim Tutanağı</strong><small>PDF olarak üretilir</small></span>
+        </button>
+        <button class="ad-doc" id="adDocLabel">
+          <span class="qa-ico kpi-ico--blue"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span>
+          <span><strong>QR Varlık Etiketi</strong><small>Yazdırılabilir etiket</small></span>
+        </button>
+        <p class="ad-hint">Belge yükleme/saklama henüz yok — buradaki belgeler talep anında üretilir.</p>
+      </div>`,
+    note: () => `
+      <div class="ad-note">
+        <p>${det.note ? escapeHtml(det.note) : '<span style="color:var(--text-muted)">Not girilmemiş.</span>'}</p>
+        ${(state.role === 'admin' || state.role === 'it') ? '<button class="btn-pdf" id="adEditNote">Notu düzenle</button>' : ''}
+      </div>`,
+  };
+  const paneCiz = (t) => {
+    const pane = $(`#adPane`);
+    if (!pane) return;
+    pane.innerHTML = paneler[t]();
+    if (t === 'lifecycle') loadDeviceHistory(a);
+    $(`#adDocHandover`)?.addEventListener('click', () => printHandoverReceipt(a));
+    $(`#adDocLabel`)?.addEventListener('click', () => printAssetLabel(a));
+    $(`#adEditNote`)?.addEventListener('click', () => editAssetDetail(a, det, 'note'));
+  };
+  $$('.ad-tab').forEach(b => b.addEventListener('click', () => {
+    $$('.ad-tab').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    paneCiz(b.dataset.t);
+  }));
+  paneCiz('lifecycle');
+
+  loadDeviceAssignment(a);
+  loadDeviceLocation(a);
+  if (a.category === 'Telefon' && a.id != null) loadDeviceLine(a.id);
 }
+
+function bakimGecti(tarih) {
+  if (!tarih) return false;
+  const t = Date.parse(tarih);
+  return !Number.isNaN(t) && t < Date.now();
+}
+
+/* Ek alanları düzenle — tek diyalogda, sunucu doğrular */
+async function editAssetDetail(asset, mevcut, odak) {
+  const sor = (etiket, varsayilan) => prompt(etiket, varsayilan ?? '') ;
+  let patch = {};
+  if (odak === 'note') {
+    const n = sor('Not:', mevcut.note || '');
+    if (n === null) return;
+    patch = { note: n };
+  } else {
+    const pd = sor('Satın alma tarihi (YYYY-AA-GG, boş bırakılabilir):', mevcut.purchase_date || '');
+    if (pd === null) return;
+    const pp = sor('Satın alma bedeli (yalnız sayı):', mevcut.purchase_price ?? '');
+    if (pp === null) return;
+    const cur = sor('Para birimi (TRY/USD/EUR):', mevcut.currency || 'TRY');
+    if (cur === null) return;
+    const sup = sor('Tedarikçi:', mevcut.supplier || '');
+    if (sup === null) return;
+    const lm = sor('Son bakım tarihi (YYYY-AA-GG):', mevcut.last_maintenance || '');
+    if (lm === null) return;
+    const nm = sor('Sonraki bakım tarihi (YYYY-AA-GG):', mevcut.next_maintenance || '');
+    if (nm === null) return;
+    patch = { purchase_date: pd, purchase_price: pp, currency: cur, supplier: sup,
+      last_maintenance: lm, next_maintenance: nm };
+  }
+  try {
+    const r = await fetch(`/api/assets/${asset.id}/detail`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || j.error);
+    openDeviceModal(asset);      // tazele
+  } catch (err) { alert('Kaydedilemedi: ' + err.message); }
+}
+
+/* QR etiketi yazdır — yerel üretim */
+function printAssetLabel(a) {
+  const w = window.open('', '_blank', 'width=420,height=520');
+  if (!w) { alert('Açılır pencere engellendi.'); return; }
+  const kod = a.serial_number || a.hostname || '';
+  w.document.write(`<!doctype html><meta charset="utf-8"><title>Etiket — ${escapeHtml(kod)}</title>
+  <style>body{font-family:system-ui,sans-serif;text-align:center;padding:24px}
+  img{width:190px;height:190px}h2{font-size:16px;margin:12px 0 2px}p{font-size:12px;color:#555;margin:0}
+  @media print{@page{margin:8mm}}</style>
+  <img src="/api/qr?data=${encodeURIComponent(kod)}">
+  <h2>${escapeHtml(a.hostname || '')}</h2>
+  <p>${escapeHtml(kod)}</p><p>${escapeHtml(a.category || '')} · ${escapeHtml((a.location || '').trim())}</p>
+  <script>window.onload=()=>{window.print();}<\/script>`);
+  w.document.close();
+}
+
 
 /* Cihaz modalı — lokasyon kutusu.
    BEKLENEN (resmi, kilitli) vs GÖRÜLEN (telemetri) ayrımı ekranda da korunur. */
@@ -2141,38 +2437,30 @@ async function loadDeviceLocation(asset) {
     const since = j.current?.first_seen_at;
     const days = since ? Math.floor((Date.now() - new Date(since).getTime()) / 86400000) : null;
 
-    const hist = (j.history || []).slice(0, 6).map(h => `
-      <div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
-        <div style="width:8px;height:8px;border-radius:50%;background:var(--accent);margin-top:5px;flex-shrink:0"></div>
-        <div style="flex:1">
-          <div style="color:var(--text);font-weight:500">
+    const hist = (j.history || []).slice(0, 5).map(h => `
+      <div style="display:flex;gap:9px;padding:6px 0;border-bottom:1px solid var(--border)">
+        <div style="width:7px;height:7px;border-radius:50%;background:var(--accent);margin-top:5px;flex-shrink:0"></div>
+        <div style="flex:1;min-width:0">
+          <div style="color:var(--text);font-weight:500;font-size:12px">
             ${h.from_location ? `${escapeHtml(h.from_location)} → ` : ''}${escapeHtml(h.to_location)}
           </div>
-          <div style="color:var(--text-muted);font-size:11px;margin-top:1px">
-            ${fmtDate(h.first_seen_at)} — ${fmtDate(h.last_seen_at)} · kaynak: ${escapeHtml(h.source)}
-          </div>
+          <div style="color:var(--text-muted);font-size:11px">${fmtDate(h.first_seen_at)} · ${escapeHtml(h.source)}</div>
         </div>
-      </div>`).join('') || '<p style="padding:4px 0;color:var(--text-muted)">Konum geçmişi kaydı yok.</p>';
+      </div>`).join('') || '<p style="padding:4px 0;color:var(--text-muted);font-size:12px">Konum geçmişi yok.</p>';
 
     box.innerHTML = `
-      <h4 style="font-size:13px;font-weight:600;margin:0 0 10px;color:var(--text)">Lokasyon</h4>
-      <div style="background:var(--bg-card2);border:1px solid ${drift ? 'var(--red)' : 'var(--border)'};
-                  border-radius:var(--radius-sm);padding:14px">
-        <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:10px">
-          <div><div style="font-size:11px;color:var(--text-muted)">Beklenen (resmi)</div>
-            <div style="font-weight:600;color:var(--text)">${exp ? escapeHtml(exp) : '<span style="color:var(--text-muted);font-weight:400">tanımlı değil</span>'}</div></div>
-          <div><div style="font-size:11px;color:var(--text-muted)">Görülen (telemetri)</div>
-            <div style="font-weight:600;color:${drift ? 'var(--red)' : 'var(--text)'}">
-              ${seen ? escapeHtml(seen) : '—'}${days !== null ? ` <span style="font-weight:400;color:var(--text-muted)">(${days} gündür)</span>` : ''}</div></div>
-        </div>
-        ${drift ? `<p style="color:var(--red);font-size:12px;margin:0 0 10px">
-          ⚠ Cihaz ait olduğu lokasyonun dışında görülüyor. Transferi resmileştirin veya cihazı yerine iade ettirin.</p>` : ''}
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div class="ad-card" style="border-color:${drift ? 'var(--red)' : 'var(--border)'}">
+        <div class="ad-card-h"><h4>Lokasyon</h4></div>
+        <div class="ad-row"><span>Beklenen (resmi)</span><b>${exp ? escapeHtml(exp) : '—'}</b></div>
+        <div class="ad-row"><span>Görülen (telemetri)</span>
+          <b style="color:${drift ? 'var(--red)' : 'var(--text)'}">${seen ? escapeHtml(seen) : '—'}${days !== null ? ` (${days} gün)` : ''}</b></div>
+        ${drift ? `<p style="color:var(--red);font-size:11.5px;margin:8px 0 0">⚠ Cihaz ait olduğu lokasyonun dışında.</p>` : ''}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
           <button class="btn-pdf" id="locSetExpected">${exp ? 'Beklenen lokasyonu değiştir' : 'Beklenen lokasyonu belirle'}</button>
-          ${drift ? `<button class="btn-pdf" id="locAcceptMove">Transferi resmileştir (görüleni beklenen yap)</button>` : ''}
+          ${drift ? `<button class="btn-pdf" id="locAcceptMove">Transferi resmileştir</button>` : ''}
         </div>
-      </div>
-      <div style="margin-top:12px;font-size:12.5px">${hist}</div>`;
+        <div style="margin-top:10px">${hist}</div>
+      </div>`;
 
     $(`#locSetExpected`)?.addEventListener('click', () => setExpectedLocationPrompt(asset, exp));
     $(`#locAcceptMove`)?.addEventListener('click', () => saveExpectedLocation(asset, seen));
@@ -2196,6 +2484,7 @@ async function saveExpectedLocation(asset, location) {
     });
     const j = await res.json();
     if (!res.ok) throw new Error(j.detail || j.error);
+    state.locGeo = null;
     loadDeviceLocation(asset);
   } catch (err) { alert('Kaydedilemedi: ' + err.message); }
 }
@@ -4258,6 +4547,12 @@ document.addEventListener('DOMContentLoaded', () => {
   $(`#saveThresholds`)?.addEventListener('click', saveThresholds);
   $(`#seedExpectedBtn`)?.addEventListener('click', seedExpectedLocations);
   $(`#geoSeedBtn`)?.addEventListener('click', geoSeed);
+  $(`#imgCatBtn`)?.addEventListener('click', imageCategoryPrompt);
+  $(`#imgFile`)?.addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = '';                      // aynı dosya tekrar seçilebilsin
+    if (f) imageUpload(f);
+  });
 
   /* Tarih aralığı + Filtrele: tasarımda ≥901px'te TOPBAR'da, mobilde başlık
      altında duruyor. CSS iki farklı kapsayıcı arasında taşıyamaz → tek öğe
