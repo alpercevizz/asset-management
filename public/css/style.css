@@ -620,7 +620,9 @@ body.sidebar-collapsed .sidebar-footer { padding: 14px 0 0; }
 
 /* ══ DASHBOARD v2: 5'li KPI + harita + şiddet + aktivite ══════════════════ */
 /* Araç çubuğu: tarih aralığı + filtre */
-.dash-toolbar { position: relative; display: flex; justify-content: flex-end; gap: 10px; margin: -8px 0 18px; }
+/* Başlığın sağında durur (tasarım referansı); mobilde alta düşer */
+.dash-toolbar { position: relative; display: flex; justify-content: flex-end; gap: 10px;
+  margin: 0 0 0 auto; flex: 0 0 auto; align-self: center; }
 .tb-btn {
   display: inline-flex; align-items: center; gap: 9px;
   background: var(--bg-card); border: 1px solid var(--border);
@@ -717,7 +719,7 @@ body.sidebar-collapsed .sidebar-footer { padding: 14px 0 0; }
 /* ≤1500px: 3 kolonlu satırda kart öyle daralıyor ki yan yana düzende etiketler
    kelime ORTASINDAN kırılıyordu ("Lokasyond|a"). Burada alt alta geçilir —
    efsane kartın tam genişliğini kullanır, kırılma olmaz. */
-@media (max-width: 1500px) and (min-width: 1241px) {
+@media (max-width: 1500px) and (min-width: 1441px) {
   .donut-body--vert { flex-direction: column; align-items: center; gap: 14px; padding: 18px; }
   .donut-body--vert .donut-wrap { width: 118px; height: 118px; flex: 0 0 118px; }
   .donut-body--vert .donut-legend { width: 100%; flex: 0 0 auto; }
@@ -1251,17 +1253,107 @@ body.sidebar-collapsed .sidebar-footer { padding: 14px 0 0; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinning { animation: spin 0.8s linear infinite; }
 
+/* ── Çok geniş ekran: içerik sınırlanır ────────────────────────────────────
+   2K/4K'da kartlar 1438px'e kadar geriliyor, içerik boşlukta kayboluyordu.
+   İçerik ortalanır; tablolar yine kendi içinde kaydırılabilir. */
+@media (min-width: 1900px) {
+  .content { max-width: 1800px; margin-left: auto; margin-right: auto; width: 100%; }
+  .topbar { max-width: 1800px; margin-left: auto; margin-right: auto; width: 100%; }
+}
+
 /* ── Responsive ── */
-@media (max-width: 1240px) {
+/* ── 1025–1440px: TABLET YATAY (iPad Pro/Air) — tasarım referansı ──────────
+   Tasarımda sidebar DURUYOR, 5 KPI tek sırada, satırlar 3 kolon. Yani yapı
+   korunur, yalnızca SIKIŞTIRILIR (padding/font/donut/ikon küçülür).
+   (Önce 2 kolona düşürmüştüm — tasarıma aykırıydı, geri alındı.) */
+@media (min-width: 1025px) and (max-width: 1440px) {
+  .content { padding: 20px 20px 34px; }
+  .kpi-grid, .kpi-grid--5 { gap: 12px; }
+  .kpi { padding: 14px 14px 12px; }
+  .kpi-top { gap: 8px; margin-bottom: 8px; }
+  .kpi-ico { width: 30px; height: 30px; border-radius: 9px; }
+  .kpi-ico svg { width: 15px; height: 15px; }
+  .kpi-label { font-size: 11.5px; line-height: 1.25; }
+  .kpi-value { font-size: 26px; margin-bottom: 8px; }
+  .kpi-trend { font-size: 10.5px; white-space: nowrap; }
+  .kpi-spark svg { width: 38px; height: 20px; }
+  .kpi-foot { min-height: 20px; gap: 5px; }
+  .kpi-arrow { width: 13px; height: 13px; }
+
+  .dash-row3, .dash-row3--b, .dash-row2 { gap: 14px; }
+  .card-header { padding: 14px 16px; }
+  .card-header h3 { font-size: 14.5px; }
+  .btn-ghost { padding: 6px 11px; font-size: 11.5px; }
+
+  /* Donut: dar kolonda alt alta + kompakt efsane */
+  .donut-body, .donut-body--compact { padding: 14px; gap: 12px; flex-wrap: nowrap; }
+  /* Efsanenin TABANI olmalı: min-width:0 ile ad sütunu 12px'e çöküyordu.
+     Yüzde/adet sütunlarının ayırdığı yer de daraltılır ki ada yer kalsın. */
+  .donut-body--compact .donut-legend { flex: 1 1 0; min-width: 132px; }
+  .donut-body--compact .dl-row { gap: 6px; }
+  .donut-body--compact .dl-pct { min-width: 30px; }
+  .donut-body--compact .dl-count { min-width: 22px; }
+  .donut-wrap--sm { flex: 0 0 110px; }
+  .donut-body--vert { flex-direction: column; align-items: center; gap: 12px; padding: 14px; }
+  .donut-body--vert .donut-wrap { width: 112px; height: 112px; flex: 0 0 112px; }
+  .donut-body--vert .donut-legend { width: 100%; flex: 0 0 auto; }
+  .donut-wrap--sm { width: 110px; height: 110px; }
+  .dl-row { padding: 4px 0; font-size: 12px; gap: 8px; }
+  .donut-center b { font-size: 17px; }
+
+  .map-body { padding: 10px 12px 12px; }
+  #locMap { max-height: 210px; }
+  .map-legend { gap: 7px 12px; font-size: 11.5px; }
+
+  .sev-body { padding: 12px 14px 14px; gap: 7px; }
+  .sev-row { padding: 10px 12px; gap: 10px; }
+  .sev-ico { width: 28px; height: 28px; }
+  .sev-name { font-size: 12.5px; }
+  .sev-count { font-size: 12px; }
+
+  .act-list { padding: 10px 14px 14px; }
+  .act-item { padding: 9px 0; gap: 10px; }
+  .act-ico { width: 30px; height: 30px; }
+  .act-txt strong { font-size: 12px; }
+  .act-txt span, .act-time { font-size: 11px; }
+
+  /* Tabloyu şişiren asıl şey büyük-harf başlıkların harf aralığıydı (EKLENME
+     TARİHİ tek başına 131px). Başlık sıkıştırılır + tabloya biraz daha pay verilir. */
+  .dash-row3--b { grid-template-columns: minmax(0,1.75fr) minmax(0,1fr) minmax(0,1.1fr); }
+  .dash-row3 .asset-table th, .dash-row3 .asset-table td { padding: 8px 5px; font-size: 12px; }
+  .dash-row3 .asset-table th:first-child, .dash-row3 .asset-table td:first-child { padding-left: 14px; }
+  .dash-row3 .asset-table th:last-child, .dash-row3 .asset-table td:last-child { padding-right: 14px; }
+  /* 1250px altında 5 sütun 391px'lik karta zaten sığmaz → dokunmatik kaydırma */
+  .table-wrap { -webkit-overflow-scrolling: touch; }
+  .dash-row3 .asset-table th { font-size: 9.5px; letter-spacing: .02em; }
+  .dash-row3 .location-tag, .dash-row3 .cat-badge, .dash-row3 .badge { font-size: 10.5px; padding: 2px 7px; }
+  .crit-strip { padding: 12px 14px 14px; gap: 8px; }
+  .crit-strip .crit-chip { flex: 1 0 140px; min-width: 140px; padding: 10px 12px; }
+  .insight-body { padding: 12px 16px 16px; gap: 12px; }
+  .insight-body p { font-size: 12.5px; }
+}
+
+/* 1025–1250: kategori kartı yan yana SIĞMIYOR ("El Terminali" 84px ister,
+   68px kalır) → alt alta geç. 1251+ tasarımdaki gibi yan yana kalır. */
+@media (min-width: 1025px) and (max-width: 1250px) {
+  .donut-body--compact { flex-wrap: wrap; }
+  .donut-body--compact .donut-legend { flex: 1 1 100%; min-width: 0; }
+  .donut-body--compact .dl-pct { min-width: 38px; }
+  .donut-body--compact .dl-count { min-width: 34px; }
+}
+
+/* ── 901–1024px: küçük tablet — 5 KPI ve 3 kolon artık sığmaz ─────────────── */
+@media (min-width: 901px) and (max-width: 1024px) {
+  .kpi-grid--5 { grid-template-columns: repeat(6, 1fr); }
+  .kpi-grid--5 > .kpi:nth-child(-n+3) { grid-column: span 2; }
+  .kpi-grid--5 > .kpi:nth-child(n+4)  { grid-column: span 3; }
+  .kpi-grid:not(.kpi-grid--5) { grid-template-columns: repeat(2, 1fr); }
   .dash-row3, .dash-row3--b { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
   .dash-row3 > .card:nth-child(3), .dash-row3--b > .card:nth-child(3) { grid-column: 1 / -1; }
-}
-@media (max-width: 1360px) {
-  .kpi-grid, .kpi-grid--5 { grid-template-columns: repeat(2, 1fr); }
+  .dash-row2 { grid-template-columns: minmax(0,1.4fr) minmax(0,1fr); }
   .dash-bottom { grid-template-columns: 1fr; }
-  .dash-row3, .dash-row3--b, .dash-row2 { grid-template-columns: 1fr; }
-  .dash-row3 > .card:nth-child(3), .dash-row3--b > .card:nth-child(3) { grid-column: auto; }
 }
+
 @media (max-width: 1100px) {
   .charts-row { grid-template-columns: 1fr 1fr; }
   .donut-row { grid-template-columns: 1fr; }
@@ -1350,7 +1442,7 @@ body.sidebar-collapsed .sidebar-footer { padding: 14px 0 0; }
   .page-header { margin-bottom: 16px; }
   .page-header h1 { font-size: 24px; }
   .page-subtitle { font-size: 13px; }
-  .dash-toolbar { margin: 0 0 14px; }
+  .dash-toolbar { margin: 12px 0 0; width: 100%; order: 2; flex: 1 1 100%; }
   .tb-btn { padding: 9px 12px; font-size: 13px; }
 
   /* KPI 2×2 — tasarım referansı */
