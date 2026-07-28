@@ -840,6 +840,19 @@ app.post('/api/assets/:id/release', requireRole('it', 'admin'), async (req, res)
   }
 });
 
+// Tüm resmi zimmetler — Varlıklar tablosundaki "Sorumlu Kişi" sütunu için.
+// Cihaz başına istek atmak N+1 olurdu; tek sorguda döner.
+app.get('/api/assignments', async (req, res) => {
+  try {
+    const rows = await assignmentTools.getAll();
+    const map = {};
+    rows.forEach(r => { if (r.assigned_to) map[r.asset_id] = r.assigned_to; });
+    res.json({ assignments: map });
+  } catch (err) {
+    res.status(500).json({ error: 'Zimmetler alınamadı', detail: err.message });
+  }
+});
+
 // Telemetri ≠ resmi zimmet uyuşmazlıkları (izinsiz kullanım şüphesi)
 app.get('/api/assignments/mismatches', async (req, res) => {
   try {

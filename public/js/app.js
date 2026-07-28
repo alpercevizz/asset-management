@@ -387,6 +387,12 @@ function showView(name) {
   // Alt sekme çubuğu: doğrudan karşılığı olmayan görünümlerde hiçbiri aktif olmaz
   $$('.tab[data-view]').forEach((t) => t.classList.toggle('active', t.dataset.view === name));
 
+  // Dashboard araç çubuğu (tarih aralığı + Filtrele) YALNIZ dashboard'a aittir;
+  // topbar'da mount edildiği için diğer sayfalarda gizlenmeli (Varlıklar'ın kendi
+  // filtre çubuğu var, ikisi birden kafa karıştırıyordu).
+  const slotEl = document.querySelector('#topbarToolbarSlot');
+  if (slotEl) slotEl.style.display = (name === 'dashboard') ? '' : 'none';
+
   state.currentView = name;
   if (name === 'assets')   renderAssetsTable();
   if (name === 'licenses') loadLicenses();
@@ -1355,11 +1361,11 @@ async function deleteUserPrompt(username) {
 }
 
 /* ─── Excel/CSV Export ──────────────────────────────────────────────────────── */
-function exportAssetsCSV() {
-  // Görünen (filtrelenmiş) envanteri dışa aktar
-  let assets = state.assets || [];
-  if (state.categoryFilter) assets = assets.filter((a) => (a.category || '') === state.categoryFilter);
-  if (state.locationFilter)  assets = assets.filter((a) => (a.location  || '') === state.locationFilter);
+function exportAssetsCSV(secilenler) {
+  // Argüman verilmezse EKRANDA GÖRÜNEN (filtrelenmiş) liste dışa aktarılır.
+  // Toplu seçim çubuğu yalnız seçilenleri gönderir.
+  const assets = Array.isArray(secilenler) ? secilenler
+    : (state.renderedAssets || state.assets || []);
   if (!assets.length) { alert('Dışa aktarılacak kayıt yok.'); return; }
 
   const cols = [
@@ -2005,60 +2011,202 @@ function populateLocationFilter(assets) {
     locations.map(l => `<option value="${l}" ${l === current ? 'selected' : ''}>${l}</option>`).join('');
 }
 
+/* ═══ VARLIKLAR v2 ════════════════════════════════════════════════════════
+   Önceki tablo 13 sütundu (dar ekranda kesiliyordu), sayfalama ve satır
+   aksiyonu yoktu. Tasarım referansına göre 7 sütun + seçim + sayfalama.
+   Filtre/sıralama/sayfalama İSTEMCİDE — envanter zaten tek istekte geliyor. */
+const ASSET_SORT_LABEL = { serial_number: 'Varlık Kodu', hostname: 'Varlık Adı',
+  category: 'Kategori', location: 'Lokasyon', status: 'Durum' };
+
+function assetSearchBlob(a) {
+  return [a.hostname, a.serial_number, a.brand, a.model, a.location, a.category,
+    a.ip_address, a.mac_address, a.username, a.os].filter(Boolean).join(' ');
+}
+
+function filteredAssets() {
+  const q = trSlug($(`#assetSearch`)?.value || '').trim();
+  const cat = $(`#filterCategory`)?.value || '';
+  const loc = $(`#filterLocation`)?.value || '';
+  const st  = $(`#filterStatus`)?.value || '';
+  let list = (state.allAssets || []).slice();
+  if (cat) list = list.filter(a => (a.category || 'Diğer') === cat);
+  if (loc) list = list.filter(a => (a.location || '') === loc);
+  if (st)  list = list.filter(a => (a.status || '') === st);
+  // trSlug: Türkçe 'İ' toLowerCase'te birleşik nokta üretir → arama tutmazdı
+  if (q)   list = list.filter(a => trSlug(assetSearchBlob(a)).includes(q));
+
+  const key = state.assetSort?.key;
+  if (key) {
+    const dir = state.assetSort.dir === 'desc' ? -1 : 1;
+    list.sort((x, y) => String(x[key] || '').localeCompare(String(y[key] || ''), 'tr') * dir);
+  }
+  return list;
+}
+
 async function renderAssetsTable() {
   const tbody = $(`#assetsBody`);
-  const countEl = $(`#assetCount`);
-  if (tbody) tbody.innerHTML = `<tr><td colspan="13" class="loading-cell">Yükleniyor...</td></tr>`;
-
+  if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="loading-cell">Yükleniyor...</td></tr>`;
   try {
-    const filterStatus = $(`#filterStatus`)?.value || '';
-    const params = { size: 200 };
-    if (filterStatus) { params.filter_field = 'status'; params.filter_value = filterStatus; }
-
-    const data = await fetchAssets(params);
-    let assets = data.results || [];
-    state.assets = assets;
-
-    populateLocationFilter(assets);
-
-    // Client-side filters
-    if (state.categoryFilter) assets = assets.filter((a) => (a.category || '') === state.categoryFilter);
-    if (state.locationFilter)  assets = assets.filter((a) => (a.location  || '') === state.locationFilter);
-
-    if (countEl) countEl.textContent = `${assets.length} cihaz bulundu`;
-    state.renderedAssets = assets;
-
-    if (!assets.length) {
-      tbody.innerHTML = `<tr><td colspan="13" class="loading-cell">Kayıt bulunamadı</td></tr>`;
-      return;
-    }
-
-    tbody.innerHTML = assets.map((a, i) => `
-      <tr class="asset-row" data-idx="${i}" style="cursor:pointer">
-        <td class="hostname-cell">${fmt(a.hostname)}</td>
-        <td><span class="location-tag">${fmt(a.location, '—')}</span></td>
-        <td>${categoryBadge(a.category)}</td>
-        <td>${fmt(a.brand)}</td>
-        <td>${fmt(a.model)}</td>
-        <td class="serial-cell">${fmt(a.serial_number)}</td>
-        <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis" title="${fmt(a.cpu)}">${fmt(a.cpu)}</td>
-        <td>${a.ram_gb ? a.ram_gb + ' GB' : '—'}</td>
-        <td>${a.storage_gb ? a.storage_gb + ' GB' : '—'}</td>
-        <td class="serial-cell">${fmt(a.ip_address)}</td>
-        <td>${fmt(a.os)}</td>
-        <td>${statusBadge(a.status)}</td>
-        <td>${fmtDate(a.last_seen)}</td>
-      </tr>`).join('');
-
-    tbody.querySelectorAll('.asset-row').forEach((tr) => {
-      tr.addEventListener('click', () => {
-        const idx = Number(tr.dataset.idx);
-        const asset = (state.renderedAssets || [])[idx];
-        if (asset) openDeviceModal(asset);
-      });
-    });
+    // Envanter + resmi zimmetler TEK seferde (cihaz başına istek N+1 olurdu)
+    const [data, asg] = await Promise.all([
+      fetchAssets({ size: 200 }),
+      fetch('/api/assignments').then(r => r.ok ? r.json() : { assignments: {} }).catch(() => ({ assignments: {} })),
+    ]);
+    state.allAssets = data.results || [];
+    state.assets = state.allAssets;
+    state.assignments = asg.assignments || {};
+    populateAssetFilters(state.allAssets);
+    paintAssetsTable();
   } catch (err) {
-    if (tbody) tbody.innerHTML = `<tr><td colspan="13" class="loading-cell" style="color:#ef4444">${err.message}</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="loading-cell" style="color:var(--red)">${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+function populateAssetFilters(assets) {
+  const cats = [...new Set(assets.map(a => a.category || 'Diğer'))].sort((a, b) => a.localeCompare(b, 'tr'));
+  const locs = [...new Set(assets.map(a => (a.location || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr'));
+  const fill = (id, items, hepsi) => {
+    const el = $('#' + id); if (!el) return;
+    const cur = el.value;
+    el.innerHTML = `<option value="">${hepsi}</option>` +
+      items.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+    if (items.includes(cur)) el.value = cur;
+  };
+  fill('filterCategory', cats, 'Tüm Kategoriler');
+  fill('filterLocation', locs, 'Tüm Lokasyonlar');
+}
+
+function paintAssetsTable() {
+  const tbody = $(`#assetsBody`);
+  if (!tbody) return;
+  const list = filteredAssets();
+  state.renderedAssets = list;
+
+  const per = Number($(`#rowsPerPage`)?.value) || 25;
+  const pages = Math.max(1, Math.ceil(list.length / per));
+  if (!state.assetPage || state.assetPage > pages) state.assetPage = 1;
+  const page = state.assetPage;
+  const slice = list.slice((page - 1) * per, page * per);
+
+  const countEl = $(`#assetCount`);
+  if (countEl) {
+    const toplam = (state.allAssets || []).length;
+    countEl.textContent = list.length === toplam
+      ? `${toplam} varlık bulundu`
+      : `${list.length} / ${toplam} varlık`;
+  }
+
+  // Sıralama başlıkları
+  $$('.asset-table--v2 th.sortable').forEach(th => {
+    const k = th.dataset.sort;
+    const aktif = state.assetSort?.key === k;
+    th.className = 'sortable th-sort' + (aktif ? ' active' : '');
+    th.innerHTML = `${ASSET_SORT_LABEL[k] || k}${aktif ? `<span class="arr">${state.assetSort.dir === 'desc' ? '▼' : '▲'}</span>` : ''}`;
+  });
+
+  const sel = state.selectedAssets || new Set();
+
+  if (!slice.length) {
+    tbody.innerHTML = `<tr><td colspan="8" class="loading-cell">Filtreye uyan kayıt yok</td></tr>`;
+    renderPager(0, per);
+    updateBulkBar();
+    return;
+  }
+
+  tbody.innerHTML = slice.map((a) => `
+    <tr class="asset-row${sel.has(a.id) ? ' selected' : ''}" data-id="${a.id}">
+      <td class="col-check"><input type="checkbox" class="row-check" data-id="${a.id}" ${sel.has(a.id) ? 'checked' : ''} aria-label="Satırı seç"></td>
+      <td class="code-cell" title="${escapeHtml(a.serial_number || '')}">${fmt(a.serial_number)}</td>
+      <td class="hostname-cell">${fmt(a.hostname)}</td>
+      <td>${categoryBadge(a.category)}</td>
+      <td>${a.location ? `<span class="location-tag">${escapeHtml(a.location)}</span>` : '—'}</td>
+      <td>${statusBadge(a.status)}</td>
+      <td>${escapeHtml(state.assignments?.[a.id] || '—')}</td>
+      <td class="col-actions">
+        <span class="row-actions">
+          <button class="ra-btn" data-act="view" data-id="${a.id}" title="Detay">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+          <button class="ra-btn" data-act="edit" data-id="${a.id}" title="Zimmet / lokasyon düzenle">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+          </button>
+          <button class="ra-btn" data-act="lifecycle" data-id="${a.id}" title="Yaşam döngüsü kaydı">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 9-9"/><polyline points="3 3 3 8 8 8"/><path d="M12 7v5l3 2"/></svg>
+          </button>
+        </span>
+      </td>
+    </tr>`).join('');
+
+  const byId = (id) => (state.allAssets || []).find(x => String(x.id) === String(id));
+
+  tbody.querySelectorAll('.asset-row').forEach(tr => {
+    tr.addEventListener('click', (e) => {
+      if (e.target.closest('.ra-btn') || e.target.closest('.row-check')) return;
+      const a = byId(tr.dataset.id); if (a) openDeviceModal(a);
+    });
+  });
+  tbody.querySelectorAll('.row-check').forEach(cb => {
+    cb.addEventListener('change', () => {
+      state.selectedAssets = state.selectedAssets || new Set();
+      const id = Number(cb.dataset.id);
+      if (cb.checked) state.selectedAssets.add(id); else state.selectedAssets.delete(id);
+      cb.closest('tr')?.classList.toggle('selected', cb.checked);
+      updateBulkBar();
+    });
+  });
+  tbody.querySelectorAll('.ra-btn').forEach(b => {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const a = byId(b.dataset.id); if (!a) return;
+      if (b.dataset.act === 'lifecycle') { showView('lifecycle'); return; }
+      openDeviceModal(a);   // detay + zimmet/lokasyon düzenleme aynı modalda
+    });
+  });
+
+  renderPager(list.length, per);
+  updateBulkBar();
+}
+
+/* Sayfalama — 1 2 … n-1 [n] n+1 … son */
+function renderPager(total, per) {
+  const nav = $(`#assetsPager`);
+  if (!nav) return;
+  const pages = Math.max(1, Math.ceil(total / per));
+  const cur = state.assetPage || 1;
+  if (pages <= 1) { nav.innerHTML = ''; return; }
+
+  const nums = [];
+  const push = (n) => { if (!nums.includes(n) && n >= 1 && n <= pages) nums.push(n); };
+  push(1); push(2);
+  for (let i = cur - 1; i <= cur + 1; i++) push(i);
+  push(pages - 1); push(pages);
+  nums.sort((a, b) => a - b);
+
+  let html = `<button data-p="${cur - 1}" ${cur === 1 ? 'disabled' : ''} aria-label="Önceki">‹</button>`;
+  let prev = 0;
+  nums.forEach(n => {
+    if (prev && n - prev > 1) html += `<span class="gap">…</span>`;
+    html += `<button data-p="${n}" class="${n === cur ? 'active' : ''}">${n}</button>`;
+    prev = n;
+  });
+  html += `<button data-p="${cur + 1}" ${cur === pages ? 'disabled' : ''} aria-label="Sonraki">›</button>`;
+  nav.innerHTML = html;
+  nav.querySelectorAll('button[data-p]').forEach(b => b.addEventListener('click', () => {
+    const p = Number(b.dataset.p);
+    if (p >= 1 && p <= pages) { state.assetPage = p; paintAssetsTable(); }
+  }));
+}
+
+function updateBulkBar() {
+  const bar = $(`#bulkBar`), cnt = $(`#bulkCount`);
+  const n = (state.selectedAssets || new Set()).size;
+  if (cnt) cnt.textContent = n;
+  if (bar) bar.hidden = n === 0;
+  const all = $(`#selectAll`);
+  if (all) {
+    const gorunen = state.renderedAssets || [];
+    all.checked = n > 0 && gorunen.length > 0 && gorunen.every(a => state.selectedAssets?.has(a.id));
+    all.indeterminate = n > 0 && !all.checked;
   }
 }
 
@@ -3354,26 +3502,73 @@ document.addEventListener('DOMContentLoaded', () => {
   $$('.tab[data-view]').forEach((t) => t.addEventListener('click', () => showView(t.dataset.view)));
   $(`#tabMore`)?.addEventListener('click', openDrawer);
 
-  // Search
+  // Topbar araması → Varlıklar sayfasındaki aramayı besler
   $(`#searchInput`)?.addEventListener('input', (e) => {
-    if (state.currentView === 'assets') filterTableBySearch(e.target.value);
+    const box = $(`#assetSearch`);
+    if (box) { box.value = e.target.value; }
+    if (state.currentView === 'assets') { state.assetPage = 1; paintAssetsTable(); }
+    else if (e.target.value.trim()) showView('assets');
   });
 
-  // Filters
-  $(`#filterStatus`)?.addEventListener('change', renderAssetsTable);
-  $(`#filterLocation`)?.addEventListener('change', () => {
-    state.locationFilter = $(`#filterLocation`).value;
-    renderAssetsTable();
+  /* ── Varlıklar v2: filtreler istemcide, sunucuya tekrar gidilmez ── */
+  const yenidenCiz = () => { state.assetPage = 1; paintAssetsTable(); };
+  let aramaZaman = null;
+  $(`#assetSearch`)?.addEventListener('input', () => {
+    clearTimeout(aramaZaman);
+    aramaZaman = setTimeout(yenidenCiz, 180);   // her tuşta yeniden çizme
   });
-
-  // Category tabs
-  $$('.cat-tab').forEach((tab) => {
-    tab.addEventListener('click', () => {
-      $$('.cat-tab').forEach((t) => t.classList.remove('active'));
-      tab.classList.add('active');
-      state.categoryFilter = tab.dataset.cat;
-      renderAssetsTable();
+  ['filterCategory', 'filterLocation', 'filterStatus'].forEach(id =>
+    $('#' + id)?.addEventListener('change', yenidenCiz));
+  $(`#rowsPerPage`)?.addEventListener('change', yenidenCiz);
+  $(`#clearFiltersBtn`)?.addEventListener('click', () => {
+    ['assetSearch', 'filterCategory', 'filterLocation', 'filterStatus'].forEach(id => {
+      const el = $('#' + id); if (el) el.value = '';
     });
+    const t = $(`#searchInput`); if (t) t.value = '';
+    state.assetSort = null;
+    yenidenCiz();
+  });
+
+  // Sütun başlığına tıkla → sırala (aynı sütun tekrar → yön değişir)
+  $$('.asset-table--v2 th.sortable').forEach(th => th.addEventListener('click', () => {
+    const k = th.dataset.sort;
+    if (state.assetSort?.key === k) {
+      state.assetSort = state.assetSort.dir === 'asc' ? { key: k, dir: 'desc' } : null;
+    } else state.assetSort = { key: k, dir: 'asc' };
+    yenidenCiz();
+  }));
+
+  // Toplu seçim
+  $(`#selectAll`)?.addEventListener('change', (e) => {
+    state.selectedAssets = state.selectedAssets || new Set();
+    // "Tümü" YALNIZ filtre kapsamındakileri seçer (görünmeyeni sessizce seçmez)
+    (state.renderedAssets || []).forEach(a =>
+      e.target.checked ? state.selectedAssets.add(a.id) : state.selectedAssets.delete(a.id));
+    paintAssetsTable();
+  });
+  $(`#bulkClearBtn`)?.addEventListener('click', () => {
+    state.selectedAssets = new Set();
+    paintAssetsTable();
+  });
+  $(`#bulkExportBtn`)?.addEventListener('click', () => {
+    const sel = state.selectedAssets || new Set();
+    exportAssetsCSV((state.allAssets || []).filter(a => sel.has(a.id)));
+  });
+
+  // Başlıktaki "diğer işlemler" menüsü
+  $(`#assetsMoreBtn`)?.addEventListener('click', (e) => {
+    e.stopPropagation(); $(`#assetsMoreMenu`)?.classList.toggle('open');
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#assetsMoreBtn')) $(`#assetsMoreMenu`)?.classList.remove('open');
+  });
+  $(`#assetsRefreshBtn`)?.addEventListener('click', () => {
+    $(`#assetsMoreMenu`)?.classList.remove('open'); renderAssetsTable();
+  });
+  $(`#bulkStockBtn`)?.addEventListener('click', () => {
+    $(`#assetsMoreMenu`)?.classList.remove('open');
+    $(`#qrModalOverlay`)?.classList.add('open');
+    $(`.modal-tab[data-tab="bulk"]`)?.click();
   });
 
   // Chat FAB
