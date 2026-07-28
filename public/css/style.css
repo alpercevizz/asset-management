@@ -476,17 +476,18 @@ body.sidebar-collapsed .sidebar-footer { padding: 14px 0 0; }
 }
 .btn-icon:hover { border-color: var(--border-strong); color: var(--text); }
 
+/* Tasarımda birincil eylem indigo (Yeni Varlık Ekle, İncele, Analiz Raporu…) */
 .btn-add, .btn-report {
   display: inline-flex; align-items: center; gap: 6px;
-  background: var(--text); border: 1px solid var(--text);
-  color: var(--bg);
+  background: var(--accent); border: 1px solid var(--accent);
+  color: #fff;
   padding: 8px 16px; border-radius: var(--radius-sm);
   font-size: 13px; font-weight: 500; cursor: pointer;
   transition: opacity 0.12s;
   font-family: inherit; flex-shrink: 0;
   box-shadow: var(--shadow-sm);
 }
-.btn-add:hover, .btn-report:hover { opacity: 0.85; }
+.btn-add:hover, .btn-report:hover { opacity: 0.9; box-shadow: 0 8px 20px -10px rgba(79,70,229,.9); }
 .btn-report:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .btn-pdf {
@@ -1704,6 +1705,9 @@ body.tv-mode .page-header h1 { font-size: 34px; }
   background: var(--accent-glow); border: 1px solid var(--accent);
   border-radius: 12px; font-size: 13.5px; color: var(--text);
 }
+/* CSS'teki display:flex, [hidden] attribute'unun display:none'unu EZİYORDU →
+   seçim yokken de çubuk görünüyordu. */
+.bulk-bar[hidden] { display: none; }
 .bulk-bar b { font-weight: 700; }
 .bulk-bar .btn-pdf { margin-left: 0; }
 .bulk-bar .btn-pdf:first-of-type { margin-left: auto; }
@@ -1762,4 +1766,101 @@ body.tv-mode .page-header h1 { font-size: 34px; }
   .asset-table--v2 .col-actions { width: 84px; }
   .asset-table--v2 td, .asset-table--v2 th { padding: 11px 9px; }
   .table-foot { justify-content: center; }
+}
+
+/* ══ VARLIKLAR — MOBİL (≤900px): tablo yerine KART listesi ════════════════
+   7 sütunluk tablo 390px'e sığmıyor; yatay kaydırma telefonda kötü bir
+   deneyim. Aynı veriden kart listesi çizilir (tasarım referansı).
+   Masaüstünde kartlar, mobilde tablo GİZLİ — tek kaynak, iki sunum. */
+.asset-cards, .cards-foot, .mini-stats { display: none; }
+
+@media (max-width: 900px) {
+  /* Tablo ve sayfalama gizlenir, kart listesi görünür */
+  #view-assets .table-wrap, #view-assets .table-foot { display: none; }
+  .asset-cards { display: block; }
+  .cards-foot { display: block; padding: 14px 16px 18px; }
+
+  /* Mini durum şeridi — yatay kaydırılabilir */
+  .mini-stats {
+    display: flex; gap: 10px; margin-bottom: 14px;
+    overflow-x: auto; scrollbar-width: none; padding-bottom: 2px;
+  }
+  .mini-stats::-webkit-scrollbar { display: none; }
+  .ms-card {
+    flex: 1 0 86px; min-width: 86px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 12px 10px;
+    display: flex; flex-direction: column; align-items: center; gap: 5px;
+    box-shadow: var(--shadow-sm); cursor: pointer;
+    font-family: inherit; text-align: center;
+  }
+  .ms-card:active { transform: scale(.97); }
+  .ms-ico { width: 32px; height: 32px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center; }
+  .ms-label { font-size: 11px; font-weight: 600; line-height: 1.25;
+    text-align: center; white-space: normal; }
+  .ms-value { font-family: var(--font-display); font-size: 21px; font-weight: 800;
+    letter-spacing: -.03em; line-height: 1; }
+
+  /* Kart satırı */
+  .ac-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .ac-item:last-child { border-bottom: none; }
+  .ac-item:active { background: var(--bg-hover); }
+  .ac-ico {
+    width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .ac-body { flex: 1; min-width: 0; }
+  .ac-top { display: flex; align-items: center; gap: 8px; }
+  .ac-name {
+    font-size: 15px; font-weight: 700; color: var(--text); letter-spacing: -.01em;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;
+  }
+  .ac-code { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted);
+    margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ac-meta { font-size: 12.5px; color: var(--text-dim); margin-top: 3px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ac-meta i { font-style: normal; color: var(--text-muted); margin: 0 5px; }
+  .ac-kebab {
+    background: none; border: none; color: var(--text-muted); cursor: pointer;
+    padding: 4px; border-radius: 8px; flex-shrink: 0; display: flex;
+  }
+  .ac-kebab:active { background: var(--bg-hover); }
+
+  .load-more {
+    width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 14px; border-radius: 12px; cursor: pointer; font-family: inherit;
+    background: var(--bg-card); border: 1px solid var(--border);
+    color: var(--text); font-size: 14px; font-weight: 600;
+  }
+  .load-more:active { background: var(--bg-hover); }
+  .load-more[hidden] { display: none; }
+  .cards-info { text-align: center; font-size: 12.5px; color: var(--text-muted); margin-top: 12px; }
+
+  /* Filtre çubuğu mobilde 2 satır */
+  .fb-search { flex: 1 1 100%; order: -1; }
+  .fb-sel { flex: 1 1 calc(50% - 6px); }
+  #clearFiltersBtn { flex: 1 1 100%; justify-content: center; }
+  .page-header--assets .count-chip { font-size: 12px; padding: 5px 12px; }
+}
+
+/* ── Cihaz modalı mobilde ALT SAYFA (bottom sheet) ── */
+@media (max-width: 900px) {
+  #deviceModalOverlay { align-items: flex-end; padding: 0; }
+  #deviceModalOverlay .modal {
+    max-width: 100%; width: 100%; max-height: 92vh;
+    border-radius: 22px 22px 0 0; border-bottom: none;
+    animation: sheetUp .26s cubic-bezier(.3,.8,.3,1);
+  }
+  #deviceModalOverlay .modal::before {
+    content: ""; display: block; width: 44px; height: 4px; border-radius: 999px;
+    background: var(--border-strong); margin: 10px auto 0; flex-shrink: 0;
+  }
+  #deviceModalOverlay .modal-header { padding: 14px 20px; }
+  #deviceModalOverlay .modal-body { padding: 16px 20px 24px; }
+  @keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 }

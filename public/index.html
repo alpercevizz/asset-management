@@ -533,6 +533,9 @@
           </button>
         </div>
 
+        <!-- Mobil: mini durum şeridi (tasarım referansı) -->
+        <div class="mini-stats" id="miniStats" aria-hidden="true"></div>
+
         <!-- Toplu seçim çubuğu -->
         <div class="bulk-bar" id="bulkBar" hidden>
           <span><b id="bulkCount">0</b> varlık seçildi</span>
@@ -559,6 +562,16 @@
                 <tr><td colspan="8" class="loading-cell">Yükleniyor...</td></tr>
               </tbody>
             </table>
+          </div>
+
+          <div class="asset-cards" id="assetCards"></div>
+
+          <div class="cards-foot" id="cardsFoot">
+            <button class="load-more" id="loadMoreBtn">
+              Daha Fazla Yükle
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <p class="cards-info" id="cardsInfo"></p>
           </div>
 
           <div class="table-foot">

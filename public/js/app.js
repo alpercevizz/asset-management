@@ -2076,6 +2076,100 @@ function populateAssetFilters(assets) {
   fill('filterLocation', locs, 'Tüm Lokasyonlar');
 }
 
+/* Kategori ikonu — mobil kart listesindeki renkli kutu (tasarım referansı) */
+const CAT_ICON = {
+  'Bilgisayar': ['blue', '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>'],
+  'Sunucu': ['blue', '<rect x="2" y="3" width="20" height="7" rx="1"/><rect x="2" y="14" width="20" height="7" rx="1"/><path d="M6 6.5h.01M6 17.5h.01"/>'],
+  'Telefon': ['green', '<rect x="5" y="2" width="14" height="20" rx="2"/><path d="M11 18h2"/>'],
+  'Tablet': ['orange', '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M11 18h2"/>'],
+  'El Terminali': ['orange', '<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M9 6h6"/>'],
+  'Yazıcı': ['red', '<path d="M6 9V2h12v7"/><rect x="2" y="9" width="20" height="8" rx="2"/><path d="M6 17h12v5H6z"/>'],
+  'Ağ Aygıtı': ['blue', '<rect x="2" y="14" width="20" height="7" rx="2"/><path d="M6 17.5h.01M10 17.5h.01"/><path d="M12 14V9M8 6l4-3 4 3"/>'],
+  'Çevre Aygıtı': ['green', '<path d="M3 12a9 9 0 0 1 18 0v5a2 2 0 0 1-2 2h-2v-7h4"/><path d="M3 17v-5h4v7H5a2 2 0 0 1-2-2z"/>'],
+};
+const CAT_ICON_DEFAULT = ['blue', '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/>'];
+
+function catIcon(cat) {
+  const [tone, path] = CAT_ICON[cat] || CAT_ICON_DEFAULT;
+  return `<span class="ac-ico kpi-ico--${tone}">
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${path}</svg></span>`;
+}
+
+/* Mobil mini durum şeridi — gerçek sayılar, tıklayınca durum filtresi uygular */
+function renderMiniStats() {
+  const box = $(`#miniStats`);
+  if (!box) return;
+  const all = state.allAssets || [];
+  const say = (st) => all.filter(a => (a.status || '') === st).length;
+  const kartlar = [
+    { k: '',        ad: 'Toplam',        n: all.length,      tone: 'blue',
+      ico: '<path d="M12 2l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5"/>' },
+    { k: 'online',  ad: 'Çevrimiçi',     n: say('online'),   tone: 'green',
+      ico: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/>' },
+    { k: 'depoda',  ad: 'Depoda',        n: say('depoda'),   tone: 'orange',
+      ico: '<path d="M3 9l9-6 9 6v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21V12h6v9"/>' },
+    { k: 'offline', ad: 'Çevrimdışı',    n: say('offline'),  tone: 'red',
+      ico: '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>' },
+  ];
+  box.innerHTML = kartlar.map(c => `
+    <button class="ms-card" data-st="${c.k}">
+      <span class="ms-ico kpi-ico--${c.tone}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.ico}</svg>
+      </span>
+      <span class="ms-label kpi--${c.tone === 'blue' ? 'loc' : c.tone}" style="color:var(--${c.tone === 'blue' ? 'accent' : c.tone})">${c.ad}</span>
+      <span class="ms-value" style="color:var(--${c.tone === 'blue' ? 'accent' : c.tone})">${c.n}</span>
+    </button>`).join('');
+  box.querySelectorAll('.ms-card').forEach(b => b.addEventListener('click', () => {
+    const sel = $(`#filterStatus`); if (sel) sel.value = b.dataset.st;
+    state.assetPage = 1; state.mobileShown = 0; paintAssetsTable();
+  }));
+}
+
+/* Mobil kart listesi — tablo ile AYNI filtrelenmiş listeden çizilir.
+   Sayfalama yerine kümülatif "Daha Fazla Yükle" (tasarım referansı). */
+function paintAssetCards(list, per) {
+  const box = $(`#assetCards`);
+  if (!box) return;
+  const goster = Math.min(list.length, state.mobileShown || per);
+  state.mobileShown = goster;
+  const dilim = list.slice(0, goster);
+
+  box.innerHTML = dilim.length ? dilim.map(a => `
+    <div class="ac-item" data-id="${a.id}">
+      ${catIcon(a.category)}
+      <div class="ac-body">
+        <div class="ac-top">
+          <span class="ac-name">${fmt(a.hostname)}</span>
+          ${statusBadge(a.status)}
+          <button class="ac-kebab" data-id="${a.id}" aria-label="İşlemler">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>
+          </button>
+        </div>
+        <div class="ac-code">${fmt(a.serial_number)}</div>
+        <div class="ac-meta">${escapeHtml(a.category || 'Diğer')}<i>•</i>${escapeHtml((a.location || '').trim() || 'Lokasyon yok')}</div>
+      </div>
+    </div>`).join('')
+    : `<p class="loading-cell">Filtreye uyan kayıt yok</p>`;
+
+  const byId = (id) => (state.allAssets || []).find(x => String(x.id) === String(id));
+  box.querySelectorAll('.ac-item').forEach(el => el.addEventListener('click', () => {
+    const a = byId(el.dataset.id); if (a) openDeviceModal(a);
+  }));
+  box.querySelectorAll('.ac-kebab').forEach(b => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const a = byId(b.dataset.id); if (a) openDeviceModal(a);
+  }));
+
+  const more = $(`#loadMoreBtn`);
+  if (more) more.hidden = goster >= list.length;
+  const info = $(`#cardsInfo`);
+  if (info) {
+    const sayfa = Math.ceil(goster / per) || 1;
+    const toplamSayfa = Math.max(1, Math.ceil(list.length / per));
+    info.textContent = `Toplam ${list.length} varlık · Sayfa ${sayfa} / ${toplamSayfa}`;
+  }
+}
+
 function paintAssetsTable() {
   const tbody = $(`#assetsBody`);
   if (!tbody) return;
@@ -2110,6 +2204,8 @@ function paintAssetsTable() {
     tbody.innerHTML = `<tr><td colspan="8" class="loading-cell">Filtreye uyan kayıt yok</td></tr>`;
     renderPager(0, per);
     updateBulkBar();
+    paintAssetCards(list, per);
+    renderMiniStats();
     return;
   }
 
@@ -2165,6 +2261,8 @@ function paintAssetsTable() {
 
   renderPager(list.length, per);
   updateBulkBar();
+  paintAssetCards(list, per);
+  renderMiniStats();
 }
 
 /* Sayfalama — 1 2 … n-1 [n] n+1 … son */
@@ -3511,7 +3609,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /* ── Varlıklar v2: filtreler istemcide, sunucuya tekrar gidilmez ── */
-  const yenidenCiz = () => { state.assetPage = 1; paintAssetsTable(); };
+  const yenidenCiz = () => { state.assetPage = 1; state.mobileShown = 0; paintAssetsTable(); };
   let aramaZaman = null;
   $(`#assetSearch`)?.addEventListener('input', () => {
     clearTimeout(aramaZaman);
@@ -3537,6 +3635,13 @@ document.addEventListener('DOMContentLoaded', () => {
     } else state.assetSort = { key: k, dir: 'asc' };
     yenidenCiz();
   }));
+
+  // Mobil: kümülatif yükleme
+  $(`#loadMoreBtn`)?.addEventListener('click', () => {
+    const per = Number($(`#rowsPerPage`)?.value) || 25;
+    state.mobileShown = (state.mobileShown || per) + per;
+    paintAssetsTable();
+  });
 
   // Toplu seçim
   $(`#selectAll`)?.addEventListener('change', (e) => {
