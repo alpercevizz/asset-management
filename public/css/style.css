@@ -652,6 +652,12 @@ body.sidebar-collapsed .sidebar-footer { padding: 14px 0 0; }
 
 .nav-sep { height: 1px; background: var(--sb-border); margin: 10px 6px; }
 
+/* Topbar'daki araç çubuğu yuvası (tarih aralığı + Filtrele) */
+.topbar-slot { display: flex; align-items: center; margin-left: auto; }
+.topbar-slot:empty { display: none; }
+.topbar-slot .dash-toolbar { margin: 0; }
+.topbar-slot ~ .topbar-actions { margin-left: 12px; }
+
 .kpi-grid--5 { grid-template-columns: repeat(5, 1fr); }
 /* Tasarım: ikon SOLDA, etiket sağında */
 .kpi-top { justify-content: flex-start; gap: 11px; }
@@ -751,6 +757,11 @@ body.sidebar-collapsed .sidebar-footer { padding: 14px 0 0; }
 .map-bubble { fill: var(--accent); fill-opacity: .28; stroke: var(--accent); stroke-width: 1.2; transition: fill-opacity .15s; }
 .map-bubble:hover { fill-opacity: .5; }
 .map-dot { fill: var(--accent); }
+.map-count { font-size: 11px; font-weight: 800; text-anchor: middle;
+  font-family: var(--font-display); letter-spacing: -.02em; pointer-events: none; }
+.map-city { font-size: 10px; font-weight: 600; text-anchor: middle;
+  fill: var(--text-dim); pointer-events: none; }
+.map-city--sm { font-size: 9px; fill: var(--text-muted); }
 .map-legend { display: flex; flex-wrap: wrap; gap: 12px 18px; padding-top: 10px; font-size: 12.5px; color: var(--text-dim); }
 .map-legend span { display: inline-flex; align-items: center; gap: 7px; }
 .map-legend i { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); display: inline-block; }
@@ -1531,4 +1542,127 @@ body.sidebar-collapsed .sidebar-footer { padding: 14px 0 0; }
   .kpi-value { font-size: 24px; }
   .tab span:last-child { font-size: 9.5px; }
   .topbar-brand small { display: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TV / DUVAR EKRANI MODU (body.tv-mode) — genişlik değil, AÇIK TERCİH
+   Uzaktan bakılan bir ekran: yoğun tablolar gizlenir, harita büyür, sayılar
+   iri olur, saat + sistem durumu görünür. (4K TV tarayıcıları 1920 CSS px
+   raporladığı için genişlikten "TV" sonucu çıkarılamaz.)
+   ══════════════════════════════════════════════════════════════════════════ */
+.tv-only { display: none; }
+.tv-status { display: none; }
+#tvToggle.active { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+
+body.tv-mode .tv-only { display: block; }
+body.tv-mode .tv-status { display: flex; align-items: center; gap: 16px; margin-left: auto; }
+body.tv-mode .topbar-search,
+body.tv-mode .topbar-slot,
+body.tv-mode #refreshBtn { display: none; }
+
+/* Tasarımda Son Aktiviteler haritanın SAĞ KOLONUNDA, ayrı satırda değil.
+   Kartlar farklı .dash-row* kapsayıcılarında olduğu için grid onları taşıyamaz →
+   satır kapsayıcıları `display: contents` ile şeffaflaştırılır ve tüm kartlar
+   TEK gride girer; sonra hücrelerine yerleştirilir. */
+/* Duvar ekranı KAYDIRILMAZ: dashboard viewport'a SIĞAR. Satırlar fr ile
+   paylaşılır, taşan iç listeler kendi içinde kaydırılır. */
+body.tv-mode .content { overflow: hidden; display: flex; flex-direction: column; }
+body.tv-mode .view:not(.hidden) { flex: 1; min-height: 0; }
+body.tv-mode #view-dashboard {
+  display: grid;
+  grid-template-columns: minmax(0,2fr) minmax(0,1fr);
+  grid-template-rows: auto auto minmax(0,1.05fr) minmax(0,1fr) auto;
+  gap: 14px;
+  align-items: stretch;
+  height: 100%;
+}
+body.tv-mode #view-dashboard > * { min-height: 0; }
+body.tv-mode .dash-row3 > .card,
+body.tv-mode .dash-row3--b > .card,
+body.tv-mode .dash-row2 > .card,
+body.tv-mode #tvDailyCard { min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+
+/* DİKKAT: gizleme kuralı yukarıdaki `display: flex`ten SONRA gelmeli — önce
+   yazılırsa flex kuralı onu ezer ve gizli kartlar geri gelir (yaşandı). */
+body.tv-mode .dash-row3:not(.dash-row3--b) > .card:nth-child(1),   /* Kategori donut */
+body.tv-mode .dash-row3--b > .card:nth-child(1),                   /* Son Eklenen tablo */
+body.tv-mode .dash-row3--b > .card:nth-child(2),                   /* Lokasyon durumu donut */
+body.tv-mode .card--insight:not(.tv-only) { display: none !important; }
+/* Taşan iç listeler kendi içinde kayar */
+body.tv-mode .act-list { overflow-y: auto; min-height: 0; flex: 1; }
+body.tv-mode .sev-body { min-height: 0; flex: 1; overflow-y: auto; }
+body.tv-mode .crit-strip { min-height: 0; }
+body.tv-mode #view-dashboard > .page-header { grid-column: 1 / -1; grid-row: 1; margin-bottom: 0; }
+body.tv-mode #view-dashboard > .kpi-grid { grid-column: 1 / -1; grid-row: 2; margin-bottom: 0; }
+body.tv-mode .dash-row3,
+body.tv-mode .dash-row3--b,
+body.tv-mode .dash-row2 { display: contents; }
+
+body.tv-mode .dash-row3:not(.dash-row3--b) > .card:nth-child(2) { grid-column: 1; grid-row: 3 / span 2; } /* harita */
+body.tv-mode .dash-row3:not(.dash-row3--b) > .card:nth-child(3) { grid-column: 2; grid-row: 3; }          /* uyumsuzluk */
+body.tv-mode .dash-row3--b > .card:nth-child(3) { grid-column: 2; grid-row: 4; }                          /* aktiviteler */
+body.tv-mode #tvDailyCard { grid-column: 1; grid-row: 5; margin-bottom: 0; }
+body.tv-mode .card--alert { grid-column: 2; grid-row: 5; }
+
+/* Harita hücresini doldursun */
+body.tv-mode .dash-row3 > .card:nth-child(2) { display: flex; flex-direction: column; }
+body.tv-mode .map-body { flex: 1; display: flex; flex-direction: column; }
+body.tv-mode .map-canvas { flex: 1; display: flex; align-items: center; }
+
+.tv-date, .tv-clock, .tv-sys { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-dim); }
+.tv-date b, .tv-clock b { color: var(--text); font-weight: 600; }
+.tv-sys { flex-direction: column; align-items: flex-end; gap: 1px; }
+.tv-sys small { font-size: 11px; color: var(--text-muted); }
+.tv-sys b { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--green); }
+.tv-sys b i { width: 8px; height: 8px; border-radius: 50%; background: var(--green); display: inline-block; }
+.tv-sep { width: 1px; height: 26px; background: var(--border); }
+
+/* AI Günlük Analiz */
+.tv-daily { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; padding: 18px 20px 6px; }
+.tvd { display: flex; align-items: flex-start; gap: 11px; }
+.tvd-ico { width: 38px; height: 38px; border-radius: 11px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; }
+.tvd b { display: block; font-family: var(--font-display); font-size: 30px; font-weight: 800;
+  line-height: 1.05; letter-spacing: -.03em; color: var(--text); }
+.tvd span { display: block; font-size: 12.5px; color: var(--text-muted); line-height: 1.35; margin-top: 2px; }
+.tv-daily-foot { display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; padding: 12px 20px 18px; font-size: 12.5px; color: var(--text-muted); }
+
+/* Uzaktan okunabilirlik: iri sayılar, büyük harita */
+body.tv-mode .kpi-value { font-size: 46px; }
+body.tv-mode .kpi-label { font-size: 15px; }
+body.tv-mode .kpi-ico { width: 44px; height: 44px; border-radius: 13px; }
+body.tv-mode .kpi-ico svg { width: 22px; height: 22px; }
+body.tv-mode .kpi-trend { font-size: 14px; }
+body.tv-mode .kpi-spark svg { width: 96px; height: 34px; }
+body.tv-mode .card-header h3 { font-size: 19px; }
+/* width:100% + height:auto ile SVG kutusu 590px'e çıkıp karttan taşıyor ve
+   alttan kırpılıyordu. Kesin yükseklik verilir; viewBox zaten içeriği ortalayıp
+   sığdırır (preserveAspectRatio varsayılanı). */
+body.tv-mode #locMap { width: 100%; height: 100%; max-height: none; }
+body.tv-mode .map-canvas { min-height: 0; }
+body.tv-mode .map-count { font-size: 13px; }
+body.tv-mode .map-city { font-size: 12px; }
+body.tv-mode .map-city--sm { font-size: 11px; }
+body.tv-mode .map-body { padding: 16px 20px 20px; }
+body.tv-mode .map-legend { font-size: 14px; gap: 10px 20px; }
+body.tv-mode .sev-row { padding: 16px 18px; }
+body.tv-mode .sev-name { font-size: 16px; }
+body.tv-mode .sev-count { font-size: 15px; }
+body.tv-mode .sev-ico { width: 38px; height: 38px; }
+body.tv-mode .act-txt strong { font-size: 15px; }
+body.tv-mode .act-txt span, body.tv-mode .act-time { font-size: 13px; }
+body.tv-mode .act-ico { width: 38px; height: 38px; }
+
+body.tv-mode .crit-chip strong { font-size: 14.5px; }
+body.tv-mode .crit-chip span { font-size: 13px; }
+body.tv-mode .page-header h1 { font-size: 34px; }
+
+/* Mobilde TV modu anlamsız — kapat */
+@media (max-width: 900px) {
+  body.tv-mode .tv-only { display: none; }
+  body.tv-mode .tv-status { display: none; }
+  body.tv-mode .dash-row3, body.tv-mode .dash-row3--b, body.tv-mode .dash-row2 { grid-template-columns: 1fr; }
+  body.tv-mode .kpi-value { font-size: 28px; }
+  #tvToggle { display: none; }
 }

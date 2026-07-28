@@ -525,10 +525,12 @@ async function loadDashboard() {
       warranty: warranty.expired?.items?.length || 0,
       uptime:   anomalies.long_uptime?.items?.length || 0,
       disk:     anomalies.low_disk?.items?.length || 0,
+      offline:  stats.by_status?.offline || 0,
     };
     state.critParts = parts;
     renderCriticalStrip(parts);
     renderInsight(summary, parts);
+    if (document.body.classList.contains('tv-mode')) renderTvDaily();
     if (state.catFilter && state.catFilter.size) applyDashFilter();
 
     // Eski görünümlerde kalan grafikler (elemanı yoksa sessizce atlanır)
@@ -546,6 +548,57 @@ async function loadDashboard() {
 /* KPI kartları — hepsi GERÇEK veriden; uydurma trend yüzdesi YOK.
    Toplam kart: son 14 günün kümülatif kayıt eğrisi (created_on).
    Durum kartları: toplam içindeki gerçek pay çubuğu. */
+/* ═══ TV / duvar ekranı modu ═══════════════════════════════════════════════
+   NOT: Ekran GENİŞLİĞİNDEN "bu bir TV" sonucu çıkarılamaz — 4K TV tarayıcıları
+   dPR 2 ile 1920 CSS px raporlar, 2560'lık masaüstü monitörler de yaygındır.
+   Bu yüzden mod AÇIK BİR TERCİH (topbar düğmesi, localStorage'da saklanır).
+   Yalnızca ilk açılışta ≥2200px ise önerilen varsayılan olarak açılır. */
+function applyTvMode(on) {
+  document.body.classList.toggle('tv-mode', !!on);
+  localStorage.setItem('tvMode', on ? '1' : '0');
+  const btn = $(`#tvToggle`);
+  if (btn) { btn.classList.toggle('active', !!on); btn.title = on ? 'TV modundan çık' : 'TV / duvar ekranı modu'; }
+  if (on) { startTvClock(); renderTvDaily(); } else { stopTvClock(); }
+}
+
+let _tvClockTimer = null;
+function startTvClock() {
+  const tick = () => {
+    const d = new Date();
+    const dEl = $(`#tvDate`), cEl = $(`#tvClock`);
+    if (dEl) dEl.textContent = d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' });
+    if (cEl) cEl.textContent = d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+  };
+  tick();
+  if (!_tvClockTimer) _tvClockTimer = setInterval(tick, 30000);
+}
+function stopTvClock() { if (_tvClockTimer) { clearInterval(_tvClockTimer); _tvClockTimer = null; } }
+
+/* AI Günlük Analiz — 4 kutu, hepsi GERÇEK tespitlerden (kural tabanlı, LLM yok) */
+function renderTvDaily() {
+  const box = $(`#tvDaily`);
+  if (!box) return;
+  const s = state.locSummary || {};
+  const p = state.critParts || {};
+  const tiles = [
+    { n: s.tasinmis || 0,  t: 'cihaz farklı<br>lokasyonda', tone: 'blue',
+      ico: '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>' },
+    { n: p.warranty || 0,  t: 'garanti süresi<br>bitiyor', tone: 'orange',
+      ico: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>' },
+    { n: p.disk || 0,      t: 'cihazın diski<br>dolu', tone: 'red',
+      ico: '<rect x="2" y="7" width="20" height="10" rx="2"/><line x1="6" y1="12" x2="6.01" y2="12"/>' },
+    { n: p.offline || 0,   t: `cihaz ${(s.threshold_days || 7)} gündür<br>çevrimdışı`, tone: 'green',
+      ico: '<path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>' },
+  ];
+  box.innerHTML = tiles.map(t => `
+    <div class="tvd">
+      <span class="tvd-ico kpi-ico--${t.tone}">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${t.ico}</svg>
+      </span>
+      <div><b>${t.n}</b><span>${t.t}</span></div>
+    </div>`).join('');
+}
+
 /* ═══ Kategori filtresi ═══════════════════════════════════════════════════
    Filtre İSTEMCİDE yeniden hesaplar (sunucuya ek istek yok). Trend rozetleri
    sunucudaki filtresiz anlık görüntülerden gelir → filtre etkinken GİZLENİR,
@@ -803,14 +856,22 @@ function renderLocationMap(locations) {
   const max = Math.max(1, ...sorted.map(([, v]) => v.n));
   const colorOf = (i) => DONUT_COLORS[i % DONUT_COLORS.length];
 
+  // Etiketler: balon yeterince büyükse sayı İÇİNE, şehir adı ÜSTÜNE yazılır
+  // (tasarım referansı). Küçük balonlarda yazı okunmaz → yalnız nokta kalır.
   const bubbles = sorted.map(([key, v], i) => {
     const [lat, lon] = TR_CITIES[key];
     const r = (7 + Math.sqrt(v.n / max) * 22) * (state.mapZoom || 1); // alan ~ adet
     const c = colorOf(i);
-    const x = projX(lon).toFixed(1), y = projY(lat).toFixed(1);
+    const x = +projX(lon).toFixed(1), y = +projY(lat).toFixed(1);
+    const ad = key.charAt(0).toUpperCase() + key.slice(1);
+    const buyuk = r >= 13;
     return `<circle class="map-bubble" cx="${x}" cy="${y}" r="${r.toFixed(1)}" fill="${c}" stroke="${c}">
-        <title>${escapeHtml(v.names.join(', '))} — ${v.n} cihaz</title></circle>
-      <circle class="map-dot" cx="${x}" cy="${y}" r="2.5" fill="${c}"/>`;
+        <title>${escapeHtml(v.names.join(', '))} — ${v.n} cihaz</title></circle>` +
+      (buyuk
+        ? `<text class="map-count" x="${x}" y="${y + 4}" fill="#fff">${v.n}</text>
+           <text class="map-city" x="${x}" y="${(y - r - 7).toFixed(1)}">${escapeHtml(ad)}</text>`
+        : `<circle class="map-dot" cx="${x}" cy="${y}" r="2.5" fill="${c}"/>
+           <text class="map-city map-city--sm" x="${x}" y="${(y - r - 5).toFixed(1)}">${escapeHtml(ad)}</text>`);
   }).join('');
 
   svg.innerHTML = `<path class="map-land" d="${path}"/>${bubbles}`;
@@ -3212,6 +3273,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // Bildirim zili → Uyarılar görünümü
   $(`#bellBtn`)?.addEventListener('click', () => showView('alerts'));
 
+  // TV modu: kayıtlı tercih yoksa yalnız çok geniş ekranda (≥2200) önerilir
+  const savedTv = localStorage.getItem('tvMode');
+  applyTvMode(savedTv === null ? window.matchMedia('(min-width: 2200px)').matches : savedTv === '1');
+  $(`#tvToggle`)?.addEventListener('click', () =>
+    applyTvMode(!document.body.classList.contains('tv-mode')));
+
   // Hesap menüsü (topbar avatar + sidebar üç nokta)
   const userMenu = $(`#userMenu`);
   const toggleUserMenu = (e) => { e.stopPropagation(); userMenu?.classList.toggle('open'); };
@@ -3391,6 +3458,21 @@ document.addEventListener('DOMContentLoaded', () => {
   // Ayarlar kaydet butonları
   $(`#saveThresholds`)?.addEventListener('click', saveThresholds);
   $(`#seedExpectedBtn`)?.addEventListener('click', seedExpectedLocations);
+
+  /* Tarih aralığı + Filtrele: tasarımda ≥901px'te TOPBAR'da, mobilde başlık
+     altında duruyor. CSS iki farklı kapsayıcı arasında taşıyamaz → tek öğe
+     JS ile uygun montaj noktasına taşınır (kopya YOK, olay bağları korunur). */
+  const toolbar = $(`.dash-toolbar`);
+  const slot = $(`#topbarToolbarSlot`);
+  const headerMount = $(`#view-dashboard .page-header`);
+  function placeToolbar() {
+    if (!toolbar || !slot || !headerMount) return;
+    const wide = window.matchMedia('(min-width: 901px)').matches;
+    const target = wide ? slot : headerMount;
+    if (toolbar.parentElement !== target) target.appendChild(toolbar);
+  }
+  placeToolbar();
+  window.addEventListener('resize', placeToolbar);
 
   // ── Tarih aralığı seçici: trend penceresini VE zaman bazlı kartları etkiler ──
   state.rangeDays = Number(localStorage.getItem('dashRangeDays')) || 30;

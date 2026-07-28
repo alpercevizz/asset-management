@@ -157,7 +157,20 @@
         <input type="text" id="searchInput" placeholder="Varlık, kategori, lokasyon veya kullanıcı ara..." />
         <kbd>⌘ K</kbd>
       </div>
+      <div class="tv-status" id="tvStatus" aria-hidden="true">
+        <span class="tv-date"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><b id="tvDate">—</b></span>
+        <span class="tv-sep"></span>
+        <span class="tv-clock"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><b id="tvClock">—</b></span>
+        <span class="tv-sep"></span>
+        <span class="tv-sys"><small>Sistem Durumu</small><b id="tvSysState"><i></i>Normal</b></span>
+      </div>
+      <div class="topbar-slot" id="topbarToolbarSlot"></div>
       <div class="topbar-actions">
+        <button class="btn-icon" id="tvToggle" title="TV / duvar ekranı modu" aria-label="TV modu">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="4" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/>
+          </svg>
+        </button>
         <button class="btn-icon" id="themeToggle" title="Tema değiştir" aria-label="Tema değiştir">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
@@ -436,6 +449,18 @@
             <div class="act-list" id="activityList">
               <p class="loading-cell">Yükleniyor...</p>
             </div>
+          </div>
+        </div>
+
+        <!-- TV modu: AI Günlük Analiz (yalnız TV modunda görünür) -->
+        <div class="card card--insight tv-only" id="tvDailyCard">
+          <div class="card-header">
+            <h3>AI Günlük Analiz</h3>
+          </div>
+          <div class="tv-daily" id="tvDaily"></div>
+          <div class="tv-daily-foot">
+            <span>Detaylı analiz ve öneriler için Risk &amp; Öngörü sayfasını inceleyin.</span>
+            <button class="btn-add" data-view="insights">Analiz Raporu</button>
           </div>
         </div>
 
