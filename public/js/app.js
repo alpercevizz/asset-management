@@ -403,6 +403,10 @@ function showView(name) {
   if (name === 'insights') loadInsights();
   if (name === 'locations') loadLocationsView();
   if (name === 'users') loadUsersView();
+  // Operasyon Merkezi tam ekrandır (kenar çubuğu/topbar gizli); diğer sayfalar
+  // TV modunda da normal kabuğunu korur.
+  document.body.classList.toggle('tv-full', name === 'tv');
+  if (name === 'tv') { tvxStart(); } else { tvxStop(); }
 }
 
 const RISK_LEVEL_CLASS = { 'Kritik': 'badge--offline', 'Yüksek': 'badge--offline', 'Orta': 'badge--unknown', 'Düşük': 'badge--online' };
@@ -536,7 +540,6 @@ async function loadDashboard() {
     state.critParts = parts;
     renderCriticalStrip(parts);
     renderInsight(summary, parts);
-    if (document.body.classList.contains('tv-mode')) renderTvDaily();
     if (state.catFilter && state.catFilter.size) applyDashFilter();
 
     // Eski görünümlerde kalan grafikler (elemanı yoksa sessizce atlanır)
@@ -554,55 +557,347 @@ async function loadDashboard() {
 /* KPI kartları — hepsi GERÇEK veriden; uydurma trend yüzdesi YOK.
    Toplam kart: son 14 günün kümülatif kayıt eğrisi (created_on).
    Durum kartları: toplam içindeki gerçek pay çubuğu. */
-/* ═══ TV / duvar ekranı modu ═══════════════════════════════════════════════
-   NOT: Ekran GENİŞLİĞİNDEN "bu bir TV" sonucu çıkarılamaz — 4K TV tarayıcıları
-   dPR 2 ile 1920 CSS px raporlar, 2560'lık masaüstü monitörler de yaygındır.
-   Bu yüzden mod AÇIK BİR TERCİH (topbar düğmesi, localStorage'da saklanır).
-   Yalnızca ilk açılışta ≥2200px ise önerilen varsayılan olarak açılır. */
+/* ═══ TV modu anahtarı ═════════════════════════════════════════════════════
+   Ekran GENİŞLİĞİNDEN "bu bir TV" sonucu çıkarılamaz (4K TV tarayıcıları dPR 2
+   ile 1920 CSS px raporlar). Bu yüzden AÇIK TERCİH; yalnız ilk açılışta
+   ≥2200px ise önerilen varsayılan olarak açılır. */
 function applyTvMode(on) {
   document.body.classList.toggle('tv-mode', !!on);
   localStorage.setItem('tvMode', on ? '1' : '0');
   const btn = $(`#tvToggle`);
   if (btn) { btn.classList.toggle('active', !!on); btn.title = on ? 'TV modundan çık' : 'TV / duvar ekranı modu'; }
-  if (on) { startTvClock(); renderTvDaily(); } else { stopTvClock(); }
+  // TV modu görünümü ELE GEÇİRMEZ: yalnız Dashboard'da tam ekran Operasyon
+  // Merkezi'ne geçer; diğer sayfalar kendi düzeniyle kalır, sadece TV stili alır.
+  const hedef = (state.currentView === 'tv' || state.currentView === 'dashboard') ? 'dashboard' : state.currentView;
+  showView(on ? (hedef === 'dashboard' ? 'tv' : hedef) : (state.currentView === 'tv' ? 'dashboard' : state.currentView));
 }
 
-let _tvClockTimer = null;
-function startTvClock() {
-  const tick = () => {
-    const d = new Date();
-    const dEl = $(`#tvDate`), cEl = $(`#tvClock`);
-    if (dEl) dEl.textContent = d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' });
-    if (cEl) cEl.textContent = d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-  };
-  tick();
-  if (!_tvClockTimer) _tvClockTimer = setInterval(tick, 30000);
-}
-function stopTvClock() { if (_tvClockTimer) { clearInterval(_tvClockTimer); _tvClockTimer = null; } }
+/* ═══ TV / OPERASYON MERKEZİ ═════════════════════════════════════════════════
+   Duvar ekranı görünümü. TÜM sayılar gerçek veriden gelir.
+   İKİ BİLİNÇLİ SAPMA (tasarımda vardı, bizde karşılığı YOK):
+   1) "Sistem Sağlığı" tasarımda Sunucular %98 / Ağ %96 / Depolama %92 /
+      Güvenlik %97 gösteriyor — sunucu/ağ/depolama izleme özelliği sistemde YOK,
+      bu yüzdeleri uydurmak gerekirdi. Yerine GERÇEK sistem kontrolleri konuldu
+      (veritabanı, WORM yedek senkronu, AI servisi, bildirim hattı, lokasyon
+      doğrulaması) ve genel sağlık bunlardan HESAPLANIR.
+   2) "Duyurular" şeridi — duyuru özelliği yok. Yerine gerçek kritik uyarılar ve
+      son işlemler akar.
+   Ayrıca haritadaki Gün/Hafta/Ay seçicisi UYGULANMADI: lokasyon verisinin
+   periyot kırılımı yok, çalışmayan bir kontrol koymak yanıltıcı olurdu. */
 
-/* AI Günlük Analiz — 4 kutu, hepsi GERÇEK tespitlerden (kural tabanlı, LLM yok) */
-function renderTvDaily() {
-  const box = $(`#tvDaily`);
-  if (!box) return;
-  const s = state.locSummary || {};
-  const p = state.critParts || {};
-  const tiles = [
-    { n: s.tasinmis || 0,  t: 'cihaz farklı<br>lokasyonda', tone: 'blue',
+let _tvxTimer = null;
+
+function tvxStart() {
+  tvxTick();
+  if (!_tvxTimer) _tvxTimer = setInterval(tvxTick, 1000);
+  tvxRenderAll();
+}
+function tvxStop() { if (_tvxTimer) { clearInterval(_tvxTimer); _tvxTimer = null; } }
+
+function tvxTick() {
+  const d = new Date();
+  const tarih = d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' });
+  const saat = d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const set = (id, v) => { const e = $('#' + id); if (e) e.textContent = v; };
+  set('tvxDate', tarih); set('tvxClock', saat);
+  set('tvxTickerClock', saat.slice(0, 5));
+}
+
+async function tvxRenderAll() {
+  // Veri yoksa çek (TV moduna doğrudan girilmiş olabilir)
+  if (!state.allAssets?.length || !state.locSummary) {
+    try {
+      const [inv, stats, sum, lc, anom, warr, lic, sys, tr] = await Promise.all([
+        fetchAssets({ size: 200 }),
+        fetchStats(),
+        fetchLocationSummary().catch(() => ({ ...EMPTY_SUMMARY })),
+        fetchLifecycleLog(30).catch(() => ({ events: [] })),
+        fetchAnomalies().catch(() => ({})),
+        fetchWarranty().catch(() => ({})),
+        fetchLicenseCompliance().catch(() => ({})),
+        fetch('/api/settings').then(r => r.ok ? r.json() : null).catch(() => null),
+        fetchTrends(180).catch(() => null),
+      ]);
+      state.allAssets = inv.results || [];
+      state.assets = state.allAssets;
+      state.stats = stats;
+      state.locSummary = sum;
+      state.railEvents = lc.events || lc.log || [];
+      state.tvxSystem = sys?.system || null;
+      state.tvxLicense = lic || {};
+      state.critParts = {
+        drift: sum.tasinmis || 0,
+        warranty: warr?.expired?.items?.length || 0,
+        uptime: anom?.long_uptime?.items?.length || 0,
+        disk: anom?.low_disk?.items?.length || 0,
+        offline: stats.by_status?.offline || 0,
+        license: lic?.expiring_soon?.count || lic?.expiring_soon?.items?.length || 0,
+      };
+      if (tr) { state.trends = tr.trends || {}; state.trendSeries = tr.series || []; state.tvxSeries = tr.series || []; }
+    } catch (e) { console.error('TV verisi alınamadı:', e.message); }
+  }
+  tvxKpis(); tvxMap(); tvxActs(); tvxCrits(); tvxCategory(); tvxTrend(); tvxAi(); tvxHealth(); tvxTicker();
+}
+
+function tvxKpis() {
+  const box = $(`#tvxKpis`); if (!box) return;
+  const st = state.stats || {}; const sum = state.locSummary || {};
+  const tr = state.trends || {}; const win = tr.window_days || 30;
+  const k = [
+    { ad: 'TOPLAM VARLIK', n: st.total || 0, tone: 'blue', renk: 'var(--accent)', t: tr.total,
+      seri: state.trendSeries, sc: '#818cf8', st: null,
+      ico: '<path d="M12 2l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5"/>' },
+    { ad: 'AKTİF VARLIK', n: st.by_status?.online || 0, tone: 'green', renk: 'var(--green)', t: tr.online,
+      seri: state.seriesOnline, sc: '#34d399', st: 'online',
+      ico: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/>' },
+    { ad: 'DEPODA', n: st.by_status?.depoda || 0, tone: 'orange', renk: 'var(--orange)', t: tr.depoda,
+      seri: state.seriesDepoda, sc: '#fb923c', st: 'depoda',
+      ico: '<path d="M3 9l9-6 9 6v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21V12h6v9"/>' },
+    { ad: 'KULLANIM DIŞI', n: st.by_status?.offline || 0, tone: 'red', renk: 'var(--red)', t: tr.offline,
+      seri: state.seriesOffline, sc: '#f87171', st: 'offline',
+      ico: '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>' },
+    { ad: 'LOKASYON UYUMSUZLUĞU', n: sum.tasinmis || 0, tone: 'blue', renk: 'var(--accent)',
+      alt: `${sum.location_count || 0} aktif lokasyon`, git: 'alerts',
       ico: '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>' },
-    { n: p.warranty || 0,  t: 'garanti süresi<br>bitiyor', tone: 'orange',
-      ico: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>' },
-    { n: p.disk || 0,      t: 'cihazın diski<br>dolu', tone: 'red',
-      ico: '<rect x="2" y="7" width="20" height="10" rx="2"/><line x1="6" y1="12" x2="6.01" y2="12"/>' },
-    { n: p.offline || 0,   t: `cihaz ${(s.threshold_days || 7)} gündür<br>çevrimdışı`, tone: 'green',
-      ico: '<path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>' },
   ];
-  box.innerHTML = tiles.map(t => `
-    <div class="tvd">
-      <span class="tvd-ico kpi-ico--${t.tone}">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${t.ico}</svg>
+  box.innerHTML = k.map((c, i) => `
+    <button class="tvx-kpi" style="color:${c.renk}" data-i="${i}">
+      <span class="tvx-kpi-top">
+        <span class="tvx-kpi-ico kpi-ico--${c.tone}">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.ico}</svg>
+        </span>
+        <span class="tvx-kpi-label">${c.ad}</span>
+        ${c.alt ? '<svg class="tvx-kpi-arr" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' : ''}
       </span>
-      <div><b>${t.n}</b><span>${t.t}</span></div>
+      <span class="tvx-kpi-val" style="color:${c.renk}">${(c.n).toLocaleString('tr-TR')}</span>
+      <span class="tvx-kpi-foot">
+        ${c.alt ? `<span class="tvx-kpi-sub">${c.alt}</span>`
+                : `<span class="kpi-trend" id="tvxTr${i}"></span><span class="kpi-spark" id="tvxSp${i}"></span>`}
+      </span>
+    </button>`).join('');
+  k.forEach((c, i) => {
+    if (c.alt) return;
+    renderTrend(`tvxTr${i}`, c.t, win);
+    sparkFromSeries(`tvxSp${i}`, c.seri || [], c.sc);
+  });
+  box.querySelectorAll('.tvx-kpi').forEach((b, i) => b.addEventListener('click', () => {
+    const c = k[i];
+    if (c.git) { applyTvMode(false); showView(c.git); return; }
+    if (c.st) { applyTvMode(false); const s = $(`#filterStatus`); if (s) s.value = c.st; showView('assets'); }
+  }));
+}
+
+function tvxMap() {
+  const locs = state.locSummary?.locations || {};
+  // Haritayı mevcut çizici ile aynı mantıkta çiz (tek kaynak)
+  const svg = $(`#tvxMap`), legend = $(`#tvxMapLegend`);
+  if (svg && legend) {
+    const eski = { m: $(`#locMap`), l: $(`#locMapLegend`) };
+    svg.id = 'locMap'; legend.id = 'locMapLegend';
+    if (eski.m && eski.m !== svg) eski.m.id = '_locMapDash';
+    if (eski.l && eski.l !== legend) eski.l.id = '_locMapLegendDash';
+    renderLocationMap(locs);
+    svg.id = 'tvxMap'; legend.id = 'tvxMapLegend';
+    if (eski.m && eski.m !== svg) eski.m.id = 'locMap';
+    if (eski.l && eski.l !== legend) eski.l.id = 'locMapLegend';
+  }
+
+  // En yoğun 5 lokasyon
+  const top = Object.entries(locs).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const tl = $(`#tvxTopLoc`);
+  if (tl) tl.innerHTML = top.length ? top.map(([ad, n], i) =>
+    `<div class="tvx-loc-row"><i style="background:${DONUT_COLORS[i % DONUT_COLORS.length]}"></i><span title="${escapeHtml(ad)}">${escapeHtml(ad)}</span><b>${n}</b></div>`).join('')
+    : '<p class="tvx-trend-empty">Lokasyon verisi yok</p>';
+
+  // Durum dağılımı donut'u (aktif/depoda/kullanım dışı/uyumsuz)
+  const st = state.stats?.by_status || {};
+  const sum = state.locSummary || {};
+  const parcalar = [
+    ['Aktif', st.online || 0, '#10b981'],
+    ['Depoda', st.depoda || 0, '#f59e0b'],
+    ['Kullanım Dışı', st.offline || 0, '#ef4444'],
+    ['Uyumsuz', sum.tasinmis || 0, '#a855f7'],
+  ].filter(p => p[1] > 0);
+  const toplam = parcalar.reduce((a, p) => a + p[1], 0) || 1;
+  const dsvg = $(`#tvxStateDonut`), dleg = $(`#tvxStateLegend`), dtot = $(`#tvxStateTotal`);
+  if (dtot) dtot.textContent = (state.stats?.total || 0).toLocaleString('tr-TR');
+  if (dsvg) {
+    const R = 42, C = 2 * Math.PI * R; let off = 0;
+    dsvg.innerHTML = parcalar.map(([, n, c]) => {
+      const len = (n / toplam) * C;
+      const seg = `<circle cx="60" cy="60" r="${R}" fill="none" stroke="${c}" stroke-width="17"
+        stroke-dasharray="${len - 1.5} ${C - len + 1.5}" stroke-dashoffset="${-off}"/>`;
+      off += len; return seg;
+    }).join('');
+  }
+  if (dleg) dleg.innerHTML = parcalar.map(([ad, n, c]) =>
+    `<div class="tvx-sd-row"><i style="background:${c}"></i><span>${ad}</span><b>%${Math.round((n / toplam) * 100)}</b></div>`).join('');
+}
+
+function tvxActs() {
+  const box = $(`#tvxActs`); if (!box) return;
+  const list = (state.railEvents || []).slice(-6).reverse();
+  if (!list.length) { box.innerHTML = '<p class="tvx-trend-empty">Henüz kayıtlı işlem yok</p>'; return; }
+  box.innerHTML = list.map(e => {
+    const [tone, ico] = ACT_ICON[e.to_status] || ACT_DEFAULT;
+    const t = new Date(e.timestamp);
+    const saat = isNaN(t) ? '—' : t.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+    return `<div class="tvx-a">
+      <span class="tvx-a-time">${saat}</span>
+      <span class="tvx-a-ico kpi-ico--${tone}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ico}</svg>
+      </span>
+      <span class="tvx-a-txt"><strong>${escapeHtml((e.hostname || e.serial_number || 'Cihaz') + ' — ' + (e.to_status || ''))}</strong>
+        <span>${escapeHtml(e.note || e.actor || '')}</span></span>
+    </div>`;
+  }).join('');
+}
+
+function tvxCrits() {
+  const box = $(`#tvxCrits`); if (!box) return;
+  const p = state.critParts || {};
+  const rows = [
+    { n: p.drift || 0,    t: 'Lokasyon Dışı Cihazlar', tone: 'red' },
+    { n: p.warranty || 0, t: 'Garanti Süresi Dolan',   tone: 'orange' },
+    { n: p.uptime || 0,   t: 'Bakım Süresi Geçen',     tone: 'orange' },
+    { n: p.disk || 0,     t: 'Disk Alanı Düşük',       tone: 'red' },
+    { n: p.offline || 0,  t: 'Çevrimdışı Cihaz',       tone: 'red' },
+    { n: p.license || 0,  t: 'Lisans Süresi Yaklaşan', tone: 'orange' },
+  ];
+  setPill('tvxCritPill', rows.reduce((a, r) => a + r.n, 0));
+  box.innerHTML = rows.map(r => `
+    <button class="tvx-c">
+      <span class="tvx-c-ico sev-ico--${r.tone}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </span>
+      <span class="tvx-c-name">${r.t}</span><span class="tvx-c-n">${r.n}</span>
+    </button>`).join('');
+  box.querySelectorAll('.tvx-c').forEach(b => b.addEventListener('click', () => { applyTvMode(false); showView('alerts'); }));
+}
+
+function tvxCategory() {
+  const byCat = state.stats?.by_category || {};
+  const all = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+  const top = all.slice(0, 5);
+  const kalan = all.slice(5).reduce((a, [, n]) => a + n, 0);
+  if (kalan) top.push(['Diğer', kalan]);
+  const toplam = state.stats?.total || 0;
+  const svg = $(`#tvxCatDonut`), leg = $(`#tvxCatLegend`), tot = $(`#tvxCatTotal`);
+  if (tot) tot.textContent = toplam.toLocaleString('tr-TR');
+  const sum = top.reduce((a, [, n]) => a + n, 0) || 1;
+  if (svg) {
+    const R = 42, C = 2 * Math.PI * R; let off = 0;
+    svg.innerHTML = top.map(([ad, n], i) => {
+      const len = (n / sum) * C;
+      const seg = `<circle cx="60" cy="60" r="${R}" fill="none" stroke="${donutColor(ad, i)}" stroke-width="17"
+        stroke-dasharray="${len - 1.5} ${C - len + 1.5}" stroke-dashoffset="${-off}"/>`;
+      off += len; return seg;
+    }).join('');
+  }
+  if (leg) leg.innerHTML = top.map(([ad, n], i) => `
+    <div class="dl-row"><span class="dl-name"><span class="dl-dot" style="background:${donutColor(ad, i)}"></span>${escapeHtml(ad)}</span>
+      <span class="dl-count">${n}</span><span class="dl-pct">%${Math.round((n / sum) * 100)}</span></div>`).join('');
+}
+
+/* Aylık trend — GERÇEK günlük anlık görüntülerden aylık son değer */
+function tvxTrend() {
+  const box = $(`#tvxTrend`); if (!box) return;
+  const seri = state.tvxSeries || state.trendSeries || [];
+  if (seri.length < 3) {
+    box.innerHTML = '<p class="tvx-trend-empty">Trend için yeterli geçmiş yok — günlük anlık görüntüler birikiyor.</p>';
+    return;
+  }
+  // Ay bazında son değeri al
+  const aylar = {};
+  seri.forEach(p => { aylar[p.day.slice(0, 7)] = p.value; });
+  const noktalar = Object.entries(aylar).sort().slice(-6);
+  if (noktalar.length < 2) {
+    box.innerHTML = '<p class="tvx-trend-empty">Trend için en az iki aylık veri gerekir.</p>';
+    return;
+  }
+  const W = 460, H = 150, PAD = 26;
+  const vals = noktalar.map(n => n[1]);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const span = (max - min) || 1;
+  const x = (i) => PAD + (i / (noktalar.length - 1)) * (W - PAD * 2);
+  const y = (v) => H - 30 - ((v - min) / span) * (H - 60);
+  const d = noktalar.map((n, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(n[1]).toFixed(1)}`).join(' ');
+  const AY = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <path d="${d} L${x(noktalar.length - 1).toFixed(1)} ${H - 30} L${PAD} ${H - 30} Z" fill="var(--accent)" opacity=".12"/>
+    <path d="${d}" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    ${noktalar.map((n, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(n[1]).toFixed(1)}" r="3.6" fill="var(--accent)"/>
+      <text x="${x(i).toFixed(1)}" y="${(y(n[1]) - 9).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="700" fill="var(--text)">${n[1]}</text>
+      <text x="${x(i).toFixed(1)}" y="${H - 10}" text-anchor="middle" font-size="10" fill="var(--text-muted)">${AY[Number(n[0].slice(5, 7)) - 1]}</text>`).join('')}
+  </svg>`;
+}
+
+function tvxAi() {
+  const ul = $(`#tvxAiList`); if (!ul) return;
+  const s = state.locSummary || {}, p = state.critParts || {};
+  const tik = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+  const satirlar = [
+    `${s.tasinmis || 0} cihaz farklı lokasyonda.`,
+    `${p.warranty || 0} garanti bitiyor (30 gün içinde).`,
+    `${p.disk || 0} cihazın diski dolu.`,
+    `${p.offline || 0} cihaz çevrimdışı.`,
+  ];
+  ul.innerHTML = satirlar.map(t => `<li>${tik}<span>${t}</span></li>`).join('');
+}
+
+/* Sistem sağlığı — GERÇEK kontroller (bkz. dosya başındaki not) */
+function tvxHealth() {
+  const box = $(`#tvxHealth`); if (!box) return;
+  const sys = state.tvxSystem || {};
+  const it = sys.integrations || {};
+  const b = sys.backup || null;
+  const kontrol = [
+    { ad: 'Veritabanı', ok: !!sys.database?.driver, bilgi: sys.database?.driver || '—' },
+    { ad: 'WORM yedek', ok: !!(b && b.in_sync), bilgi: b ? (b.in_sync ? 'senkron' : 'senkron değil') : '—' },
+    { ad: 'AI servisi', ok: !!sys.ai?.provider, bilgi: sys.ai?.provider ? 'bağlı' : 'yok' },
+    { ad: 'Bildirim hattı', ok: !!it.n8n_notify, bilgi: it.n8n_notify ? 'yapılandırıldı' : 'yok' },
+    { ad: 'Lokasyon doğrulaması', ok: !!it.location_tokens, bilgi: it.location_tokens ? 'açık' : 'kapalı' },
+  ];
+  box.innerHTML = kontrol.map(k => `
+    <div class="tvx-h">
+      <span>${k.ad}</span>
+      <b style="color:var(--${k.ok ? 'green' : 'orange'})">${k.bilgi}</b>
     </div>`).join('');
+
+  const gecen = kontrol.filter(k => k.ok).length;
+  const pct = Math.round((gecen / kontrol.length) * 100);
+  const el = $(`#tvxHealthPct`); if (el) { el.textContent = '%' + pct; el.style.color = pct >= 80 ? 'var(--green)' : 'var(--orange)'; }
+  const g = $(`#tvxGauge`);
+  if (g) {
+    const R = 45, C = 2 * Math.PI * R, len = (pct / 100) * C;
+    g.innerHTML = `<circle cx="60" cy="60" r="${R}" fill="none" stroke="var(--bg-hover)" stroke-width="11"/>
+      <circle cx="60" cy="60" r="${R}" fill="none" stroke="${pct >= 80 ? 'var(--green)' : 'var(--orange)'}"
+        stroke-width="11" stroke-linecap="round" stroke-dasharray="${len} ${C - len}"/>`;
+  }
+  const note = $(`#tvxHealthNote`);
+  if (note) note.textContent = gecen === kontrol.length
+    ? '✓ Tüm sistem kontrolleri geçti.'
+    : `${kontrol.length - gecen} kontrol yapılandırılmamış.`;
+  const ss = $(`#tvxSysState`);
+  if (ss) { ss.className = pct >= 80 ? '' : 'warn'; ss.innerHTML = `<i></i>${pct >= 80 ? 'Normal' : 'Dikkat'}`; }
+}
+
+/* Duyuru şeridi — gerçek uyarı ve işlemlerden (bkz. dosya başındaki not) */
+function tvxTicker() {
+  const box = $(`#tvxTickerItems`); if (!box) return;
+  const p = state.critParts || {};
+  const ogeler = [];
+  if (p.drift)    ogeler.push(['red', `${p.drift} cihaz ait olduğu lokasyonun dışında`]);
+  if (p.warranty) ogeler.push(['orange', `${p.warranty} cihazın garantisi doldu`]);
+  if (p.license)  ogeler.push(['blue', `${p.license} lisans yakında sona eriyor`]);
+  if (p.disk)     ogeler.push(['red', `${p.disk} cihazın diski dolmak üzere`]);
+  if (p.offline)  ogeler.push(['orange', `${p.offline} cihaz çevrimdışı`]);
+  (state.railEvents || []).slice(-3).reverse().forEach(e =>
+    ogeler.push(['green', `${e.hostname || e.serial_number || 'Cihaz'} — ${e.to_status}`]));
+  if (!ogeler.length) ogeler.push(['green', 'Aktif uyarı yok — tüm sistemler normal']);
+  const html = ogeler.map(([t, m]) =>
+    `<span><i style="background:var(--${t === 'blue' ? 'accent' : t})"></i>${escapeHtml(m)}</span>`).join('');
+  box.innerHTML = html + html;   // kesintisiz kayma için iki kopya
 }
 
 /* ═══ Kategori filtresi ═══════════════════════════════════════════════════
@@ -2139,7 +2434,7 @@ function renderAssetsRail() {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         </span>
         <span class="sev-name">${c.t}<small>${c.n} cihaz</small></span>
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        <span class="sev-count" style="color:var(--${c.tone})">${c.n}</span>
       </button>`).join('');
     crit.querySelectorAll('.sev-row').forEach(r => r.addEventListener('click', () => showView('alerts')));
   }
