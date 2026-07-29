@@ -1772,21 +1772,20 @@ body.sidebar-collapsed .sidebar-footer { padding: 14px 0 0; }
   .cards-foot { display: block; padding: 14px 16px 18px; }
 }
 
-/* ── Cihaz modalı mobilde ALT SAYFA (bottom sheet) ── */
-@media (max-width: 900px) {
-  #deviceModalOverlay { align-items: flex-end; padding: 0; }
+/* ── Cihaz modalı telefonda: YÜZEN DİYALOG ──────────────────────────────────
+   Önce kenardan kenara alt sayfa (bottom sheet) idi; ekranı doldurduğu için
+   modal değil AYRI BİR SAYFA gibi okunuyordu. Her kenarda koyu arka plan
+   görünecek kadar boşluk bırakılıp dört köşesi yuvarlatıldı — üstte açılmış
+   bir diyalog olduğu belli oluyor. Alt sayfaya özgü tutamak ve yukarı kayma
+   animasyonu bu yüzden kaldırıldı. */
+@media (max-width: 760px) {
+  #deviceModalOverlay { align-items: center; padding: 16px; }
   #deviceModalOverlay .modal {
-    max-width: 100%; width: 100%; max-height: 92vh;
-    border-radius: 22px 22px 0 0; border-bottom: none;
-    animation: sheetUp .26s cubic-bezier(.3,.8,.3,1);
+    max-width: 100%; width: 100%; border-radius: 18px; overflow: hidden;
+    animation: modalPop .2s cubic-bezier(.3,.8,.3,1);
   }
-  #deviceModalOverlay .modal::before {
-    content: ""; display: block; width: 44px; height: 4px; border-radius: 999px;
-    background: var(--border-strong); margin: 10px auto 0; flex-shrink: 0;
-  }
-  #deviceModalOverlay .modal-header { padding: 14px 20px; }
-  #deviceModalOverlay .modal-body { padding: 16px 20px 24px; }
-  @keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  #deviceModalOverlay .modal-header { padding: 14px 18px; }
+  @keyframes modalPop { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
 }
 
 /* ══ VARLIKLAR — GENİŞ MONİTÖR: sağ bağlam rayı ═══════════════════════════
@@ -2154,8 +2153,10 @@ body.tv-mode:not(.tv-full) .assets-rail .sev-count {
    solda, sekmeler sağdaki iki kolonu kaplar. Ortalanmış dar bir kutu yerine
    içerik alanını dolduran sayfa gibi durur. */
 @media (min-width: 901px) and (max-width: 1180px) {
-  #deviceModalOverlay { padding: 16px; }
-  #deviceModalOverlay .modal { max-width: none; width: 100%; max-height: calc(100dvh - 32px); }
+  /* Diyalog olarak durmalı, sayfa gibi değil: her kenarda koyu arka plan
+     görünsün diye bolca dolgu bırakılır (16px'te tam ekran gibi okunuyordu). */
+  #deviceModalOverlay { padding: 40px; }
+  #deviceModalOverlay .modal { max-width: none; width: 100%; max-height: calc(100dvh - 80px); }
 
   .ad-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2177,8 +2178,8 @@ body.tv-mode:not(.tv-full) .assets-rail .sev-count {
 /* Dikey tablet (768–900): 3 kolon sığmıyor → 2 kolon, doğal akış.
    Sıra: kimlik | zimmet · Temel | Durum · sekmeler (tam genişlik). */
 @media (min-width: 761px) and (max-width: 900px) {
-  #deviceModalOverlay { padding: 16px; }
-  #deviceModalOverlay .modal { max-width: none; width: 100%; max-height: calc(100dvh - 32px); }
+  #deviceModalOverlay { padding: 28px; }
+  #deviceModalOverlay .modal { max-width: none; width: 100%; max-height: calc(100dvh - 56px); }
   .ad-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
   .ad-left { display: contents; }
   /* Yerleşim AÇIK yazılır: doğal akışta Zimmet sağ üste, Temel Bilgiler ise
@@ -2211,17 +2212,16 @@ body.tv-mode:not(.tv-full) .assets-rail .sev-count {
    altında yapışkan sekme çubuğu · yalnız aktif bölüm çizilir.
    İçerik KOPYALANMIYOR: aynı DOM, display:contents ile yeniden sıralanıyor. */
 @media (max-width: 760px) {
-  /* Geometri ≤900px'teki alt sayfa (bottom sheet) kuralından gelir — tutamak,
-     yuvarlak üst köşeler, sheetUp animasyonu aynen korunur. Burada YALNIZ
-     içerik düzeni değişir; iki ayrı mobil geometri tanımlamak çakışma üretiyordu.
-     Tek istisna: gövde dolgusu sıfırlanır ki hero ve kartlar kenara dayansın. */
-  #deviceModalOverlay .modal-body { padding: 0; }
+  /* Gövde dolgusu sıfırlanır ki hero ve kartlar kartın kenarına dayansın. */
+  #deviceModalOverlay .modal-body { padding: 0; flex: 1; min-height: 0; }
   /* SABİT yükseklik. İçerik sekmeye göre 213px–1051px arası değişiyor; yükseklik
-     içeriğe bağlı kalırsa sayfa her sekmede zıplıyor, sekme çubuğu parmağın
+     içeriğe bağlı kalırsa diyalog her sekmede zıplıyor, sekme çubuğu parmağın
      altından kaçıyordu. Sabitleyip kaydırmayı gövdeye bırakıyoruz.
-     dvh → adres çubuğu açılıp kapanınca yeniden ölçülmez. */
-  #deviceModalOverlay .modal { height: 92dvh; max-height: 92dvh; }
-  #deviceModalOverlay .modal-body { flex: 1; min-height: 0; }
+     dvh → adres çubuğu açılıp kapanınca yeniden ölçülmez. Çıkarılan 88px:
+     üstte/altta arka planın görünmesi için bırakılan pay. */
+  #deviceModalOverlay .modal { height: calc(100dvh - 88px); max-height: calc(100dvh - 88px); }
+  /* Kartlar arası ayırıcı çizgi son kartta gereksiz (altında içerik yok) */
+  .ad-sec--durum { border-bottom: none; }
 
   /* .ad-left kendi kutusunu bırakır → çocukları doğrudan sıralanabilir */
   .ad-grid { display: flex; flex-direction: column; gap: 0; }
