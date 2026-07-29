@@ -2250,10 +2250,14 @@ async function openDeviceModal(asset) {
     <div class="ad-grid">
       <!-- Sol: görsel + kimlik + QR + zimmet -->
       <div class="ad-left">
+        <!-- Hero: telefonda HER SEKMEDE görünür kalır (hangi cihaza baktığını
+             kaybetmeyesin). Geri kalanı mobilde sekmelere dağılır. -->
+        <div class="ad-hero">
         <div class="ad-photo${d.image ? '' : ' ad-photo--illus'}">
           ${gorsel}
           ${statusBadge(a.status)}
         </div>
+        <div class="ad-hero-t">
         <h3 class="ad-name">${fmt(a.hostname)}</h3>
         <div class="ad-ident">
           <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5h8v2"/></svg>${fmt(a.serial_number)}</span>
@@ -2261,7 +2265,10 @@ async function openDeviceModal(asset) {
           <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>${escapeHtml((a.location || '').trim() || 'Lokasyon yok')}</span>
           <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>${escapeHtml(d.assignment?.assigned_to || 'Zimmetsiz')}</span>
         </div>
+        </div>
+        </div>
 
+        <div class="ad-sec ad-sec--zimmet">
         <div class="ad-qr">
           <img id="adQr" alt="QR etiketi">
           <div>
@@ -2273,10 +2280,11 @@ async function openDeviceModal(asset) {
         <div id="deviceAssignBox"></div>
         <div id="deviceLocationBox"></div>
         ${a.category === 'Telefon' ? '<div id="deviceLineBox"></div>' : ''}
+        </div>
       </div>
 
       <!-- Orta: temel bilgiler -->
-      <div class="ad-card">
+      <div class="ad-card ad-sec ad-sec--genel">
         <div class="ad-card-h"><h4>Temel Bilgiler</h4>
           ${state.role === 'admin' || state.role === 'it' ? '<button class="btn-pdf" id="adEditBasic">Düzenle</button>' : ''}</div>
         ${satir('Varlık Kodu', `<span class="serial-cell">${fmt(a.serial_number)}</span>`)}
@@ -2293,7 +2301,7 @@ async function openDeviceModal(asset) {
       </div>
 
       <!-- Sağ: durum bilgileri -->
-      <div class="ad-card">
+      <div class="ad-card ad-sec ad-sec--genel">
         <div class="ad-card-h"><h4>Durum Bilgileri</h4>${statusBadge(a.status)}</div>
         ${satir('Lokasyon', escapeHtml((a.location || '').trim() || '—'))}
         ${satir('Sorumlu Kişi', escapeHtml(d.assignment?.assigned_to || '—'))}
@@ -2308,6 +2316,10 @@ async function openDeviceModal(asset) {
       <!-- Alt: sekmeler -->
       <div class="ad-tabs-wrap">
         <div class="ad-tabs">
+          <!-- İlk iki sekme YALNIZ telefonda görünür: masaüstünde bu iki bölüm
+               zaten kolonlarda duruyor, sekmeye gerek yok (CSS gizler). -->
+          <button class="ad-tab ad-tab--m" data-t="genel">Genel</button>
+          <button class="ad-tab ad-tab--m" data-t="zimmet">Zimmet &amp; Konum</button>
           <button class="ad-tab active" data-t="lifecycle">İşlem Geçmişi</button>
           <button class="ad-tab" data-t="maint">Bakım</button>
           <button class="ad-tab" data-t="docs">Belgeler</button>
@@ -2352,9 +2364,19 @@ async function openDeviceModal(asset) {
         ${(state.role === 'admin' || state.role === 'it') ? '<button class="btn-pdf" id="adEditNote">Notu düzenle</button>' : ''}
       </div>`,
   };
+  /* Telefonda 'genel'/'zimmet' sekmeleri #adPane'i DOLDURMAZ; grid'deki
+     bölümleri gösterir/gizler (data-mtab + CSS). Böylece aynı DOM masaüstünde
+     kolon, telefonda sekme olarak çalışır — içerik kopyalanmıyor. */
+  const grid = body.querySelector('.ad-grid');
   const paneCiz = (t) => {
+    if (grid) grid.dataset.mtab = t;
     const pane = $(`#adPane`);
     if (!pane) return;
+    /* 'genel'/'zimmet' mobil BÖLÜM sekmeleri — pane'e hiç dokunma. Boşaltmak
+       kırılgandı: telefondan geniş ekrana dönülünce (döndürme) pane boş kalıp
+       masaüstü düzeni yarım görünüyordu. Dokunmayınca pane her zaman dolu,
+       geri dönüş de anlık. */
+    if (t === 'genel' || t === 'zimmet') return;
     pane.innerHTML = paneler[t]();
     if (t === 'lifecycle') loadDeviceHistory(a);
     $(`#adDocHandover`)?.addEventListener('click', () => printHandoverReceipt(a));
@@ -2366,7 +2388,15 @@ async function openDeviceModal(asset) {
     b.classList.add('active');
     paneCiz(b.dataset.t);
   }));
+
+  /* Pane'i her zaman doldur (geniş ekranda alt bölüm boş kalmasın), sonra
+     telefonda 'Genel' sekmesini aç — kullanıcının ilk görmesi gereken bilgi.
+     Geniş ekranda 'Genel' zaten kolonda duruyor, orada 'İşlem Geçmişi' açılır. */
   paneCiz('lifecycle');
+  if (window.matchMedia('(max-width: 760px)').matches) {
+    $$('.ad-tab').forEach(x => x.classList.toggle('active', x.dataset.t === 'genel'));
+    if (grid) grid.dataset.mtab = 'genel';
+  }
 
   loadDeviceAssignment(a);
   loadDeviceLocation(a);

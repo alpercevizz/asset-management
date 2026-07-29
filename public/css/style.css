@@ -2142,7 +2142,84 @@ body.tv-mode:not(.tv-full) .assets-rail .sev-count {
   .ad-grid { grid-template-columns: 220px minmax(0,1fr); }
   .ad-tabs-wrap { grid-column: 1 / -1; }
 }
+/* Mobil sekmeleri geniş ekranda gizle — orada bölümler zaten kolonda duruyor */
+.ad-tab--m { display: none; }
+/* Telefondan geniş ekrana dönülürse (döndürme) aktif sekme gizli bir düğmede
+   kalıyor ve hiçbir sekme seçili görünmüyordu; pane zaten İşlem Geçmişi'ni
+   gösterdiği için işareti oraya taşıyoruz. */
+@media (min-width: 761px) {
+  .ad-grid[data-mtab="genel"]  .ad-tab[data-t="lifecycle"],
+  .ad-grid[data-mtab="zimmet"] .ad-tab[data-t="lifecycle"] {
+    color: var(--accent); border-bottom-color: var(--accent);
+  }
+}
+
+/* ── VARLIK DETAYI · TELEFON ────────────────────────────────────────────────
+   Masaüstü 3 kolonu telefonda düz akışa çevrilince ~1900px'lik tek bir kaydırma
+   oluyor ve alttaki sekme çubuğuna kimse ulaşamıyordu. Telefonda düzen şu:
+   tam ekran sayfa · üstte sabit hero (hangi cihaza baktığın kaybolmasın) ·
+   altında yapışkan sekme çubuğu · yalnız aktif bölüm çizilir.
+   İçerik KOPYALANMIYOR: aynı DOM, display:contents ile yeniden sıralanıyor. */
 @media (max-width: 760px) {
-  .ad-grid { grid-template-columns: 1fr; }
-  .ad-photo { min-height: 130px; }
+  /* Geometri ≤900px'teki alt sayfa (bottom sheet) kuralından gelir — tutamak,
+     yuvarlak üst köşeler, sheetUp animasyonu aynen korunur. Burada YALNIZ
+     içerik düzeni değişir; iki ayrı mobil geometri tanımlamak çakışma üretiyordu.
+     Tek istisna: gövde dolgusu sıfırlanır ki hero ve kartlar kenara dayansın. */
+  #deviceModalOverlay .modal-body { padding: 0; }
+  /* SABİT yükseklik. İçerik sekmeye göre 213px–1051px arası değişiyor; yükseklik
+     içeriğe bağlı kalırsa sayfa her sekmede zıplıyor, sekme çubuğu parmağın
+     altından kaçıyordu. Sabitleyip kaydırmayı gövdeye bırakıyoruz.
+     dvh → adres çubuğu açılıp kapanınca yeniden ölçülmez. */
+  #deviceModalOverlay .modal { height: 92dvh; max-height: 92dvh; }
+  #deviceModalOverlay .modal-body { flex: 1; min-height: 0; }
+
+  /* .ad-left kendi kutusunu bırakır → çocukları doğrudan sıralanabilir */
+  .ad-grid { display: flex; flex-direction: column; gap: 0; }
+  .ad-left { display: contents; }
+
+  .ad-hero {
+    order: 1; display: flex; gap: 14px; align-items: center;
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+  }
+  .ad-hero-t { min-width: 0; flex: 1; }
+  .ad-photo { min-height: 0; width: 84px; height: 84px; flex-shrink: 0; padding: 8px; }
+  .ad-photo .badge { display: none; }          /* rozet ad-ident'te zaten var */
+  .ad-img { max-height: 68px; }
+  .ad-illus { width: 52px; height: 52px; }
+  .ad-name { font-size: 16px; margin-bottom: 6px; overflow-wrap: anywhere; }
+  /* Kimlik satırları telefonda yan yana rozet şeridi olur */
+  .ad-ident { flex-direction: row; flex-wrap: wrap; gap: 6px 10px; }
+  .ad-ident span { font-size: 11.5px; max-width: 100%; }
+
+  /* Yapışkan sekme çubuğu: hero'nun altında, kaydırırken tepede kalır.
+     .ad-tabs-wrap da kutusunu bırakmalı — sticky bir eleman yalnız KENDİ
+     ebeveyninin sınırları içinde yapışır; 73px'lik sarmalayıcının içinde
+     kalınca çubuk hemen kayıp gidiyordu. Contents ile çubuk ve pane doğrudan
+     .ad-grid'in çocuğu olur, sticky tüm içerik boyunca geçerli olur. */
+  .ad-tabs-wrap { display: contents; }
+  .ad-tabs {
+    order: 2; position: sticky; top: 0; z-index: 2; background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 0 8px;
+  }
+  .ad-tabs::-webkit-scrollbar { display: none; }
+  .ad-tab--m { display: block; }
+  .ad-tab { white-space: nowrap; padding: 13px 12px; font-size: 12.5px; }
+  .ad-pane { order: 3; padding: 14px 16px; }
+  /* 'Genel'/'Zimmet' sekmelerinde pane boş kalıyor; dolgusu 28px'lik hayalet
+     boşluk bırakıyordu. */
+  .ad-grid[data-mtab="genel"] .ad-pane,
+  .ad-grid[data-mtab="zimmet"] .ad-pane { display: none; }
+
+  /* Bölümler: yalnız aktif sekmeninki görünür */
+  .ad-sec { order: 3; display: none; }
+  .ad-grid[data-mtab="genel"]  .ad-sec--genel,
+  .ad-grid[data-mtab="zimmet"] .ad-sec--zimmet { display: block; }
+  .ad-sec--zimmet { padding: 14px 16px; display: none; }
+  .ad-grid[data-mtab="zimmet"] .ad-sec--zimmet { display: flex; flex-direction: column; gap: 12px; }
+  .ad-card.ad-sec { border: none; border-radius: 0; border-bottom: 8px solid var(--bg); padding: 14px 16px; }
+
+  /* Uzun değerler (IP/MAC, model) alta sarsın — yan yana sıkışmasın */
+  .ad-row { flex-wrap: wrap; gap: 2px 14px; }
+  .ad-row b { text-align: left; }
 }
