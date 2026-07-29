@@ -347,6 +347,20 @@ app.post('/api/webhook', async (req, res) => {
 
     const locationChanged = await trackLocation(result.id, enriched, loc.location, loc.source);
 
+    /* Canlı ölçümler ve güvenlik durumu envanter satırına DEĞİL ayrı tablolara
+       yazılır (grafik için geçmiş gerekiyor, envanterde cihaz başına tek satır
+       var). Collector göndermiyorsa sessizce atlanır — eski sürüm collector'lar
+       çalışmaya devam etsin. */
+    const tele = require('./agent/tools/telemetry-tools');
+    if (payload.telemetry) {
+      try { await tele.recordTelemetry(result.id, payload.telemetry); }
+      catch (e) { console.warn('[TELEMETRİ] kaydedilemedi:', e.message); }
+    }
+    if (payload.security) {
+      try { await tele.recordSecurity(result.id, payload.security); }
+      catch (e) { console.warn('[GÜVENLİK] kaydedilemedi:', e.message); }
+    }
+
     res.json({
       success: true, action: existing ? 'updated' : 'created', id: result.id,
       ...(locationChanged ? { location_changed: { from: locationChanged.from, to: locationChanged.to } } : {}),
@@ -998,6 +1012,27 @@ app.get('/api/assets/:id/detail', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: 'Detay alınamadı', detail: err.message });
+  }
+});
+
+/* Canlı telemetri + güvenlik durumu. Detay uç noktasından AYRI tutuldu:
+   sekme açılmadan bu veriyi çekmenin anlamı yok ve seri sorgusu daha pahalı. */
+app.get('/api/assets/:id/telemetry', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const tele = require('./agent/tools/telemetry-tools');
+    const saat = Math.min(Math.max(Number(req.query.hours) || 24, 1), 24 * 30);
+    const [latest, series, security] = await Promise.all([
+      tele.getLatest(id), tele.getSeries(id, { saat }), tele.getSecurity(id),
+    ]);
+    res.json({
+      latest: latest || null,
+      series: series || [],
+      security: security || null,
+      retention_days: tele.SAKLAMA_GUN,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Telemetri alınamadı', detail: err.message });
   }
 });
 

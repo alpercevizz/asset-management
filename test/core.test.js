@@ -669,3 +669,42 @@ test('login rate limit: yalnız başarısız denemeler sayılır, başarı sıf�
   assert.equal(g.clientIp({ headers: { 'x-forwarded-for': '1.2.3.4, 5.6.7.8' }, socket: { remoteAddress: '9.9.9.9' } }), '1.2.3.4');
   assert.equal(g.clientIp({ headers: {}, socket: { remoteAddress: '9.9.9.9' } }), '9.9.9.9');
 });
+
+// ── Telemetri + güvenlik durumu ───────────────────────────────────────────────
+test('telemetri: boş ölçüm satır açmaz, değerler sınırlanır, seri örneklenir', async () => {
+  const tele = require('../agent/tools/telemetry-tools');
+  const { db } = require('../db');
+  const AID = 990001;
+  await db()('asset_telemetry').where({ asset_id: AID }).del();
+  await db()('asset_security').where({ asset_id: AID }).del();
+
+  // 1) Hiçbir ölçüm alanı yoksa satır AÇILMAZ — "ölçüm alındı" yalanı olurdu
+  assert.equal(await tele.recordTelemetry(AID, {}), null);
+  assert.equal(await tele.recordTelemetry(AID, { cpu_pct: null, temp_c: null }), null);
+  assert.equal(await tele.getLatest(AID), null);
+
+  // 2) Aralık dışı yüzde sınırlanır; okunamayan alan NULL kalır (0 DEĞİL)
+  await tele.recordTelemetry(AID, { cpu_pct: 150, battery_pct: -5, ram_used_gb: 6.4 });
+  const son = await tele.getLatest(AID);
+  assert.equal(Number(son.cpu_pct), 100);
+  assert.equal(Number(son.battery_pct), 0);
+  assert.equal(son.temp_c, null, 'gönderilmeyen sensör NULL kalmalı, 0 olmamalı');
+
+  // 3) Seri örnekleme: 100 ölçüm → istenen nokta sayısı, SON değer korunur
+  for (let i = 0; i < 100; i++) await tele.recordTelemetry(AID, { cpu_pct: i });
+  const seri = await tele.getSeries(AID, { saat: 24, nokta: 20 });
+  assert.equal(seri.length, 20);
+  assert.equal(Number(seri[seri.length - 1].cpu_pct), 99, 'en güncel ölçüm korunmalı');
+
+  // 4) Güvenlik: boolean/metin normalize edilir, bitlocker → disk_encryption
+  assert.equal(await tele.recordSecurity(AID, {}), null, 'boş güvenlik kaydı açılmaz');
+  await tele.recordSecurity(AID, { firewall: true, bitlocker: 'On', defender: 'disabled' });
+  const g = await tele.getSecurity(AID);
+  assert.equal(g.firewall, 'aktif');
+  assert.equal(g.disk_encryption, 'aktif');
+  assert.equal(g.defender, 'pasif');
+  assert.equal(g.antivirus, null, 'gönderilmeyen alan bilinmiyor kalmalı (pasif DEĞİL)');
+
+  await db()('asset_telemetry').where({ asset_id: AID }).del();
+  await db()('asset_security').where({ asset_id: AID }).del();
+});

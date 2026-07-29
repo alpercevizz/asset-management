@@ -2222,6 +2222,153 @@ function trPara(v, cur) {
   return sim + n.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/* ═══ TELEMETRİ SEKMESİ ═════════════════════════════════════════════════════
+   HİÇBİR SAYI UYDURULMAZ. Cihaz ölçümü göndermediyse kart "ölçüm yok" der.
+   Bu bilinçli: bir sunucuda pil, bir sanal makinede sıcaklık sensörü YOKTUR;
+   oraya %0 veya 0°C yazmak müşteriye yanlış bilgi vermek olurdu. Aynı şekilde
+   güvenlik kartında "bilinmiyor" ile "kapalı" ayrı gösterilir — biri okunamadı,
+   diğeri gerçekten kapalı demektir. */
+
+/* Sparkline: dış kütüphane yok, düz SVG polyline. */
+function sparkline(degerler, renk) {
+  const v = (degerler || []).filter((x) => x !== null && x !== undefined && Number.isFinite(Number(x))).map(Number);
+  if (v.length < 2) return '<div class="tm-spark tm-spark--bos">grafik için en az 2 ölçüm gerekir</div>';
+  const en = Math.min(...v), buyuk = Math.max(...v);
+  const fark = buyuk - en || 1;         // düz çizgi: sıfıra bölme koruması
+  const W = 100, H = 28;
+  const nok = v.map((x, i) => {
+    const px = (i / (v.length - 1)) * W;
+    const py = H - ((x - en) / fark) * (H - 4) - 2;
+    return `${px.toFixed(1)},${py.toFixed(1)}`;
+  }).join(' ');
+  return `<svg class="tm-spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+    <polyline points="${nok}" fill="none" stroke="${renk}" stroke-width="1.6"
+      vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+}
+
+function tmKart({ baslik, ikon, renk, deger, alt, seri }) {
+  const yok = deger === null || deger === undefined;
+  return `<div class="tm-card">
+    <div class="tm-h"><span class="ad-ico ${renk.sinif}">${ikon}</span>${escapeHtml(baslik)}</div>
+    ${yok
+      ? '<div class="tm-yok">Ölçüm yok</div>'
+      : `<div class="tm-v">${deger}</div><div class="tm-alt">${alt || ''}</div>`}
+    ${yok ? '' : sparkline(seri, renk.cizgi)}
+  </div>`;
+}
+
+function renderTelemetri(tel, a) {
+  const L = tel.latest;
+  const S = tel.series || [];
+  const al = (k) => S.map((r) => r[k]);
+  const yuzde = (kul, top) => (kul == null || !top ? null : Math.round((kul / top) * 100));
+
+  const R = {
+    cpu:  { sinif: 'kpi-ico--blue',  cizgi: 'var(--blue)' },
+    ram:  { sinif: 'kpi-ico--accent', cizgi: 'var(--accent)' },
+    disk: { sinif: 'kpi-ico--purple', cizgi: 'var(--purple)' },
+    ag:   { sinif: 'kpi-ico--teal',  cizgi: 'var(--teal)' },
+    pil:  { sinif: 'kpi-ico--green', cizgi: 'var(--green)' },
+    isi:  { sinif: 'kpi-ico--orange', cizgi: 'var(--orange)' },
+  };
+  const I = {
+    cpu: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg>',
+    ram: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="10" rx="2"/><path d="M6 17v3M12 17v3M18 17v3"/></svg>',
+    disk: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>',
+    ag: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1"/></svg>',
+    pil: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="17" height="10" rx="2"/><path d="M22 11v2"/></svg>',
+    isi: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 14.8V4a2 2 0 1 0-4 0v10.8a4 4 0 1 0 4 0z"/></svg>',
+  };
+
+  const ramPct  = L ? yuzde(L.ram_used_gb, L.ram_total_gb) : null;
+  const diskPct = L ? yuzde(L.disk_used_gb, L.disk_total_gb) : null;
+  const pilDurum = { sarj_oluyor: 'Şarj oluyor', pilde: 'Pilde', dolu: 'Dolu' };
+  const isiEtiket = (c) => (c == null ? '' : c < 60 ? 'Normal' : c < 80 ? 'Yüksek' : 'Kritik');
+
+  const kartlar = [
+    tmKart({ baslik: 'CPU Kullanımı', ikon: I.cpu, renk: R.cpu,
+      deger: L && L.cpu_pct != null ? `${Math.round(L.cpu_pct)}%` : null,
+      alt: L && L.cpu_pct != null ? (L.cpu_pct < 50 ? 'İyi' : L.cpu_pct < 85 ? 'Yoğun' : 'Kritik') : '',
+      seri: al('cpu_pct') }),
+    tmKart({ baslik: 'RAM Kullanımı', ikon: I.ram, renk: R.ram,
+      deger: ramPct != null ? `${ramPct}%` : null,
+      alt: L && L.ram_used_gb != null ? `${L.ram_used_gb} GB / ${L.ram_total_gb || '?'} GB` : '',
+      seri: S.map((r) => yuzde(r.ram_used_gb, r.ram_total_gb)) }),
+    tmKart({ baslik: 'Disk Kullanımı', ikon: I.disk, renk: R.disk,
+      deger: diskPct != null ? `${diskPct}%` : null,
+      alt: L && L.disk_used_gb != null ? `${Math.round(L.disk_used_gb)} GB / ${Math.round(L.disk_total_gb || 0)} GB` : '',
+      seri: S.map((r) => yuzde(r.disk_used_gb, r.disk_total_gb)) }),
+    tmKart({ baslik: 'Ağ Kullanımı', ikon: I.ag, renk: R.ag,
+      deger: L && L.net_rx_mbps != null
+        ? `<span class="tm-net">↓ ${L.net_rx_mbps} <small>Mbps</small></span><span class="tm-net">↑ ${L.net_tx_mbps ?? '—'} <small>Mbps</small></span>` : null,
+      alt: '', seri: al('net_rx_mbps') }),
+    tmKart({ baslik: 'Pil Durumu', ikon: I.pil, renk: R.pil,
+      deger: L && L.battery_pct != null ? `${Math.round(L.battery_pct)}%` : null,
+      alt: L ? (pilDurum[L.battery_state] || '') : '', seri: al('battery_pct') }),
+    tmKart({ baslik: 'Sıcaklık', ikon: I.isi, renk: R.isi,
+      deger: L && L.temp_c != null ? `${L.temp_c}°C` : null,
+      alt: L ? isiEtiket(L.temp_c) : '', seri: al('temp_c') }),
+  ].join('');
+
+  // ── Sistem Bilgileri: TAMAMI envanterden, collector kurulu olmasa da dolu ──
+  const bootTarih = a.uptime_days != null
+    ? fmtDate(new Date(Date.now() - Number(a.uptime_days) * 86400000).toISOString()) : '—';
+  const upt = a.uptime_days != null
+    ? `${Math.floor(a.uptime_days)} gün ${Math.round((a.uptime_days % 1) * 24)} saat` : '—';
+  const sistem = `
+    <div class="ad-card tm-panel">
+      <div class="ad-card-h"><h4>Sistem Bilgileri</h4></div>
+      <div class="ad-row"><span>Hostname</span><b>${fmt(a.hostname)}</b></div>
+      <div class="ad-row"><span>Domain</span><b>${fmt(a.domain)}</b></div>
+      <div class="ad-row"><span>IP Adresi</span><b class="serial-cell">${fmt(a.ip_address)}</b></div>
+      <div class="ad-row"><span>MAC Adresi</span><b class="serial-cell">${fmt(a.mac_address)}</b></div>
+      <div class="ad-row"><span>Uptime</span><b>${upt}</b></div>
+      <div class="ad-row"><span>Son Yeniden Başlatma</span><b>${bootTarih}</b></div>
+    </div>`;
+
+  // ── Güvenlik Durumu ────────────────────────────────────────────────────────
+  const G = tel.security;
+  const rozet = (v) => {
+    if (v === 'aktif')  return '<b class="tm-ok">Aktif</b>';
+    if (v === 'pasif')  return '<b class="tm-kotu">Kapalı</b>';
+    if (v === 'yok')    return '<b class="tm-kotu">Yok</b>';
+    return '<b class="ad-bos">bilinmiyor</b>';
+  };
+  const guvenlik = `
+    <div class="ad-card tm-panel">
+      <div class="ad-card-h"><h4>Güvenlik Durumu</h4>
+        ${G ? `<span class="tm-zaman">${fmtDate(G.checked_at)}</span>` : ''}</div>
+      ${G ? `
+        <div class="ad-row"><span>Windows Defender</span>${rozet(G.defender)}</div>
+        <div class="ad-row"><span>Güvenlik Duvarı</span>${rozet(G.firewall)}</div>
+        <div class="ad-row"><span>Disk Şifreleme</span>${rozet(G.disk_encryption)}</div>
+        <div class="ad-row"><span>Antivirüs</span>${G.antivirus_name
+          ? `<b class="${G.antivirus === 'aktif' ? 'tm-ok' : 'tm-kotu'}">${escapeHtml(G.antivirus_name)}</b>`
+          : rozet(G.antivirus)}</div>
+        <div class="ad-row"><span>İşletim Sistemi Güncellemesi</span><b class="${G.os_update === 'guncel' ? 'tm-ok' : G.os_update === 'bekliyor' ? 'ad-warn' : 'ad-bos'}">
+          ${G.os_update === 'guncel' ? 'Güncel' : G.os_update === 'bekliyor' ? 'Bekleyen güncelleme var' : 'bilinmiyor'}</b></div>
+        <div class="ad-row"><span>Kritik Yama</span><b class="${G.critical_patches > 0 ? 'ad-warn' : ''}">${G.critical_patches ?? '—'}</b></div>
+        <div class="ad-row"><span>Bekleyen Güncelleme</span><b>${G.pending_updates ?? '—'}</b></div>`
+      : `<p class="ad-hint">Bu cihazdan güvenlik durumu gelmedi. Toplama betiği (collector)
+         sürüm 1.1.0 ve üzeri bu bilgiyi gönderir; BitLocker ve Windows Update
+         okuması yönetici yetkisi ister.</p>`}
+    </div>`;
+
+  const olcumVar = !!L;
+  return `
+    ${olcumVar ? '' : `<div class="tm-uyari">
+      <strong>Bu cihazdan henüz canlı ölçüm gelmedi.</strong>
+      Aşağıdaki kartlar toplama betiği (collector) sürüm 1.1.0 ve üzeri kurulduğunda dolar.
+      Sistem Bilgileri paneli envanter kaydından geldiği için şimdiden dolu.
+      <em>Sıcaklık ve pil her makinede okunamaz</em> — sunucuda pil, sanal makinede
+      sıcaklık sensörü yoktur; o kartlar o cihazlarda boş kalır.
+    </div>`}
+    <div class="tm-grid">${kartlar}</div>
+    <div class="tm-panels">${sistem}${guvenlik}</div>
+    ${olcumVar ? `<p class="ad-hint">Grafikler son 24 saati gösterir (${S.length} ölçüm).
+      Ölçümler ${tel.retention_days || 30} gün saklanır.</p>` : ''}`;
+}
+
 async function openDeviceModal(asset) {
   const overlay = $(`#deviceModalOverlay`);
   if (!overlay || !asset) return;
@@ -2233,9 +2380,16 @@ async function openDeviceModal(asset) {
   const pdfBtn = $(`#handoverPdfBtn`); if (pdfBtn) pdfBtn.style.display = '';
 
   let d = { asset, detail: null, usage: null, image: null, assignment: null };
+  /* Telemetri, 'Son Envanter Taraması' satırında da kullanıldığı için sekme
+     açılışını beklemeden detayla PARALEL çekilir (iki ayrı bekleme olmasın). */
+  let tel = { latest: null, series: [], security: null };
   try {
-    const r = await fetch(`/api/assets/${asset.id}/detail`);
+    const [r, rt] = await Promise.all([
+      fetch(`/api/assets/${asset.id}/detail`),
+      fetch(`/api/assets/${asset.id}/telemetry`).catch(() => null),
+    ]);
     if (r.ok) d = await r.json();
+    if (rt && rt.ok) tel = await rt.json();
   } catch { /* çevrimdışı: yalnız listedeki alanlarla çiz */ }
 
   const a = d.asset || asset;
@@ -2292,8 +2446,11 @@ async function openDeviceModal(asset) {
       <div class="ad-card ad-sec ad-sec--genel ad-sec--temel">
         <div class="ad-card-h"><h4><span class="ad-ico kpi-ico--blue"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/></svg></span>Temel Bilgiler</h4>
           ${state.role === 'admin' || state.role === 'it' ? '<button class="btn-pdf" id="adEditBasic">Düzenle</button>' : ''}</div>
-        ${satir('Varlık Kodu', `<span class="serial-cell">${fmt(a.serial_number)}</span>`)}
-        ${satir('Marka / Model', `${fmt(a.brand)} ${fmt(a.model, '')}`)}
+        ${satir('Varlık Kodu', det.asset_code
+          ? `<span class="serial-cell">${escapeHtml(det.asset_code)}</span>`
+          : '<span class="ad-bos">tanımlı değil</span>')}
+        ${satir('Seri Numarası', `<span class="serial-cell">${fmt(a.serial_number)}</span>`)}
+        ${satir('Üretici / Model', `${fmt(a.brand)} ${fmt(a.model, '')}`)}
         ${satir('Kategori', escapeHtml(a.category || 'Diğer'))}
         ${satir('İşletim Sistemi', fmt(a.os))}
         ${satir('CPU', fmt(a.cpu))}
@@ -2301,8 +2458,8 @@ async function openDeviceModal(asset) {
         ${satir('IP / MAC', `<span class="serial-cell">${fmt(a.ip_address)} · ${fmt(a.mac_address)}</span>`)}
         ${satir('Satın Alma Tarihi', trTarih(det.purchase_date))}
         ${satir('Satın Alma Bedeli', trPara(det.purchase_price, det.currency))}
-        ${satir('Tedarikçi', fmt(det.supplier))}
         ${satir('Garanti Bitiş', trTarih(a.warranty_expiry))}
+        ${satir('Tedarikçi', fmt(det.supplier))}
       </div>
 
       <!-- Sağ: durum bilgileri -->
@@ -2310,11 +2467,17 @@ async function openDeviceModal(asset) {
         <div class="ad-card-h"><h4><span class="ad-ico kpi-ico--green"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>Durum Bilgileri</h4>${statusBadge(a.status)}</div>
         ${satir('Lokasyon', escapeHtml((a.location || '').trim() || '—'))}
         ${satir('Sorumlu Kişi', escapeHtml(d.assignment?.assigned_to || '—'))}
-        ${satir('Son gören kullanıcı', fmt(a.username))}
+        ${satir('Son Giriş Yapan Kullanıcı', fmt(a.username))}
         ${satir('Kullanım Süresi', d.usage || '—')}
-        ${satir('Son Bakım', trTarih(det.last_maintenance))}
+        ${satir('Son Bakım Tarihi', trTarih(det.last_maintenance))}
         ${satir('Sonraki Bakım', trTarih(det.next_maintenance), bakimGecti(det.next_maintenance) ? 'ad-warn' : '')}
         ${satir('Son Görülme', fmtDate(a.last_seen))}
+        ${satir('Son IP', a.ip_address ? `<span class="serial-cell">${escapeHtml(a.ip_address)}</span>` : '—')}
+        ${satir('Agent Versiyonu', a.collector_ver
+          ? escapeHtml(a.collector_ver)
+          : '<span class="ad-bos">agent kurulu değil</span>')}
+        ${satir('Son Envanter Taraması', tel.latest ? fmtDate(tel.latest.measured_at) : '<span class="ad-bos">ölçüm yok</span>')}
+        ${satir('Durum', statusBadge(a.status))}
         ${satir('Not', det.note ? escapeHtml(det.note) : '—')}
       </div>
 
@@ -2325,6 +2488,7 @@ async function openDeviceModal(asset) {
                zaten kolonlarda duruyor, sekmeye gerek yok (CSS gizler). -->
           <button class="ad-tab ad-tab--m" data-t="genel">Genel</button>
           <button class="ad-tab ad-tab--m" data-t="zimmet">Zimmet &amp; Konum</button>
+          <button class="ad-tab" data-t="telemetri"><svg class="ad-tico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3v18h18"/><path d="m7 14 3-4 3 3 4-6"/></svg>Telemetri</button>
           <button class="ad-tab active" data-t="lifecycle"><svg class="ad-tico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>İşlem Geçmişi</button>
           <button class="ad-tab" data-t="maint"><svg class="ad-tico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14.7 6.3a4 4 0 0 1 5 5l-9.4 9.4a2 2 0 0 1-2.8-2.8z"/><path d="M9 5 5 9 2 6l3-3z"/></svg>Bakım Geçmişi</button>
           <button class="ad-tab" data-t="docs"><svg class="ad-tico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Belgeler</button>
@@ -2342,6 +2506,7 @@ async function openDeviceModal(asset) {
 
   // Sekmeler
   const paneler = {
+    telemetri: () => renderTelemetri(tel, a),
     lifecycle: () => '<div id="deviceHistory" class="ad-hist">Yükleniyor...</div>',
     maint: () => `
       <div class="ad-maint">

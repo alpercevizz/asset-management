@@ -2140,6 +2140,40 @@ body.tv-mode:not(.tv-full) .assets-rail .sev-count {
 .ad-doc small { display: block; font-size: 11.5px; color: var(--text-muted); }
 .ad-note p { font-size: 13.5px; line-height: 1.7; color: var(--text-dim); margin-bottom: 12px; white-space: pre-wrap; }
 
+/* ══ TELEMETRİ SEKMESİ ═══════════════════════════════════════════════════ */
+.tm-grid {
+  /* 140px eşiği bilinçli: 390px telefonda gövde 316px kalıyor, 155px'te iki
+     kart sığmayıp tek kolona düşüyor ve 6 kart gereksiz uzun bir kaydırma
+     yapıyordu. 140 ile telefonda 2, tablette 3-4, masaüstünde 6 kolon olur. */
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px; margin-bottom: 14px;
+}
+.tm-card { border: 1px solid var(--border); border-radius: 12px; padding: 12px 13px; background: var(--bg-card); }
+.tm-h { display: flex; align-items: center; font-size: 12px; font-weight: 600; color: var(--text-dim); margin-bottom: 8px; }
+.tm-h .ad-ico { width: 22px; height: 22px; margin-right: 8px; }
+.tm-v { font-size: 25px; font-weight: 800; letter-spacing: -.03em; color: var(--text); line-height: 1.1; }
+.tm-alt { font-size: 11.5px; color: var(--text-muted); margin-top: 3px; min-height: 15px; }
+.tm-net { display: block; font-size: 14px; font-weight: 700; color: var(--text); }
+.tm-net small { font-size: 10.5px; font-weight: 500; color: var(--text-muted); }
+/* Ölçüm gelmeyen kart: boş bırakmak yerine NEDENİ yazılır (uydurma sayı YOK) */
+.tm-yok { font-size: 12.5px; color: var(--text-muted); padding: 9px 0 12px; font-style: italic; }
+.tm-spark { width: 100%; height: 28px; margin-top: 8px; display: block; overflow: visible; }
+.tm-spark--bos { font-size: 10.5px; color: var(--text-muted); font-style: italic; height: auto; }
+
+.tm-panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.tm-panel .ad-row { font-size: 12.5px; padding: 7px 0; }
+.tm-zaman { font-size: 11px; color: var(--text-muted); }
+.tm-ok { color: var(--green); }
+.tm-kotu { color: var(--red); }
+.ad-bos { color: var(--text-muted); font-style: italic; font-weight: 500; }
+
+.tm-uyari {
+  border: 1px solid var(--border); border-left: 3px solid var(--accent);
+  background: var(--accent-glow); border-radius: 10px; padding: 12px 14px;
+  font-size: 12.5px; line-height: 1.65; color: var(--text-dim); margin-bottom: 14px;
+}
+.tm-uyari strong { color: var(--text); display: block; margin-bottom: 3px; }
+
 /* Kart başlığı ve sekme ikonları (tasarım referansı) */
 .ad-ico {
   display: inline-flex; align-items: center; justify-content: center;

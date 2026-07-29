@@ -28,7 +28,7 @@ function normKey(x) {
 
 /* ══ Ek alanlar ═══════════════════════════════════════════════════════════ */
 const ALANLAR = ['purchase_date', 'purchase_price', 'currency', 'supplier',
-  'last_maintenance', 'next_maintenance', 'note'];
+  'last_maintenance', 'next_maintenance', 'note', 'asset_code'];
 
 async function getDetail(assetId) {
   return db()('asset_details').where({ asset_id: Number(assetId) }).first();

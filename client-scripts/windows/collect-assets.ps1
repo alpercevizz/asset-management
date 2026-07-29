@@ -70,6 +70,97 @@ try {
     $gpuName   = if ($gpu) { Get-SafeValue $gpu.Caption } else { $null }
     $gpuRamGB  = if ($gpu -and $gpu.AdapterRAM) { [math]::Round($gpu.AdapterRAM / 1GB, 0) } else { $null }
 
+    # ── Canlı Telemetri ──────────────────────────────────────────────────────
+    # HER ÖLÇÜM AYRI try/catch: biri okunamazsa (sanal makine, kısıtlı yetki,
+    # donanım yok) digerleri yine gonderilsin. Okunamayan alan GONDERILMEZ —
+    # sunucu NULL birakir ve arayuz "veri gelmedi" der. Sifir yazmak yanlis
+    # olurdu: sunucuda pil YOK, sanal makinede sicaklik sensoru YOK.
+    $telemetry = @{}
+
+    try {   # CPU: tek anlik okuma dalgali cikar, 3 ornek alinip ortalanir
+        $samples = (Get-Counter '\Processor(_Total)\% Processor Time' -SampleInterval 1 -MaxSamples 3 -ErrorAction Stop)
+        $telemetry.cpu_pct = [math]::Round(($samples.CounterSamples | Measure-Object -Property CookedValue -Average).Average, 1)
+    } catch { Write-Log "CPU kullanimi okunamadi: $($_.Exception.Message)" }
+
+    try {
+        $freeGB = [math]::Round($os.FreePhysicalMemory / 1MB, 2)   # KB -> GB
+        $telemetry.ram_total_gb = $totalRamGB
+        $telemetry.ram_used_gb  = [math]::Round($totalRamGB - $freeGB, 2)
+    } catch { Write-Log "RAM kullanimi okunamadi: $($_.Exception.Message)" }
+
+    try {   # Yalnizca sistem diski (C:) — tum diskleri toplamak yaniltici olur
+        $sys = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$($env:SystemDrive)'" -ErrorAction Stop
+        $telemetry.disk_total_gb = [math]::Round($sys.Size / 1GB, 2)
+        $telemetry.disk_used_gb  = [math]::Round(($sys.Size - $sys.FreeSpace) / 1GB, 2)
+    } catch { Write-Log "Disk kullanimi okunamadi: $($_.Exception.Message)" }
+
+    try {   # Ag: bayt/sn sayaclari -> Mbps
+        $rx = (Get-Counter '\Network Interface(*)\Bytes Received/sec' -ErrorAction Stop).CounterSamples |
+              Where-Object { $_.InstanceName -notmatch 'isatap|Teredo|Loopback' } |
+              Measure-Object -Property CookedValue -Sum
+        $tx = (Get-Counter '\Network Interface(*)\Bytes Sent/sec' -ErrorAction Stop).CounterSamples |
+              Where-Object { $_.InstanceName -notmatch 'isatap|Teredo|Loopback' } |
+              Measure-Object -Property CookedValue -Sum
+        $telemetry.net_rx_mbps = [math]::Round($rx.Sum * 8 / 1MB, 2)
+        $telemetry.net_tx_mbps = [math]::Round($tx.Sum * 8 / 1MB, 2)
+    } catch { Write-Log "Ag kullanimi okunamadi: $($_.Exception.Message)" }
+
+    try {   # Pil YALNIZCA dizustunde vardir; masaustu/sunucuda bu blok bos gecer
+        $bat = Get-CimInstance Win32_Battery -ErrorAction Stop | Select-Object -First 1
+        if ($bat) {
+            $telemetry.battery_pct = $bat.EstimatedChargeRemaining
+            # Win32_Battery.BatteryStatus: 1=pilde, 2=sebekede, 3=dolu
+            $telemetry.battery_state = switch ($bat.BatteryStatus) {
+                1 { "pilde" } 2 { "sarj_oluyor" } 3 { "dolu" } default { $null }
+            }
+        }
+    } catch { Write-Log "Pil durumu okunamadi (masaustu/sunucu olabilir)" }
+
+    try {   # SICAKLIK: cogu makinede OKUNAMAZ. MSAcpi_ThermalZoneTemperature
+            # birçok uretici tarafindan desteklenmez, sanal makinede hic yoktur.
+            # Okunamazsa alan gonderilmez — arayuz "sensor yok" gosterir.
+        $t = Get-CimInstance -Namespace root/WMI -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction Stop |
+             Select-Object -First 1
+        if ($t -and $t.CurrentTemperature -gt 0) {
+            $telemetry.temp_c = [math]::Round(($t.CurrentTemperature / 10) - 273.15, 1)
+        }
+    } catch { Write-Log "Sicaklik sensoru okunamadi (bu makinede desteklenmiyor)" }
+
+    # ── Guvenlik Durumu ──────────────────────────────────────────────────────
+    # Okunamayan alan GONDERILMEZ; "bilinmiyor" ile "kapali" ayni sey degil.
+    $security = @{}
+
+    try {
+        $av = Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntiVirusProduct -ErrorAction Stop
+        if ($av) {
+            $primary = $av | Select-Object -First 1
+            $security.antivirus_name = $primary.displayName
+            # productState bit alani: 0x1000 biti "gercek zamanli koruma acik"
+            $aktif = $av | Where-Object { ($_.productState -band 0x1000) -ne 0 }
+            $security.antivirus = if ($aktif) { "aktif" } else { "pasif" }
+            $def = $av | Where-Object { $_.displayName -match 'Defender' }
+            if ($def) { $security.defender = if (($def.productState -band 0x1000) -ne 0) { "aktif" } else { "pasif" } }
+        }
+    } catch { Write-Log "Antivirus durumu okunamadi: $($_.Exception.Message)" }
+
+    try {   # Herhangi bir profil acikken guvenlik duvari "aktif" sayilir
+        $fw = Get-NetFirewallProfile -ErrorAction Stop
+        $security.firewall = if ($fw | Where-Object { $_.Enabled }) { "aktif" } else { "pasif" }
+    } catch { Write-Log "Guvenlik duvari durumu okunamadi: $($_.Exception.Message)" }
+
+    try {   # BitLocker: yonetici yetkisi ister, yoksa sessizce atlanir
+        $bl = Get-BitLockerVolume -MountPoint $env:SystemDrive -ErrorAction Stop
+        $security.disk_encryption = if ($bl.ProtectionStatus -eq 'On') { "aktif" } else { "pasif" }
+    } catch { Write-Log "BitLocker durumu okunamadi (yonetici yetkisi gerekebilir)" }
+
+    try {   # Bekleyen guncellemeler — Windows Update COM arayuzu
+        $searcher = (New-Object -ComObject Microsoft.Update.Session).CreateUpdateSearcher()
+        $pending  = $searcher.Search("IsInstalled=0 and IsHidden=0").Updates
+        $security.pending_updates  = $pending.Count
+        $security.critical_patches = @($pending | Where-Object { $_.MsrcSeverity -eq 'Critical' }).Count
+        $security.os_update = if ($pending.Count -eq 0) { "guncel" } else { "bekliyor" }
+    } catch { Write-Log "Windows Update durumu okunamadi: $($_.Exception.Message)" }
+
     # ── Payload Oluştur ──────────────────────────────────────────────────────
     $payload = @{
         hostname       = $env:COMPUTERNAME
@@ -93,7 +184,7 @@ try {
         last_seen      = (Get-Date -Format "o")
         status         = "online"
         category       = "Bilgisayar"
-        collector_ver  = "1.0.0"
+        collector_ver  = "1.1.0"
     }
 
     # Null değerleri temizle
@@ -103,6 +194,11 @@ try {
             $cleaned[$key] = $payload[$key]
         }
     }
+
+    # Olcum blolklari yalnizca ICI DOLUYSA eklenir. Bos nesne gondermek
+    # sunucuda "olcum alindi ama hepsi bos" satiri acardi.
+    if ($telemetry.Count -gt 0) { $cleaned.telemetry = $telemetry }
+    if ($security.Count  -gt 0) { $cleaned.security  = $security }
 
     Write-Log "Toplanan veriler: Hostname=$($cleaned.hostname), Seri=$($cleaned.serial_number), RAM=${totalRamGB}GB, Disk=${totalDiskGB}GB"
 
