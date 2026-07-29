@@ -2250,6 +2250,10 @@ async function openDeviceModal(asset) {
     <div class="ad-grid">
       <!-- Sol: görsel + kimlik + QR + zimmet -->
       <div class="ad-left">
+        <!-- Kimlik kartı: görsel + ad + kimlik satırları + QR. Tablette tek kart
+             olarak sol üstte durur (tasarım böyle), telefonda parçalanır:
+             hero her sekmede görünür kalır, QR 'Zimmet & Konum' sekmesine iner. -->
+        <div class="ad-idbox">
         <!-- Hero: telefonda HER SEKMEDE görünür kalır (hangi cihaza baktığını
              kaybetmeyesin). Geri kalanı mobilde sekmelere dağılır. -->
         <div class="ad-hero">
@@ -2268,7 +2272,6 @@ async function openDeviceModal(asset) {
         </div>
         </div>
 
-        <div class="ad-sec ad-sec--zimmet">
         <div class="ad-qr">
           <img id="adQr" alt="QR etiketi">
           <div>
@@ -2276,7 +2279,9 @@ async function openDeviceModal(asset) {
             <button class="btn-pdf" id="adPrintLabel">Etiket Yazdır</button>
           </div>
         </div>
+        </div>
 
+        <div class="ad-sec ad-sec--zimmet">
         <div id="deviceAssignBox"></div>
         <div id="deviceLocationBox"></div>
         ${a.category === 'Telefon' ? '<div id="deviceLineBox"></div>' : ''}
@@ -2284,8 +2289,8 @@ async function openDeviceModal(asset) {
       </div>
 
       <!-- Orta: temel bilgiler -->
-      <div class="ad-card ad-sec ad-sec--genel">
-        <div class="ad-card-h"><h4>Temel Bilgiler</h4>
+      <div class="ad-card ad-sec ad-sec--genel ad-sec--temel">
+        <div class="ad-card-h"><h4><span class="ad-ico kpi-ico--blue"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/></svg></span>Temel Bilgiler</h4>
           ${state.role === 'admin' || state.role === 'it' ? '<button class="btn-pdf" id="adEditBasic">Düzenle</button>' : ''}</div>
         ${satir('Varlık Kodu', `<span class="serial-cell">${fmt(a.serial_number)}</span>`)}
         ${satir('Marka / Model', `${fmt(a.brand)} ${fmt(a.model, '')}`)}
@@ -2301,8 +2306,8 @@ async function openDeviceModal(asset) {
       </div>
 
       <!-- Sağ: durum bilgileri -->
-      <div class="ad-card ad-sec ad-sec--genel">
-        <div class="ad-card-h"><h4>Durum Bilgileri</h4>${statusBadge(a.status)}</div>
+      <div class="ad-card ad-sec ad-sec--genel ad-sec--durum">
+        <div class="ad-card-h"><h4><span class="ad-ico kpi-ico--green"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>Durum Bilgileri</h4>${statusBadge(a.status)}</div>
         ${satir('Lokasyon', escapeHtml((a.location || '').trim() || '—'))}
         ${satir('Sorumlu Kişi', escapeHtml(d.assignment?.assigned_to || '—'))}
         ${satir('Son gören kullanıcı', fmt(a.username))}
@@ -2320,10 +2325,10 @@ async function openDeviceModal(asset) {
                zaten kolonlarda duruyor, sekmeye gerek yok (CSS gizler). -->
           <button class="ad-tab ad-tab--m" data-t="genel">Genel</button>
           <button class="ad-tab ad-tab--m" data-t="zimmet">Zimmet &amp; Konum</button>
-          <button class="ad-tab active" data-t="lifecycle">İşlem Geçmişi</button>
-          <button class="ad-tab" data-t="maint">Bakım</button>
-          <button class="ad-tab" data-t="docs">Belgeler</button>
-          <button class="ad-tab" data-t="note">Notlar</button>
+          <button class="ad-tab active" data-t="lifecycle"><svg class="ad-tico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>İşlem Geçmişi</button>
+          <button class="ad-tab" data-t="maint"><svg class="ad-tico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14.7 6.3a4 4 0 0 1 5 5l-9.4 9.4a2 2 0 0 1-2.8-2.8z"/><path d="M9 5 5 9 2 6l3-3z"/></svg>Bakım Geçmişi</button>
+          <button class="ad-tab" data-t="docs"><svg class="ad-tico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Belgeler</button>
+          <button class="ad-tab" data-t="note"><svg class="ad-tico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4h16v12H8l-4 4z"/><path d="M8 9h8M8 12h5"/></svg>Notlar</button>
         </div>
         <div class="ad-pane" id="adPane"></div>
       </div>
