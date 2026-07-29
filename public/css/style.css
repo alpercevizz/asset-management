@@ -2148,7 +2148,13 @@ body.tv-mode:not(.tv-full) .assets-rail .sev-count {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 12px; margin-bottom: 14px;
 }
-.tm-card { border: 1px solid var(--border); border-radius: 12px; padding: 12px 13px; background: var(--bg-card); }
+/* Kartlar ızgarada esner (satır yüksekliğini yandaki paneller belirliyor).
+   Sütun düzeni + esneyen sparkline sayesinde artan yer altta boşluk olarak
+   kalmaz, grafiğe gider. */
+.tm-card {
+  border: 1px solid var(--border); border-radius: 12px; padding: 12px 13px;
+  background: var(--bg-card); display: flex; flex-direction: column;
+}
 .tm-h { display: flex; align-items: center; font-size: 12px; font-weight: 600; color: var(--text-dim); margin-bottom: 8px; }
 .tm-h .ad-ico { width: 22px; height: 22px; margin-right: 8px; }
 .tm-v { font-size: 25px; font-weight: 800; letter-spacing: -.03em; color: var(--text); line-height: 1.1; }
@@ -2156,12 +2162,18 @@ body.tv-mode:not(.tv-full) .assets-rail .sev-count {
 .tm-net { display: block; font-size: 14px; font-weight: 700; color: var(--text); }
 .tm-net small { font-size: 10.5px; font-weight: 500; color: var(--text-muted); }
 /* Ölçüm gelmeyen kart: boş bırakmak yerine NEDENİ yazılır (uydurma sayı YOK) */
-.tm-yok { font-size: 12.5px; color: var(--text-muted); padding: 9px 0 12px; font-style: italic; }
-.tm-spark { width: 100%; height: 28px; margin-top: 8px; display: block; overflow: visible; }
+.tm-yok { font-size: 12.5px; color: var(--text-muted); padding: 9px 0 12px; font-style: italic; flex: 1; }
+/* min-height taban, flex ile artan yeri alır — kart uzayınca grafik de uzar */
+.tm-spark { width: 100%; min-height: 28px; flex: 1 1 auto; margin-top: 8px; display: block; overflow: visible; }
 .tm-spark--bos { font-size: 10.5px; color: var(--text-muted); font-style: italic; height: auto; }
 
 .tm-panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
-.tm-panel .ad-row { font-size: 12.5px; padding: 7px 0; }
+/* Panel kolonu dar (monitörde ~200px). Taban .ad-row kuralında değerde
+   `overflow-wrap: anywhere` var; etiket yanına sığmayınca değeri HARF HARF
+   sarıyor ve "26.07.2026 16:54" sekiz satıra bölünüp satırı 122px yapıyordu.
+   Burada değer sığmazsa bütün halinde ALT SATIRA iner. */
+.tm-panel .ad-row { font-size: 12.5px; padding: 7px 0; flex-wrap: wrap; gap: 2px 10px; }
+.tm-panel .ad-row b { overflow-wrap: normal; text-align: left; }
 .tm-zaman { font-size: 11px; color: var(--text-muted); }
 .tm-ok { color: var(--green); }
 .tm-kotu { color: var(--red); }
@@ -2173,6 +2185,41 @@ body.tv-mode:not(.tv-full) .assets-rail .sev-count {
   font-size: 12.5px; line-height: 1.65; color: var(--text-dim); margin-bottom: 14px;
 }
 .tm-uyari strong { color: var(--text); display: block; margin-bottom: 3px; }
+
+/* ══ VARLIK DETAYI · MONİTÖR (≥1181px) ═══════════════════════════════════
+   Telemetri TEK ızgara olur: ölçüm kartları solda 4+2, Sistem Bilgileri ve
+   Güvenlik Durumu sağda iki satır boyunca uzanır. Önce iki ayrı blok halinde
+   alt alta duruyordu.
+
+   SEKME KARTI TAM GENİŞLİK KALIR. İlk denemede tasarımdaki sıralamaya bakıp
+   sekmeleri 2. kolona aldım; telemetri alanı 740px'e düşünce 6 kolon sığmadı,
+   paneller 137px'e sıkışıp içerik sarmasından satırlar 427px'e uzadı ve
+   ölçüm kartları da onunla birlikte gerildi. Tasarımı yeniden ölçünce sekme
+   kartının modalın tamamını kapladığı görüldü: ~1090px iç genişlik, 6 kolon
+   tam oturuyor (kart 152px, paneller 221/198 — tasarımdaki ölçüler). */
+@media (min-width: 1181px) {
+  #deviceModalOverlay .modal { max-width: 1160px; }
+
+  /* Kolon oranları tasarımdan: sol kimlik dar, orta en geniş, sağ arada */
+  .ad-grid { grid-template-columns: 318px minmax(0, 1.15fr) minmax(0, 1fr); }
+
+  .ad-photo { min-height: 190px; }
+  .ad-img { max-height: 190px; }
+
+  /* Telemetri: 4 ölçüm kolonu + 2 panel kolonu tek ızgarada.
+     Sarmalayıcılar kutularını bırakır ki kartlar ve paneller AYNI
+     ızgaranın hücrelerine girebilsin. */
+  .tm-wrap {
+    display: grid; gap: 12px;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) 1.45fr 1.3fr;
+  }
+  .tm-grid, .tm-panels { display: contents; }
+  .tm-grid { margin-bottom: 0; }
+  .tm-card--bat  { grid-column: 1 / 3; grid-row: 2; }
+  .tm-card--temp { grid-column: 3 / 5; grid-row: 2; }
+  .tm-panel--sistem   { grid-column: 5; grid-row: 1 / 3; }
+  .tm-panel--guvenlik { grid-column: 6; grid-row: 1 / 3; }
+}
 
 /* Kart başlığı ve sekme ikonları (tasarım referansı) */
 .ad-ico {

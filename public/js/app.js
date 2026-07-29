@@ -2246,9 +2246,9 @@ function sparkline(degerler, renk) {
       vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
 }
 
-function tmKart({ baslik, ikon, renk, deger, alt, seri }) {
+function tmKart({ baslik, ikon, renk, deger, alt, seri, sinif }) {
   const yok = deger === null || deger === undefined;
-  return `<div class="tm-card">
+  return `<div class="tm-card ${sinif || ''}">
     <div class="tm-h"><span class="ad-ico ${renk.sinif}">${ikon}</span>${escapeHtml(baslik)}</div>
     ${yok
       ? '<div class="tm-yok">Ölçüm yok</div>'
@@ -2286,26 +2286,26 @@ function renderTelemetri(tel, a) {
   const isiEtiket = (c) => (c == null ? '' : c < 60 ? 'Normal' : c < 80 ? 'Yüksek' : 'Kritik');
 
   const kartlar = [
-    tmKart({ baslik: 'CPU Kullanımı', ikon: I.cpu, renk: R.cpu,
+    tmKart({ baslik: 'CPU Kullanımı', sinif: 'tm-card--cpu', ikon: I.cpu, renk: R.cpu,
       deger: L && L.cpu_pct != null ? `${Math.round(L.cpu_pct)}%` : null,
       alt: L && L.cpu_pct != null ? (L.cpu_pct < 50 ? 'İyi' : L.cpu_pct < 85 ? 'Yoğun' : 'Kritik') : '',
       seri: al('cpu_pct') }),
-    tmKart({ baslik: 'RAM Kullanımı', ikon: I.ram, renk: R.ram,
+    tmKart({ baslik: 'RAM Kullanımı', sinif: 'tm-card--ram', ikon: I.ram, renk: R.ram,
       deger: ramPct != null ? `${ramPct}%` : null,
       alt: L && L.ram_used_gb != null ? `${L.ram_used_gb} GB / ${L.ram_total_gb || '?'} GB` : '',
       seri: S.map((r) => yuzde(r.ram_used_gb, r.ram_total_gb)) }),
-    tmKart({ baslik: 'Disk Kullanımı', ikon: I.disk, renk: R.disk,
+    tmKart({ baslik: 'Disk Kullanımı', sinif: 'tm-card--disk', ikon: I.disk, renk: R.disk,
       deger: diskPct != null ? `${diskPct}%` : null,
       alt: L && L.disk_used_gb != null ? `${Math.round(L.disk_used_gb)} GB / ${Math.round(L.disk_total_gb || 0)} GB` : '',
       seri: S.map((r) => yuzde(r.disk_used_gb, r.disk_total_gb)) }),
-    tmKart({ baslik: 'Ağ Kullanımı', ikon: I.ag, renk: R.ag,
+    tmKart({ baslik: 'Ağ Kullanımı', sinif: 'tm-card--net', ikon: I.ag, renk: R.ag,
       deger: L && L.net_rx_mbps != null
         ? `<span class="tm-net">↓ ${L.net_rx_mbps} <small>Mbps</small></span><span class="tm-net">↑ ${L.net_tx_mbps ?? '—'} <small>Mbps</small></span>` : null,
       alt: '', seri: al('net_rx_mbps') }),
-    tmKart({ baslik: 'Pil Durumu', ikon: I.pil, renk: R.pil,
+    tmKart({ baslik: 'Pil Durumu', sinif: 'tm-card--bat', ikon: I.pil, renk: R.pil,
       deger: L && L.battery_pct != null ? `${Math.round(L.battery_pct)}%` : null,
       alt: L ? (pilDurum[L.battery_state] || '') : '', seri: al('battery_pct') }),
-    tmKart({ baslik: 'Sıcaklık', ikon: I.isi, renk: R.isi,
+    tmKart({ baslik: 'Sıcaklık', sinif: 'tm-card--temp', ikon: I.isi, renk: R.isi,
       deger: L && L.temp_c != null ? `${L.temp_c}°C` : null,
       alt: L ? isiEtiket(L.temp_c) : '', seri: al('temp_c') }),
   ].join('');
@@ -2316,14 +2316,14 @@ function renderTelemetri(tel, a) {
   const upt = a.uptime_days != null
     ? `${Math.floor(a.uptime_days)} gün ${Math.round((a.uptime_days % 1) * 24)} saat` : '—';
   const sistem = `
-    <div class="ad-card tm-panel">
+    <div class="ad-card tm-panel tm-panel--sistem">
       <div class="ad-card-h"><h4>Sistem Bilgileri</h4></div>
       <div class="ad-row"><span>Hostname</span><b>${fmt(a.hostname)}</b></div>
       <div class="ad-row"><span>Domain</span><b>${fmt(a.domain)}</b></div>
       <div class="ad-row"><span>IP Adresi</span><b class="serial-cell">${fmt(a.ip_address)}</b></div>
       <div class="ad-row"><span>MAC Adresi</span><b class="serial-cell">${fmt(a.mac_address)}</b></div>
       <div class="ad-row"><span>Uptime</span><b>${upt}</b></div>
-      <div class="ad-row"><span>Son Yeniden Başlatma</span><b>${bootTarih}</b></div>
+      <div class="ad-row"><span>Son Başlatma</span><b>${bootTarih}</b></div>
     </div>`;
 
   // ── Güvenlik Durumu ────────────────────────────────────────────────────────
@@ -2335,7 +2335,7 @@ function renderTelemetri(tel, a) {
     return '<b class="ad-bos">bilinmiyor</b>';
   };
   const guvenlik = `
-    <div class="ad-card tm-panel">
+    <div class="ad-card tm-panel tm-panel--guvenlik">
       <div class="ad-card-h"><h4>Güvenlik Durumu</h4>
         ${G ? `<span class="tm-zaman">${fmtDate(G.checked_at)}</span>` : ''}</div>
       ${G ? `
@@ -2345,8 +2345,8 @@ function renderTelemetri(tel, a) {
         <div class="ad-row"><span>Antivirüs</span>${G.antivirus_name
           ? `<b class="${G.antivirus === 'aktif' ? 'tm-ok' : 'tm-kotu'}">${escapeHtml(G.antivirus_name)}</b>`
           : rozet(G.antivirus)}</div>
-        <div class="ad-row"><span>İşletim Sistemi Güncellemesi</span><b class="${G.os_update === 'guncel' ? 'tm-ok' : G.os_update === 'bekliyor' ? 'ad-warn' : 'ad-bos'}">
-          ${G.os_update === 'guncel' ? 'Güncel' : G.os_update === 'bekliyor' ? 'Bekleyen güncelleme var' : 'bilinmiyor'}</b></div>
+        <div class="ad-row"><span>OS Güncellemesi</span><b class="${G.os_update === 'guncel' ? 'tm-ok' : G.os_update === 'bekliyor' ? 'ad-warn' : 'ad-bos'}">
+          ${G.os_update === 'guncel' ? 'Güncel' : G.os_update === 'bekliyor' ? 'Bekliyor' : 'bilinmiyor'}</b></div>
         <div class="ad-row"><span>Kritik Yama</span><b class="${G.critical_patches > 0 ? 'ad-warn' : ''}">${G.critical_patches ?? '—'}</b></div>
         <div class="ad-row"><span>Bekleyen Güncelleme</span><b>${G.pending_updates ?? '—'}</b></div>`
       : `<p class="ad-hint">Bu cihazdan güvenlik durumu gelmedi. Toplama betiği (collector)
@@ -2363,8 +2363,10 @@ function renderTelemetri(tel, a) {
       <em>Sıcaklık ve pil her makinede okunamaz</em> — sunucuda pil, sanal makinede
       sıcaklık sensörü yoktur; o kartlar o cihazlarda boş kalır.
     </div>`}
-    <div class="tm-grid">${kartlar}</div>
-    <div class="tm-panels">${sistem}${guvenlik}</div>
+    <div class="tm-wrap">
+      <div class="tm-grid">${kartlar}</div>
+      <div class="tm-panels">${sistem}${guvenlik}</div>
+    </div>
     ${olcumVar ? `<p class="ad-hint">Grafikler son 24 saati gösterir (${S.length} ölçüm).
       Ölçümler ${tel.retention_days || 30} gün saklanır.</p>` : ''}`;
 }
