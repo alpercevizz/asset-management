@@ -86,7 +86,9 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 // Model görselleri base64 data URL olarak gelir (2 MB dosya ≈ 2.7 MB gövde).
 // Dış dosya yükleme servisi/multipart bağımlılığı eklemek yerine bu yol seçildi.
-app.use(express.json({ limit: '4mb' }));
+// verify: ham gövde saklanır — collector imzası gövde ÖZETİNİ kapsıyor,
+// JSON'u yeniden dizmek (key sırası/boşluk) özeti değiştirip imzayı bozardı.
+app.use(express.json({ limit: '4mb', verify: (req, _res, buf) => { req.rawBody = buf; } }));
 // Klasik form gönderimi: JS'i çalışmayan/eski tarayıcılarda (bazı TV/kiosk
 // tarayıcıları) giriş yine de tamamlanabilsin diye.
 app.use(express.urlencoded({ extended: false }));
@@ -299,6 +301,23 @@ app.get('/api/stats', async (req, res) => {
 
 app.post('/api/webhook', async (req, res) => {
   try {
+    /* KİMLİK DOĞRULAMA — envanteri yazan tek public uç burası. İmzasız istek
+       kabul edilirse adresi bilen herkes sahte cihaz açar veya mevcut cihazın
+       verisini ezer; üzerine kurulu tüm tespitler (shadow IT, zimmet
+       uyuşmazlığı, EOL) yanılır. Bkz. agent/tools/agent-auth.js */
+    const agentAuth = require('./agent/tools/agent-auth');
+    const kimlik = await agentAuth.verifyRequest(req);
+    if (!kimlik.ok) {
+      console.warn(`[WEBHOOK REDDEDİLDİ] ${kimlik.code} — ${kimlik.reason}` +
+        (kimlik.deviceId ? ` (cihaz: ${kimlik.deviceId})` : '') +
+        ` ip=${(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim()}`);
+      return res.status(401).json({ error: kimlik.reason, code: kimlik.code });
+    }
+    if (kimlik.imzasiz) {
+      console.warn('[WEBHOOK] İmzasız istek kabul edildi (WEBHOOK_AUTH=' + agentAuth.mode() + '). ' +
+        'Üretimde "required" olmalı.');
+    }
+
     const payload = req.body;
 
     if (!payload.serial_number && !payload.hostname) {
@@ -361,13 +380,50 @@ app.post('/api/webhook', async (req, res) => {
       catch (e) { console.warn('[GÜVENLİK] kaydedilemedi:', e.message); }
     }
 
+    // Kayıtlı cihazı envanter satırıyla eşle (teşhis ve iptal için gerekiyor)
+    if (kimlik.deviceId) {
+      try { await agentAuth.touch(kimlik.deviceId, { asset_id: result.id }); } catch (_) { /* kritik değil */ }
+    }
+
     res.json({
       success: true, action: existing ? 'updated' : 'created', id: result.id,
       ...(locationChanged ? { location_changed: { from: locationChanged.from, to: locationChanged.to } } : {}),
+      /* Cihaza özel sır YALNIZ ilk kayıtta, YALNIZ bir kez döner. Collector
+         bunu diske yazar; bundan sonra paylaşılan anahtar bu cihaz için
+         çalışmaz. Sunucu sırrı tekrar göndermez — kaybedilirse kayıt sıfırlanır. */
+      ...(kimlik.yeniKayit ? {
+        enrollment: {
+          device_id: kimlik.deviceId,
+          secret: kimlik.enrollment.secret,
+          note: 'Bu sırrı sakla. Bir daha gönderilmeyecek.',
+        },
+      } : {}),
     });
   } catch (err) {
     console.error('[POST /api/webhook]', err.message);
     res.status(500).json({ error: 'Webhook işleme hatası', detail: err.message });
+  }
+});
+
+/* ─── Collector cihaz kayıtları (admin) ─────────────────────────────────────
+   Cihaz yeniden kurulduğunda sırrı kaybolur ve paylaşılan anahtarla yeniden
+   kaydolamaz (bilinçli). Yönetici kaydı silerse cihaz temiz bir kayıt açar. */
+app.get('/api/agents', requireRole('admin'), async (req, res) => {
+  try {
+    const a = require('./agent/tools/agent-auth');
+    res.json({ mode: a.mode(), secret_configured: !!a.sharedSecret(), results: await a.listEnrollments() });
+  } catch (err) {
+    res.status(500).json({ error: 'Kayıtlar alınamadı', detail: err.message });
+  }
+});
+
+app.delete('/api/agents/:deviceId', requireRole('admin'), async (req, res) => {
+  try {
+    const n = await require('./agent/tools/agent-auth').revoke(req.params.deviceId);
+    console.warn(`[AGENT] Kayıt silindi: ${req.params.deviceId} (silen: ${currentUser(req)?.username})`);
+    res.json({ success: true, deleted: n });
+  } catch (err) {
+    res.status(500).json({ error: 'Kayıt silinemedi', detail: err.message });
   }
 });
 
@@ -555,6 +611,17 @@ app.get('/api/licenses/stats', async (req, res) => {
 // Bir bilgisayardan gelen tüm yazılım listesini upsert eder
 app.post('/api/licenses/sync', async (req, res) => {
   try {
+    // Webhook ile AYNI koruma: bu uç da kimlik doğrulamasız yazma noktasıydı.
+    // Yalnız webhook'u kapatmak yarım çözüm olurdu — saldırgan lisans/yazılım
+    // envanterini kirletip uyum raporlarını yanıltabilirdi.
+    const agentAuth = require('./agent/tools/agent-auth');
+    const kimlik = await agentAuth.verifyRequest(req);
+    if (!kimlik.ok) {
+      console.warn(`[LİSANS REDDEDİLDİ] ${kimlik.code} — ${kimlik.reason}` +
+        (kimlik.deviceId ? ` (cihaz: ${kimlik.deviceId})` : ''));
+      return res.status(401).json({ error: kimlik.reason, code: kimlik.code });
+    }
+
     const { hostname, serial_number, username, location, software } = req.body;
     if (!hostname || !Array.isArray(software)) {
       return res.status(400).json({ error: 'hostname ve software[] zorunludur' });
@@ -1381,6 +1448,7 @@ function checkSecrets() {
     ['SESSION_SECRET', process.env.SESSION_SECRET],
     ['CHAIN_SECRET', process.env.CHAIN_SECRET || process.env.SESSION_SECRET],
     ['WORM_SECRET', process.env.WORM_SECRET || process.env.SESSION_SECRET],
+    ['AGENT_SECRET', process.env.AGENT_SECRET],
   ];
   const weak = [];
   for (const [name, val] of checks) {
@@ -1394,7 +1462,20 @@ function checkSecrets() {
     }
     console.warn(msg + ' (development modunda izin verildi — PRODUCTION öncesi mutlaka değiştirin.)');
   } else {
-    console.log('[GÜVENLİK] Sır kontrolü geçti (SESSION/CHAIN/WORM güçlü).');
+    console.log('[GÜVENLİK] Sır kontrolü geçti (SESSION/CHAIN/WORM/AGENT güçlü).');
+  }
+
+  /* Webhook kimlik doğrulama modu AÇIKÇA raporlanır. 'off'/'optional' sessizce
+     çalışırsa kimse envanter yazımının korumasız olduğunu fark etmez. */
+  const agentAuth = require('./agent/tools/agent-auth');
+  const m = agentAuth.mode();
+  if (m === 'required') {
+    console.log('[GÜVENLİK] Webhook kimlik doğrulama: ZORUNLU (imzasız istek reddedilir).');
+  } else {
+    const msg = `[GÜVENLİK] Webhook kimlik doğrulama: ${m.toUpperCase()} — imzasız istek KABUL EDİLİYOR. ` +
+      'Adresi bilen herkes sahte cihaz kaydedebilir. Üretimde WEBHOOK_AUTH=required olmalı.';
+    if (process.env.NODE_ENV === 'production') console.error(msg);
+    else console.warn(msg);
   }
 }
 

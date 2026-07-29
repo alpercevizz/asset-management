@@ -708,3 +708,77 @@ test('telemetri: boş ölçüm satır açmaz, değerler sınırlanır, seri örn
   await db()('asset_telemetry').where({ asset_id: AID }).del();
   await db()('asset_security').where({ asset_id: AID }).del();
 });
+
+// ── Collector kimlik doğrulaması (imzalı istek + cihaz kaydı) ─────────────────
+test('agent-auth: imza doğrulama, replay koruması ve cihaz kaydı', async () => {
+  const crypto = require('crypto');
+  const auth = require('../agent/tools/agent-auth');
+  const { db } = require('../db');
+
+  process.env.AGENT_SECRET = 'test-paylasilan-anahtar-en-az-32-karakter-olmali';
+  process.env.WEBHOOK_AUTH = 'required';
+  const PAYLASILAN = process.env.AGENT_SECRET;
+  const CIHAZ = 'TEST-CIHAZ-' + crypto.randomBytes(4).toString('hex');
+  await db()('agent_enrollments').where({ device_id: CIHAZ }).del();
+
+  // Express req taklidi — imza ham gövdeyi kapsıyor
+  const istek = ({ secret, deviceId = CIHAZ, ts = Date.now(), nonce, govde = '{"a":1}', bozGovde = null }) => {
+    const n = nonce || crypto.randomBytes(6).toString('hex');
+    const parcalar = { timestamp: String(ts), nonce: n, method: 'POST', path: '/api/webhook',
+      bodyHash: auth.govdeOzeti(Buffer.from(govde, 'utf8')) };
+    const h = {
+      'x-assetman-device': deviceId, 'x-assetman-timestamp': String(ts),
+      'x-assetman-nonce': n, 'x-assetman-signature': secret ? auth.imzala(secret, parcalar) : '',
+    };
+    return { method: 'POST', path: '/api/webhook', rawBody: Buffer.from(bozGovde ?? govde, 'utf8'),
+      get: (k) => h[k.toLowerCase()] || '' };
+  };
+
+  // 1) İmzasız istek reddedilir (required modunda)
+  const imzasiz = await auth.verifyRequest({ method: 'POST', path: '/api/webhook', rawBody: Buffer.from('{}'), get: () => '' });
+  assert.equal(imzasiz.ok, false);
+  assert.equal(imzasiz.code, 'IMZA_YOK');
+
+  // 2) Yanlış anahtar reddedilir
+  assert.equal((await auth.verifyRequest(istek({ secret: 'baska-anahtar' }))).ok, false);
+
+  // 3) Pencere dışı zaman damgası reddedilir (replay)
+  const eski = await auth.verifyRequest(istek({ secret: PAYLASILAN, ts: Date.now() - 10 * 60 * 1000 }));
+  assert.equal(eski.code, 'ZAMAN_PENCERESI');
+
+  // 4) İmza gövdeyi kapsar — gövde sonradan değiştirilemez
+  const bozuk = await auth.verifyRequest(istek({ secret: PAYLASILAN, govde: '{"a":1}', bozGovde: '{"a":2}' }));
+  assert.equal(bozuk.ok, false, 'gövde değiştirilmişse imza tutmamalı');
+
+  // 5) Geçerli imza → cihaz KAYDOLUR ve kendine özel sır alır
+  const kayit = await auth.verifyRequest(istek({ secret: PAYLASILAN }));
+  assert.equal(kayit.ok, true);
+  assert.equal(kayit.yeniKayit, true);
+  const cihazSirri = kayit.enrollment.secret;
+  assert.ok(cihazSirri && cihazSirri !== PAYLASILAN);
+
+  // 6) Kayıt sonrası cihaz sırrı geçerli
+  assert.equal((await auth.verifyRequest(istek({ secret: cihazSirri }))).ok, true);
+
+  // 7) KRİTİK: kayıtlı cihaz için paylaşılan anahtar ARTIK kabul edilmez.
+  //    Anahtarı okuyan yerel yönetici başka cihazı taklit edemesin diye.
+  const paylasilanSonra = await auth.verifyRequest(istek({ secret: PAYLASILAN }));
+  assert.equal(paylasilanSonra.ok, false);
+  assert.equal(paylasilanSonra.code, 'KAYITLI_CIHAZ_PAYLASILAN_ANAHTAR');
+
+  // 8) Aynı nonce ikinci kez kullanılamaz (replay)
+  const n = 'sabit-nonce-' + crypto.randomBytes(3).toString('hex');
+  assert.equal((await auth.verifyRequest(istek({ secret: cihazSirri, nonce: n }))).ok, true);
+  assert.equal((await auth.verifyRequest(istek({ secret: cihazSirri, nonce: n }))).code, 'TEKRAR');
+
+  // 9) Kayıt silinince cihaz yeniden kaydolabilir (yeniden kurulan makine)
+  await auth.revoke(CIHAZ);
+  assert.equal((await auth.verifyRequest(istek({ secret: PAYLASILAN }))).yeniKayit, true);
+
+  // 10) Sır listede ASLA görünmez
+  const liste = await auth.listEnrollments();
+  assert.ok(liste.every((r) => r.secret === undefined), 'cihaz sırrı dışarı sızmamalı');
+
+  await db()('agent_enrollments').where({ device_id: CIHAZ }).del();
+  delete process.env.WEBHOOK_AUTH;
+});

@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 #  AssetMan - Collector Kurulumu (Gorev Zamanlayici / SYSTEM)
 #  Betigi SYSTEM hesabiyla, oturum acilmasa bile calisacak
 #  sekilde zamanlanmis gorev olarak kaydeder.
@@ -13,6 +13,9 @@
 param(
     [string]$WebhookUrl  = "https://envanter.alperceviz.com/api/webhook",
     [string]$LicenseUrl  = "",
+    # Sunucudaki AGENT_SECRET. Cihazin ILK kaydi icin sart; kayittan sonra
+    # cihaz kendi sirriyla imzalar ve bu anahtar o cihaz icin gecersizlesir.
+    [Parameter(Mandatory = $false)][string]$AgentKey = "",
     # Kurulum hedefi. ProgramData bilincli secildi: kullanici profilinden
     # BAGIMSIZ, SYSTEM okuyabiliyor ve kullanici silemiyor.
     [string]$InstallDir  = "$env:ProgramData\AssetMan",
@@ -46,6 +49,17 @@ if ($Uninstall) {
     exit 0
 }
 
+# ── Imzalama anahtari kontrolu ───────────────────────────────────────────────
+# Sunucu WEBHOOK_AUTH=required ile calisiyorsa imzasiz istek reddedilir.
+# Anahtarsiz kurulum, her saat sessizce 401 alan bir gorev birakirdi.
+$zatenKayitli = Test-Path (Join-Path $InstallDir "device.json")
+if (-not $AgentKey -and -not $zatenKayitli) {
+    Write-Warning "-AgentKey verilmedi ve bu cihaz henuz kayitli degil."
+    Write-Warning "Sunucudaki AGENT_SECRET degerini kullanin (data/secrets.json veya .env)."
+    Write-Warning "Sunucuda WEBHOOK_AUTH=off degilse collector 401 alacaktir."
+}
+if ($zatenKayitli) { Write-Host "[i] Cihaz zaten kayitli — kendi sirriyla imzalayacak" }
+
 # ── Dosyalari kopyala ────────────────────────────────────────────────────────
 $kaynak = Join-Path $PSScriptRoot "collect-assets.ps1"
 if (-not (Test-Path $kaynak)) { Write-Error "collect-assets.ps1 bulunamadi: $kaynak"; exit 1 }
@@ -66,9 +80,11 @@ $argListesi = @(
     "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
     "-File", "`"$InstallDir\collect-assets.ps1`"",
     "-WebhookUrl", "`"$WebhookUrl`"",
-    "-LogFile", "`"$logDosya`""
+    "-LogFile", "`"$logDosya`"",
+    "-StateFile", "`"$InstallDir\device.json`""
 )
 if ($LicenseUrl) { $argListesi += @("-LicenseUrl", "`"$LicenseUrl`"") }
+if ($AgentKey)   { $argListesi += @("-AgentKey", "`"$AgentKey`"") }
 
 $eylem = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
                                  -Argument ($argListesi -join ' ')

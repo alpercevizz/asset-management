@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 #  AI Asset Management - Windows Hardware Collector
 #  Bilgisayar bilgilerini toplar ve webhook'a gönderir
 # ============================================================
@@ -6,11 +6,19 @@
 param(
     [string]$WebhookUrl    = "http://localhost:3000/api/webhook",
     [string]$LicenseUrl    = "http://localhost:3000/api/licenses/sync",
-    [string]$LogFile       = "$env:TEMP\asset-collector.log"
+    [string]$LogFile       = "$env:TEMP\asset-collector.log",
+    # Sunucudaki AGENT_SECRET ile ayni PAYLASILAN anahtar. Yalnizca ILK
+    # baglantida (kayit/enrollment) kullanilir; sonrasinda cihaza ozel sir gecer.
+    [string]$AgentKey      = "",
+    # Cihaza ozel sirrin saklandigi dosya. ProgramData bilincli: kullanici
+    # profilinden bagimsiz, SYSTEM yazabiliyor.
+    [string]$StateFile     = "$env:ProgramData\AssetMan\device.json"
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+$COLLECTOR_VERSION = "1.2.0"
 
 function Write-Log {
     param([string]$Message, [string]$Level = "INFO")
@@ -24,6 +32,83 @@ function Get-SafeValue {
     param($Value, $Default = $null)
     if ($null -eq $Value -or $Value -eq "") { return $Default }
     return $Value
+}
+
+# ── Istek Imzalama ───────────────────────────────────────────────────────────
+# Sunucu her webhook istegini HMAC-SHA256 ile dogrular. Imza GOVDE OZETINI de
+# kapsar (yol ustunde degistirilemez) ve zaman damgasi + nonce icerir (eski bir
+# istek tekrar oynatilamaz).
+
+# Makine kimligi: kalici ve makineye ozgu olmali. MachineGuid Windows kurulumuyla
+# birlikte uretilir ve yeniden kuruluma kadar degismez. Hostname KULLANILMAZ:
+# degistirilebilir ve cakisabilir.
+function Get-MachineId {
+    try {
+        $g = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Cryptography' -Name MachineGuid -ErrorAction Stop).MachineGuid
+        if ($g) { return $g }
+    } catch { }
+    return $env:COMPUTERNAME    # son care
+}
+
+function Get-DeviceState {
+    param([string]$Path)
+    if (-not (Test-Path $Path)) { return $null }        # henuz kayitli degil
+    try {
+        return Get-Content $Path -Raw | ConvertFrom-Json
+    } catch {
+        # Dosya VAR ama okunamiyor. Neredeyse her zaman izin sorunudur: dosya
+        # SYSTEM+Administrators'a kilitli (cihaz sirri kullanici tarafindan
+        # okunabilseydi kullanici kendi makinesini taklit edebilirdi).
+        # Bunu "kayitli degil" saymak YANLIS olur — paylasilan anahtarla
+        # yeniden kaydolmayi dener, sunucu da onu hakli olarak reddeder.
+        throw "Cihaz kayit dosyasi okunamiyor ($Path): $($_.Exception.Message)`n" +
+              "Collector'i SYSTEM olarak (Gorev Zamanlayici) veya yonetici olarak calistirin. " +
+              "Bkz. docs/COLLECTOR-KURULUM.md"
+    }
+}
+
+function Save-DeviceState {
+    param([string]$Path, [string]$DeviceId, [string]$Secret)
+    $dir = Split-Path $Path -Parent
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    @{ device_id = $DeviceId; secret = $Secret; saved_at = (Get-Date -Format 'o') } |
+        ConvertTo-Json | Out-File -FilePath $Path -Encoding UTF8 -Force
+    # Cihaz sirri YALNIZCA SYSTEM ve yoneticilerce okunabilmeli. Kullanici
+    # okuyabilseydi kendi makinesini taklit edebilirdi.
+    try {
+        icacls $Path /inheritance:r /grant "SYSTEM:F" /grant "Administrators:F" | Out-Null
+    } catch { Write-Log "Cihaz dosyasi izinleri ayarlanamadi: $($_.Exception.Message)" "WARN" }
+}
+
+function New-SignedHeaders {
+    param([string]$Secret, [string]$DeviceId, [string]$Method, [string]$Path, [string]$Body)
+
+    $ts    = [string][DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    $nonce = [guid]::NewGuid().ToString('N')
+
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bodyHash = -join ($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($Body)) | ForEach-Object { $_.ToString('x2') })
+    } finally { $sha.Dispose() }
+
+    # Taban sunucudaki agent-auth.js ile BIREBIR ayni olmali (satir sonu \n)
+    $base = ($ts, $nonce, $Method.ToUpper(), $Path, $bodyHash) -join "`n"
+
+    $hmac = New-Object System.Security.Cryptography.HMACSHA256
+    try {
+        $hmac.Key = [Text.Encoding]::UTF8.GetBytes($Secret)
+        $sig = -join ($hmac.ComputeHash([Text.Encoding]::UTF8.GetBytes($base)) | ForEach-Object { $_.ToString('x2') })
+    } finally { $hmac.Dispose() }
+
+    return @{
+        "Content-Type"           = "application/json"
+        "User-Agent"             = "AssetCollector/$COLLECTOR_VERSION (Windows)"
+        "X-AssetMan-Device"      = $DeviceId
+        "X-AssetMan-Timestamp"   = $ts
+        "X-AssetMan-Nonce"       = $nonce
+        "X-AssetMan-Signature"   = $sig
+        "X-AssetMan-Agent"       = $COLLECTOR_VERSION
+    }
 }
 
 Write-Log "Veri toplama basliyor..."
@@ -92,9 +177,16 @@ try {
     # olurdu: sunucuda pil YOK, sanal makinede sicaklik sensoru YOK.
     $telemetry = @{}
 
-    try {   # CPU: tek anlik okuma dalgali cikar, 3 ornek alinip ortalanir
-        $samples = (Get-Counter '\Processor(_Total)\% Processor Time' -SampleInterval 1 -MaxSamples 3 -ErrorAction Stop)
-        $telemetry.cpu_pct = [math]::Round(($samples.CounterSamples | Measure-Object -Property CookedValue -Average).Average, 1)
+    # DIKKAT — Get-Counter KULLANILMIYOR. Sayac yollari ('\Processor(_Total)\
+    # % Processor Time') Windows'un DILINE gore yerellesir; Turkce Windows'ta
+    # "The specified object was not found" hatasi verir. Musterinin makineleri
+    # Turkce oldugu icin CPU ve ag olcumu HIC gelmiyordu. Asagidaki WMI
+    # siniflari dilden BAGIMSIZ, her yerelde ayni calisir.
+    try {   # CPU: iki okuma alinip ortalanir (tek anlik deger dalgali)
+        $p1 = Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter "Name='_Total'" -ErrorAction Stop
+        Start-Sleep -Milliseconds 800
+        $p2 = Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter "Name='_Total'" -ErrorAction Stop
+        $telemetry.cpu_pct = [math]::Round((($p1.PercentProcessorTime + $p2.PercentProcessorTime) / 2), 1)
     } catch { Write-Log "CPU kullanimi okunamadi: $($_.Exception.Message)" }
 
     try {
@@ -109,15 +201,15 @@ try {
         $telemetry.disk_used_gb  = [math]::Round(($sys.Size - $sys.FreeSpace) / 1GB, 2)
     } catch { Write-Log "Disk kullanimi okunamadi: $($_.Exception.Message)" }
 
-    try {   # Ag: bayt/sn sayaclari -> Mbps
-        $rx = (Get-Counter '\Network Interface(*)\Bytes Received/sec' -ErrorAction Stop).CounterSamples |
-              Where-Object { $_.InstanceName -notmatch 'isatap|Teredo|Loopback' } |
-              Measure-Object -Property CookedValue -Sum
-        $tx = (Get-Counter '\Network Interface(*)\Bytes Sent/sec' -ErrorAction Stop).CounterSamples |
-              Where-Object { $_.InstanceName -notmatch 'isatap|Teredo|Loopback' } |
-              Measure-Object -Property CookedValue -Sum
-        $telemetry.net_rx_mbps = [math]::Round($rx.Sum * 8 / 1MB, 2)
-        $telemetry.net_tx_mbps = [math]::Round($tx.Sum * 8 / 1MB, 2)
+    try {   # Ag: bayt/sn -> Mbps (WMI sinifi, dilden bagimsiz)
+        $nic = Get-CimInstance Win32_PerfFormattedData_Tcpip_NetworkInterface -ErrorAction Stop |
+               Where-Object { $_.Name -notmatch 'isatap|Teredo|Loopback|Pseudo' }
+        if ($nic) {
+            $rx = ($nic | Measure-Object -Property BytesReceivedPersec -Sum).Sum
+            $tx = ($nic | Measure-Object -Property BytesSentPersec -Sum).Sum
+            $telemetry.net_rx_mbps = [math]::Round($rx * 8 / 1MB, 2)
+            $telemetry.net_tx_mbps = [math]::Round($tx * 8 / 1MB, 2)
+        }
     } catch { Write-Log "Ag kullanimi okunamadi: $($_.Exception.Message)" }
 
     try {   # Pil YALNIZCA dizustunde vardir; masaustu/sunucuda bu blok bos gecer
@@ -199,7 +291,7 @@ try {
         last_seen      = (Get-Date -Format "o")
         status         = "online"
         category       = "Bilgisayar"
-        collector_ver  = "1.1.0"
+        collector_ver  = $COLLECTOR_VERSION
     }
 
     # Null değerleri temizle
@@ -217,18 +309,49 @@ try {
 
     Write-Log "Toplanan veriler: Hostname=$($cleaned.hostname), Seri=$($cleaned.serial_number), RAM=${totalRamGB}GB, Disk=${totalDiskGB}GB"
 
-    # ── Webhook Gönder ───────────────────────────────────────────────────────
+    # ── Webhook Gönder (imzali) ──────────────────────────────────────────────
     $jsonBody = $cleaned | ConvertTo-Json -Depth 3 -Compress
     Write-Log "Webhook'a gonderiliyor: $WebhookUrl"
 
-    $headers = @{
-        "Content-Type" = "application/json"
-        "User-Agent"   = "AssetCollector/1.0 (Windows)"
+    $machineId = Get-MachineId
+    $state     = Get-DeviceState -Path $StateFile
+
+    # Cihaza ozel sir varsa ONU kullan; yoksa paylasilan anahtarla kaydol.
+    # Kayitli cihaz icin sunucu paylasilan anahtari BILEREK reddeder.
+    if ($state -and $state.secret) {
+        $signingKey = $state.secret
+        $deviceId   = $state.device_id
+        Write-Log "Imzalama: cihaza ozel sir (kayitli)"
+    } elseif ($AgentKey) {
+        $signingKey = $AgentKey
+        $deviceId   = $machineId
+        Write-Log "Imzalama: paylasilan anahtar (ilk kayit yapilacak)"
+    } else {
+        throw "Imzalama anahtari yok. -AgentKey verin (sunucudaki AGENT_SECRET) veya cihaz $StateFile ile kayitli olsun."
     }
 
-    $response = Invoke-RestMethod -Uri $WebhookUrl -Method POST -Body $jsonBody -Headers $headers -TimeoutSec 30
+    $uri     = [Uri]$WebhookUrl
+    $headers = New-SignedHeaders -Secret $signingKey -DeviceId $deviceId `
+                                 -Method 'POST' -Path $uri.AbsolutePath -Body $jsonBody
 
-    Write-Log "Basarili! Yanit: $($response | ConvertTo-Json -Compress)"
+    # Gövde BAYT olarak gonderilir: Invoke-RestMethod string'i varsayilan
+    # kodlamayla yollarsa Turkce karakterlerde bayt dizisi degisir ve sunucudaki
+    # govde ozeti tutmaz — imza gecersiz olurdu.
+    $bodyBytes = [Text.Encoding]::UTF8.GetBytes($jsonBody)
+    $response  = Invoke-RestMethod -Uri $WebhookUrl -Method POST -Body $bodyBytes -Headers $headers -TimeoutSec 30
+
+    # Ilk kayitta sunucu cihaza ozel sirri BIR KEZ dondurur — hemen sakla.
+    if ($response.PSObject.Properties.Name -contains 'enrollment' -and $response.enrollment.secret) {
+        Save-DeviceState -Path $StateFile -DeviceId $response.enrollment.device_id -Secret $response.enrollment.secret
+        Write-Log "Cihaz kaydi tamamlandi. Cihaza ozel sir saklandi: $StateFile"
+        Write-Log "Bundan sonra paylasilan anahtar bu cihaz icin KULLANILMAYACAK."
+        # AYNI CALISTIRMADAKI sonraki istekler (lisans sync) de yeni sirla
+        # imzalanmali: sunucu artik bu cihaz icin paylasilan anahtari reddediyor.
+        $signingKey = $response.enrollment.secret
+        $deviceId   = $response.enrollment.device_id
+    }
+
+    Write-Log "Basarili! Yanit: $($response | ConvertTo-Json -Compress -Depth 3)"
 
     # ── Yazılım & Lisans Toplama ─────────────────────────────────────────────
     Write-Log "Yazilim envanteri toplanıyor..."
@@ -387,7 +510,13 @@ try {
             software      = $softwareList
         }
         $licJson = $licPayload | ConvertTo-Json -Depth 5 -Compress
-        $licResponse = Invoke-RestMethod -Uri $LicenseUrl -Method POST -Body $licJson -Headers $headers -TimeoutSec 60
+        # AYRI imza sart: imza yolu ve govde ozetini kapsar, webhook'un
+        # basliklari burada gecersizdir (nonce da tekrar sayilir).
+        $licUri     = [Uri]$LicenseUrl
+        $licHeaders = New-SignedHeaders -Secret $signingKey -DeviceId $deviceId `
+                                        -Method 'POST' -Path $licUri.AbsolutePath -Body $licJson
+        $licBytes    = [Text.Encoding]::UTF8.GetBytes($licJson)
+        $licResponse = Invoke-RestMethod -Uri $LicenseUrl -Method POST -Body $licBytes -Headers $licHeaders -TimeoutSec 60
         Write-Log "Lisans sync: $($licResponse.created) eklendi, $($licResponse.updated) guncellendi ($($softwareList.Count) yazilim)"
     } else {
         Write-Log "Takip edilecek yazilim bulunamadi."

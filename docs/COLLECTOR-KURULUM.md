@@ -21,7 +21,13 @@ Yönetici PowerShell'de:
 
 ```powershell
 cd <repo>\client-scripts\windows
-.\install-collector.ps1 -WebhookUrl "https://envanter.alperceviz.com/api/webhook"
+.\install-collector.ps1 -WebhookUrl "https://envanter.alperceviz.com/api/webhook" -AgentKey "<AGENT_SECRET>"
+```
+
+`AGENT_SECRET` sunucuda otomatik üretilir. Almak için:
+
+```bash
+cd /opt/asset-management && docker compose exec -T app node -e "console.log(require('/app/data/secrets.json').AGENT_SECRET)"
 ```
 
 Betik şunları yapar:
@@ -89,8 +95,14 @@ Computer Configuration
 - **Program**: `powershell.exe`
 - **Arguments**:
   ```
-  -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "\\dc01\NETLOGON\AssetMan\collect-assets.ps1" -WebhookUrl "https://envanter.alperceviz.com/api/webhook" -LogFile "C:\ProgramData\AssetMan\collector.log"
+  -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "\\dc01\NETLOGON\AssetMan\collect-assets.ps1" -WebhookUrl "https://envanter.alperceviz.com/api/webhook" -LogFile "C:\ProgramData\AssetMan\collector.log" -StateFile "C:\ProgramData\AssetMan\device.json" -AgentKey "<AGENT_SECRET>"
   ```
+
+  > `-AgentKey` yalnız **ilk kayıt** için gerekli; cihaz kaydolduktan sonra
+  > kendi sırrıyla imzalar ve bu anahtar o cihaz için geçersizleşir. Yine de
+  > GPO argümanında duracağı için: bu anahtar makinede oturum açan herkesçe
+  > görülebilir (görev tanımı okunabilir). Kabul edilen risk — ele geçiren kişi
+  > **kayıtlı** cihazları taklit edemez, yalnız yeni kayıt açabilir.
 - **Triggers**: At startup (5 dk gecikme) + Daily, repeat every 1 hour
 - **Settings**: ✅ Start only if network available, ✅ Run as soon as possible
   after a scheduled start is missed, ⏱ Stop if runs longer than 10 minutes
@@ -143,11 +155,71 @@ sanal makinelerde hiç yoktur. Gerçek sıcaklık gerekiyorsa üretici ajanı
 
 ---
 
-## Güvenlik notu
+## Kimlik doğrulama (imzalı istek)
 
-Betik `-WebhookUrl` ile verilen adrese **kimlik doğrulaması olmadan** POST
-atar; `/api/webhook` public bir uç noktadır. Lokasyon bildirimi
-`X-Location-Token` ile doğrulanır (bkz. [LOKASYON-AJANI-KURULUM.md](LOKASYON-AJANI-KURULUM.md)),
-fakat envanter yazımı için token yoktur. İnternete açık kurulumda webhook'u
-IP kısıtı veya ön kimlik doğrulama arkasına almak gerekir — aksi halde
-adresi bilen biri sahte cihaz kaydı oluşturabilir.
+`/api/webhook` ve `/api/licenses/sync` envanteri **yazan** uçlardır. Eskiden
+kimlik doğrulaması yoktu: adresi bilen herkes sahte cihaz ekleyebilir veya
+mevcut bir cihazın verisini ezebilirdi. Envanter, üzerine kurulu her tespitin
+(shadow IT, zimmet uyuşmazlığı, EOL, lisans uyumu) girdisi — kirlenirse
+hepsi yanılır. Artık iki katmanlı koruma var.
+
+### 1. İmzalı istek
+
+Collector her isteği HMAC-SHA256 ile imzalar. İmza **gövde özetini** de kapsar
+(yol üstünde değiştirilemez), **zaman damgası** ve **nonce** içerir (eski bir
+istek tekrar oynatılamaz — replay).
+
+Başlıklar: `X-AssetMan-Device`, `X-AssetMan-Timestamp`, `X-AssetMan-Nonce`,
+`X-AssetMan-Signature`. Zaman penceresi ±5 dk (`AGENT_SKEW_MS`).
+
+> Sunucu ve istemci saatleri 5 dakikadan fazla kayarsa istekler `ZAMAN_PENCERESI`
+> ile reddedilir. Domain makinelerinde bu genelde sorun olmaz (AD saat senkronu),
+> ama izole makinelerde NTP kontrol edin.
+
+### 2. Cihaz kaydı (enrollment)
+
+Paylaşılan anahtar **her makinede duruyor** — yerel yöneticisi olan biri
+okuyabilir. Tek katman olsaydı o kişi *istediği* cihaz adına rapor
+gönderebilirdi. Bu yüzden:
+
+1. Cihaz ilk kez paylaşılan anahtarla imzalar.
+2. Sunucu **o cihaza özel** bir sır üretip yanıtta **bir kez** döner.
+3. Collector bunu `C:\ProgramData\AssetMan\device.json` içine yazar ve
+   dosyayı yalnız SYSTEM + Administrators okuyabilecek şekilde kilitler.
+4. **Kayıtlı cihaz için paylaşılan anahtar artık kabul edilmez.**
+
+### Cihaz yeniden kurulursa
+
+Sır kaybolur ve cihaz paylaşılan anahtarla **yeniden kaydolamaz** — sunucu
+`KAYITLI_CIHAZ_PAYLASILAN_ANAHTAR` döner. Bu bilinçli: aksi halde koruma
+anlamsız olurdu. Yönetici kaydı silince cihaz temiz bir kayıt açar:
+
+```bash
+curl -X DELETE https://envanter.alperceviz.com/api/agents/<device_id> -b "am_session=..."
+```
+
+Kayıtları listelemek için (yalnız admin): `GET /api/agents`. Cihaz sırları
+listede **asla** yer almaz.
+
+### Modlar (`WEBHOOK_AUTH`)
+
+| Değer | Davranış |
+|---|---|
+| `required` (varsayılan) | İmzasız istek reddedilir. **Üretimde bu.** |
+| `optional` | İmzasız kabul edilir ve loglanır; imza varsa katı doğrulanır. Geçiş için. |
+| `off` | Doğrulama yok. Yalnız yerel geliştirme. |
+
+Sunucu açılışta modu yazar. `required` dışındaysa uyarı basar — korumasız
+çalıştığını kimsenin fark etmemesi en kötü senaryo.
+
+### Kalan risk (dürüstçe)
+
+Paylaşılan anahtarı ele geçiren biri **henüz kayıtsız** bir cihaz adına yeni
+kayıt açabilir. Bunu tamamen kapatmak için cihaz başına önceden dağıtılan
+kayıt jetonu veya mTLS gerekir. Sahte kayıtlar envanterde "yeni cihaz" olarak
+görünür ve `GET /api/agents` listesinde `enrolled_at` ile ayırt edilir.
+
+**Hâlâ korumasız:** `/api/register` ve `/api/register/bulk` (QR ile telefon
+self-servis kaydı). Bunları bir insan tarayıcıdan kullandığı için imzalanamaz;
+kapatmak imzalı/süreli QR jetonu gerektirir. Ayrı iş olarak duruyor.
+
