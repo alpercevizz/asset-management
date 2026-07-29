@@ -70,6 +70,21 @@ try {
     $gpuName   = if ($gpu) { Get-SafeValue $gpu.Caption } else { $null }
     $gpuRamGB  = if ($gpu -and $gpu.AdapterRAM) { [math]::Round($gpu.AdapterRAM / 1GB, 0) } else { $null }
 
+    # ── Oturum Acan Kullanici ────────────────────────────────────────────────
+    # DIKKAT: Gorev Zamanlayici'da SYSTEM olarak calisirken $env:USERNAME
+    # "SYSTEM" veya "MAKINE$" doner — cihazi GERCEKTEN kullanan kisi degil.
+    # Win32_ComputerSystem.UserName etkilesimli oturumu verir (DOMAIN\kullanici).
+    # Kimse oturum acmamissa (kilitli/RDP kapali) NULL kalir; tahmin YAPILMAZ,
+    # cunku bu deger zimmet uyusmazligi tespitinde kullaniliyor.
+    $loggedUser = $null
+    if ($cs.UserName) {
+        $loggedUser = ($cs.UserName -split '\\')[-1]     # DOMAIN\ad -> ad
+    } elseif ($env:USERNAME -and $env:USERNAME -notmatch '^(SYSTEM|.*\$)$') {
+        $loggedUser = $env:USERNAME                      # etkilesimli calistirma
+    }
+    if ($loggedUser) { Write-Log "Oturum acan kullanici: $loggedUser" }
+    else { Write-Log "Oturum acan kullanici tespit edilemedi (kimse oturum acmamis olabilir)" }
+
     # ── Canlı Telemetri ──────────────────────────────────────────────────────
     # HER ÖLÇÜM AYRI try/catch: biri okunamazsa (sanal makine, kısıtlı yetki,
     # donanım yok) digerleri yine gonderilsin. Okunamayan alan GONDERILMEZ —
@@ -180,7 +195,7 @@ try {
         gpu_ram_gb     = $gpuRamGB
         uptime_days    = $uptimeDays
         domain         = Get-SafeValue $cs.Domain
-        username       = $env:USERNAME
+        username       = $loggedUser
         last_seen      = (Get-Date -Format "o")
         status         = "online"
         category       = "Bilgisayar"
