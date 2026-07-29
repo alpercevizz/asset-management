@@ -4521,6 +4521,20 @@ document.addEventListener('DOMContentLoaded', () => {
   applyTvMode(savedTv === null ? window.matchMedia('(min-width: 2200px)').matches : savedTv === '1');
   $(`#tvToggle`)?.addEventListener('click', () =>
     applyTvMode(!document.body.classList.contains('tv-mode')));
+  /* Operasyon Merkezi'nin sağ üstündeki kapat düğmesi. HTML'de vardı ama hiçbir
+     dinleyicisi yoktu — TV moduna girince çıkışın TEK görünür yolu bu düğme
+     olduğu için kullanıcı ekranda kilitli kalıyordu (üst çubuk TV modunda
+     gizli, #tvToggle'a ulaşılamıyor). */
+  $(`#tvxExit`)?.addEventListener('click', () => applyTvMode(false));
+  /* Klavye kaçışı: duvar ekranında fare olmayabilir, ayrıca düğme bir daha
+     kırılırsa kullanıcı sıkışmasın. */
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !document.body.classList.contains('tv-mode')) return;
+    // Açık bir modal varsa Escape ÖNCE onu kapatsın; tek tuşla hem modalı
+    // kapatıp hem TV modundan çıkmak beklenmedik olurdu.
+    if (document.querySelector('.modal-overlay.open')) return;
+    applyTvMode(false);
+  });
   // Ekran daraldıysa (döndürme / pencere küçültme) TV modundan otomatik çık
   window.addEventListener('resize', () => {
     if (document.body.classList.contains('tv-mode') && window.innerWidth < TV_MIN_WIDTH) applyTvMode(false);
