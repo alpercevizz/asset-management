@@ -100,7 +100,7 @@ Computer Configuration
 
   > **Anahtarı GPO argümanına KOYMAYIN.** Görev tanımını okuyabilen herkes
   > görür. Bunun yerine anahtarı makinelere kilitli bir dosya olarak dağıtın:
-  > `C:\ProgramData\AssetMangent.key` (yalnız SYSTEM + Administrators
+  > `C:\ProgramData\AssetMan\agent.key` (yalnız SYSTEM + Administrators
   > okuyabilsin). Collector `-AgentKey` verilmediğinde bu dosyadan okur.
   > Dosyayı GPO ile dağıtmak için: Computer Configuration → Preferences →
   > Windows Settings → Files.
