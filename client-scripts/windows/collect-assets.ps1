@@ -84,6 +84,48 @@ function Save-DeviceState {
     } catch { Write-Log "Cihaz dosyasi izinleri ayarlanamadi: $($_.Exception.Message)" "WARN" }
 }
 
+# Imzali POST. HTTP hatasinda sunucunun YANIT GOVDESINI okur: sunucu neden
+# reddettigini {error, code} olarak sadikca soyluyor ama Invoke-RestMethod
+# 401'de firlatip govdeyi yutuyor, geride yalnizca "(401) Onaylanmadi" kaliyor.
+# O mesajla kimse sorunu cozemez — kod ve aciklama loga yazilir.
+function Invoke-SignedPost {
+    param([string]$Url, [hashtable]$Headers, [string]$Body)
+    $bytes = [Text.Encoding]::UTF8.GetBytes($Body)
+    try {
+        return Invoke-RestMethod -Uri $Url -Method POST -Body $bytes -Headers $Headers -TimeoutSec 30
+    } catch {
+        $kod = $null; $govde = $null
+
+        # PowerShell 5.1'de Invoke-RestMethod yanit akisini KENDISI tuketiyor;
+        # GetResponseStream() bos doner. Govde $_.ErrorDetails.Message'da olur.
+        # (Once bu denenir, olmazsa akisa duselir — PS 7 icin.)
+        if ($_.ErrorDetails -and $_.ErrorDetails.Message) { $govde = $_.ErrorDetails.Message }
+
+        $resp = $null
+        if ($_.Exception.PSObject.Properties.Name -contains 'Response') { $resp = $_.Exception.Response }
+        if ($resp) {
+            try { $kod = [int]$resp.StatusCode } catch { }
+            if (-not $govde) {
+                try {
+                    $sr = New-Object IO.StreamReader($resp.GetResponseStream())
+                    $govde = $sr.ReadToEnd()
+                    $sr.Close()
+                } catch { }
+            }
+        }
+        $ek = ""
+        if ($govde) {
+            try {
+                $j = $govde | ConvertFrom-Json
+                if ($j.code)  { $ek += " [kod: $($j.code)]" }
+                if ($j.error) { $ek += " $($j.error)" }
+            } catch { $ek = " " + $govde.Substring(0, [Math]::Min(300, $govde.Length)) }
+        }
+        $onEk = if ($kod) { "HTTP $kod" } else { $_.Exception.Message }
+        throw ("Sunucu istegi reddetti: " + $onEk + $ek)
+    }
+}
+
 function New-SignedHeaders {
     param([string]$Secret, [string]$DeviceId, [string]$Method, [string]$Path, [string]$Body)
 
@@ -344,11 +386,10 @@ try {
     $headers = New-SignedHeaders -Secret $signingKey -DeviceId $deviceId `
                                  -Method 'POST' -Path $uri.AbsolutePath -Body $jsonBody
 
-    # Gövde BAYT olarak gonderilir: Invoke-RestMethod string'i varsayilan
-    # kodlamayla yollarsa Turkce karakterlerde bayt dizisi degisir ve sunucudaki
-    # govde ozeti tutmaz — imza gecersiz olurdu.
-    $bodyBytes = [Text.Encoding]::UTF8.GetBytes($jsonBody)
-    $response  = Invoke-RestMethod -Uri $WebhookUrl -Method POST -Body $bodyBytes -Headers $headers -TimeoutSec 30
+    # Govde BAYT olarak gonderilir: string varsayilan kodlamayla yollanirsa
+    # Turkce karakterlerde bayt dizisi degisir, sunucudaki govde ozeti tutmaz
+    # ve imza gecersiz olur.
+    $response = Invoke-SignedPost -Url $WebhookUrl -Headers $headers -Body $jsonBody
 
     # Ilk kayitta sunucu cihaza ozel sirri BIR KEZ dondurur — hemen sakla.
     if ($response.PSObject.Properties.Name -contains 'enrollment' -and $response.enrollment.secret) {
@@ -531,8 +572,7 @@ try {
         $licUri     = [Uri]$LicenseUrl
         $licHeaders = New-SignedHeaders -Secret $signingKey -DeviceId $deviceId `
                                         -Method 'POST' -Path $licUri.AbsolutePath -Body $licJson
-        $licBytes    = [Text.Encoding]::UTF8.GetBytes($licJson)
-        $licResponse = Invoke-RestMethod -Uri $LicenseUrl -Method POST -Body $licBytes -Headers $licHeaders -TimeoutSec 60
+        $licResponse = Invoke-SignedPost -Url $LicenseUrl -Headers $licHeaders -Body $licJson
         Write-Log "Lisans sync: $($licResponse.created) eklendi, $($licResponse.updated) guncellendi ($($softwareList.Count) yazilim)"
     } else {
         Write-Log "Takip edilecek yazilim bulunamadi."
