@@ -2203,6 +2203,18 @@ const KAT_CIZIM = {
   'Diğer': `<rect x="12" y="16" width="56" height="44" rx="5"/><path d="M12 30h56" opacity=".5"/>`,
 };
 
+
+/* "15 saniye önce" biçimi — duvar ekranında mutlak tarihten daha okunur. */
+function gecenSure(iso) {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return '—';
+  const sn = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (sn < 60) return `${sn} saniye önce`;
+  if (sn < 3600) return `${Math.floor(sn / 60)} dakika önce`;
+  if (sn < 86400) return `${Math.floor(sn / 3600)} saat önce`;
+  return `${Math.floor(sn / 86400)} gün önce`;
+}
+
 function katCizim(kategori) {
   const p = KAT_CIZIM[kategori] || KAT_CIZIM['Diğer'];
   return `<svg viewBox="0 0 80 76" fill="currentColor" stroke="currentColor" stroke-width="0"
@@ -2244,6 +2256,328 @@ function sparkline(degerler, renk) {
   return `<svg class="tm-spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
     <polyline points="${nok}" fill="none" stroke="${renk}" stroke-width="1.6"
       vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+}
+
+const TVA_YENILE = Number(localStorage.getItem("tvaYenile") || 30000);  // ms
+/* ═══ VARLIK DETAYI · TV / DUVAR EKRANI ══════════════════════════════════════
+   TV modunda bir varlık açıldığında modal yerine tam ekran, koyu, kendini
+   yenileyen tek-cihaz panosu çizilir. Duvar ekranında kimse tıklamıyor:
+   her şey aynı anda görünmeli, uzaktan okunabilmeli ve kendi kendine
+   tazelenmeli.
+
+   VERİ DÜRÜSTLÜĞÜ: tasarımda lokasyon kartında bina fotoğrafı ve açık adres,
+   kullanıcı kartında e-posta ve unvan var — bunların HİÇBİRİ sistemde yok.
+   Uydurmak yerine sahip olduğumuz alanlar gösteriliyor (lokasyon adı,
+   varsa koordinat; zimmetli kişinin adı). Eksik alan "—" kalır. */
+
+let _tvaTimer = null;   // otomatik yenileme
+
+/* Büyük çizgi grafik (sparkline'dan farklı: eksen etiketleri + ızgara).
+   Duvar ekranından metrenin ötesinden okunacağı için etiketler iri. */
+function tvaChart(seri, renk, baslik) {
+  const v = (seri || []).filter((x) => x !== null && x !== undefined && Number.isFinite(Number(x))).map(Number);
+  if (v.length < 2) {
+    return `<div class="tva-ch">
+      <div class="tva-ch-t">${escapeHtml(baslik)}</div>
+      <div class="tva-ch-bos">grafik için en az 2 ölçüm gerekir</div></div>`;
+  }
+  const W = 300, H = 62;
+  const nok = v.map((x, i) => {
+    const px = (i / (v.length - 1)) * W;
+    const py = H - (Math.max(0, Math.min(100, x)) / 100) * H;   // 0-100 sabit ölçek
+    return `${px.toFixed(1)},${py.toFixed(1)}`;
+  }).join(' ');
+  return `<div class="tva-ch">
+    <div class="tva-ch-t">${escapeHtml(baslik)}</div>
+    <div class="tva-ch-body">
+      <div class="tva-ch-y"><span>100</span><span>50</span><span>0</span></div>
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+        <line x1="0" y1="0.5" x2="${W}" y2="0.5"/>
+        <line x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}"/>
+        <line x1="0" y1="${H - 0.5}" x2="${W}" y2="${H - 0.5}"/>
+        <polyline points="${nok}" fill="none" stroke="${renk}" stroke-width="1.8"
+          vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>
+      </svg>
+    </div></div>`;
+}
+
+/* Cihaza özel kritik uyarılar — HEPSİ mevcut veriden hesaplanır.
+   Uyarı yoksa yeşil onay gösterilir; "sorun yok" da bir bilgidir. */
+function tvaUyarilar(a, d, tel) {
+  const u = [];
+  const L = tel.latest, G = tel.security;
+
+  if (String(a.status || '').toLowerCase() === 'offline') u.push(['kritik', 'Cihaz çevrimdışı']);
+
+  const gar = Date.parse(a.warranty_expiry);
+  if (!Number.isNaN(gar)) {
+    const gun = Math.ceil((gar - Date.now()) / 86400000);
+    if (gun < 0) u.push(['kritik', 'Garanti süresi dolmuş']);
+    else if (gun <= 30) u.push(['uyari', `Garanti ${gun} gün içinde bitiyor`]);
+  }
+
+  if (L && L.disk_used_gb != null && L.disk_total_gb) {
+    const pct = Math.round((L.disk_used_gb / L.disk_total_gb) * 100);
+    if (pct >= 90) u.push(['kritik', `Disk %${pct} dolu`]);
+    else if (pct >= 80) u.push(['uyari', `Disk %${pct} dolu`]);
+  }
+  if (L && L.cpu_pct != null && L.cpu_pct >= 90) u.push(['uyari', `CPU %${Math.round(L.cpu_pct)}`]);
+  if (L && L.temp_c != null && L.temp_c >= 80) u.push(['kritik', `Sıcaklık ${L.temp_c}°C`]);
+
+  if (G) {
+    if (G.firewall === 'pasif') u.push(['kritik', 'Güvenlik duvarı kapalı']);
+    if (G.defender === 'pasif') u.push(['kritik', 'Defender kapalı']);
+    if (G.disk_encryption === 'pasif') u.push(['uyari', 'Disk şifreleme kapalı']);
+    if (G.critical_patches > 0) u.push(['kritik', `${G.critical_patches} kritik yama bekliyor`]);
+  }
+
+  // Beklenen lokasyon dışında mı? (resmi kayıt vs telemetri)
+  const bek = d.expected_location?.location;
+  const gor = d.current_stay?.to_location || (a.location || '').trim();
+  if (bek && gor && bek.toLowerCase() !== gor.toLowerCase()) {
+    u.push(['uyari', `Lokasyon dışında: ${gor}`]);
+  }
+  return u;
+}
+
+function renderTvAsset(a, d, tel) {
+  const det = d.detail || {};
+  const L = tel.latest, S = tel.series || [];
+  const yuzde = (kul, top) => (kul == null || !top ? null : Math.round((kul / top) * 100));
+  const gorsel = d.image
+    ? `<img src="${d.image.url}" alt="" class="tva-img">`
+    : `<div class="tva-illus">${katCizim(a.category)}</div>`;
+
+  const olc = (baslik, deger, alt, seri, renk) => `
+    <div class="tva-m">
+      <div class="tva-m-t">${escapeHtml(baslik)}</div>
+      ${deger === null || deger === undefined
+        ? '<div class="tva-m-yok">Ölçüm yok</div>'
+        : `<div class="tva-m-v">${deger}</div><div class="tva-m-a">${alt || ''}</div>
+           ${sparkline(seri, renk)}`}
+    </div>`;
+
+  const ramP = L ? yuzde(L.ram_used_gb, L.ram_total_gb) : null;
+  const diskP = L ? yuzde(L.disk_used_gb, L.disk_total_gb) : null;
+  const pilAd = { sarj_oluyor: 'Şarj oluyor', pilde: 'Pilde', dolu: 'Dolu' };
+
+  const metrikler = [
+    olc('CPU Kullanımı', L && L.cpu_pct != null ? `${Math.round(L.cpu_pct)}%` : null,
+      L && L.cpu_pct != null ? (L.cpu_pct < 50 ? 'İyi' : L.cpu_pct < 85 ? 'Yoğun' : 'Kritik') : '',
+      S.map(r => r.cpu_pct), 'var(--blue)'),
+    olc('RAM Kullanımı', ramP != null ? `${ramP}%` : null,
+      L && L.ram_used_gb != null ? `${L.ram_used_gb} GB / ${L.ram_total_gb || '?'} GB` : '',
+      S.map(r => yuzde(r.ram_used_gb, r.ram_total_gb)), 'var(--accent)'),
+    olc('Disk Kullanımı', diskP != null ? `${diskP}%` : null,
+      L && L.disk_used_gb != null ? `${Math.round(L.disk_used_gb)} GB / ${Math.round(L.disk_total_gb || 0)} GB` : '',
+      S.map(r => yuzde(r.disk_used_gb, r.disk_total_gb)), 'var(--purple)'),
+    olc('Ağ Kullanımı', L && L.net_rx_mbps != null
+      ? `${(Number(L.net_rx_mbps) + Number(L.net_tx_mbps || 0)).toFixed(1)} <small>Mbps</small>` : null,
+      L && L.net_rx_mbps != null ? `↓ ${L.net_rx_mbps} &nbsp; ↑ ${L.net_tx_mbps ?? '—'}` : '',
+      S.map(r => r.net_rx_mbps), 'var(--teal)'),
+    olc('Pil Durumu', L && L.battery_pct != null ? `${Math.round(L.battery_pct)}%` : null,
+      L ? (pilAd[L.battery_state] || '') : '', S.map(r => r.battery_pct), 'var(--green)'),
+    olc('Sıcaklık', L && L.temp_c != null ? `${L.temp_c}°C` : null,
+      L && L.temp_c != null ? (L.temp_c < 60 ? 'Normal' : L.temp_c < 80 ? 'Yüksek' : 'Kritik') : '',
+      S.map(r => r.temp_c), 'var(--orange)'),
+  ].join('');
+
+  const upt = a.uptime_days != null
+    ? `${Math.floor(a.uptime_days)} gün, ${Math.round((a.uptime_days % 1) * 24)} saat` : '—';
+
+  const serit = [
+    ['Son Görülme', gecenSure(a.last_seen)],
+    ['Son Envanter Taraması', tel.latest ? fmtDate(tel.latest.measured_at) : '—'],
+    ['Son Bakım', trTarih(det.last_maintenance)],
+    ['Sonraki Bakım', trTarih(det.next_maintenance)],
+    ['Çalışma Süresi', upt],
+  ].map(([k, v]) => `<div class="tva-s"><span>${k}</span><b>${v}</b></div>`).join('');
+
+  const G = tel.security;
+  const rz = (v) => v === 'aktif' ? '<b class="tva-ok">Aktif</b>'
+    : v === 'pasif' ? '<b class="tva-no">Kapalı</b>'
+    : '<b class="tva-bilinmiyor">bilinmiyor</b>';
+
+  const uyarilar = tvaUyarilar(a, d, tel);
+
+  return `
+  <div class="tva">
+    <div class="tva-head">
+      <div class="tva-brand"><b>AssetMan</b><span>OPERASYON MERKEZİ</span></div>
+      <div class="tva-head-r">
+        <span class="tva-sys"><i class="${uyarilar.some(x => x[0] === 'kritik') ? 'kirmizi' : uyarilar.length ? 'sari' : 'yesil'}"></i>
+          Sistem Durumu <b>${uyarilar.some(x => x[0] === 'kritik') ? 'KRİTİK' : uyarilar.length ? 'DİKKAT' : 'TÜM SİSTEMLER NORMAL'}</b></span>
+        <span class="tva-clock" id="tvaClock"></span>
+        <button class="btn-icon" id="tvaExit" title="TV modundan çık" aria-label="Kapat">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="tva-main">
+      <div class="tva-dev">
+        <div class="tva-photo">${gorsel}</div>
+        <h2 class="tva-name">${fmt(a.hostname)}</h2>
+        <div class="tva-badge ${String(a.status).toLowerCase() === 'online' ? 'on' : 'off'}">
+          <i></i>${escapeHtml(a.status || 'bilinmiyor')}</div>
+        <div class="tva-ident">
+          <div><span>Varlık Kodu</span><b>${det.asset_code ? escapeHtml(det.asset_code) : '—'}</b></div>
+          <div><span>Kategori</span><b>${escapeHtml(a.category || '—')}</b></div>
+          <div><span>Lokasyon</span><b>${escapeHtml((a.location || '').trim() || '—')}</b></div>
+          <div><span>Sorumlu Kişi</span><b>${escapeHtml(d.assignment?.assigned_to || 'Zimmetsiz')}</b></div>
+          <div><span>İşletim Sistemi</span><b>${fmt(a.os)}</b></div>
+          <div><span>Agent Versiyonu</span><b>${a.collector_ver ? escapeHtml(a.collector_ver) : '—'}</b></div>
+        </div>
+      </div>
+
+      <div class="tva-metrics">${metrikler}</div>
+      <div class="tva-strip">${serit}</div>
+    </div>
+
+    <div class="tva-r3">
+      <div class="tva-card">
+        <h4>Konum &amp; Kullanıcı</h4>
+        <div class="tva-kk">
+          <div class="tva-kk-i">📍</div>
+          <div><b>${escapeHtml((a.location || '').trim() || 'Lokasyon yok')}</b>
+            <small>${d.current_stay?.first_seen_at ? fmtDate(d.current_stay.first_seen_at) + '’den beri' : 'konaklama kaydı yok'}</small></div>
+        </div>
+        <div class="tva-kk">
+          <div class="tva-kk-i tva-kk-av">${(d.assignment?.assigned_to || '?').slice(0, 2).toLocaleUpperCase('tr-TR')}</div>
+          <div><b>${escapeHtml(d.assignment?.assigned_to || 'Zimmetsiz')}</b>
+            <small>${a.username ? 'son giriş: ' + escapeHtml(a.username) : 'oturum bilgisi yok'}</small></div>
+        </div>
+      </div>
+
+      <div class="tva-card">
+        <h4>Sistem Bilgileri</h4>
+        <div class="tva-row"><span>Üretici / Model</span><b>${fmt(a.brand)} ${fmt(a.model, '')}</b></div>
+        <div class="tva-row"><span>Seri Numarası</span><b>${fmt(a.serial_number)}</b></div>
+        <div class="tva-row"><span>IP Adresi</span><b>${fmt(a.ip_address)}</b></div>
+        <div class="tva-row"><span>MAC Adresi</span><b>${fmt(a.mac_address)}</b></div>
+        <div class="tva-row"><span>Domain</span><b>${fmt(a.domain)}</b></div>
+        <div class="tva-row"><span>Satın Alma</span><b>${trTarih(det.purchase_date)}</b></div>
+        <div class="tva-row"><span>Garanti Bitiş</span><b>${trTarih(a.warranty_expiry)}</b></div>
+        <div class="tva-row"><span>Tedarikçi</span><b>${fmt(det.supplier)}</b></div>
+      </div>
+
+      <div class="tva-card">
+        <h4>Güvenlik Durumu</h4>
+        ${G ? `
+          <div class="tva-row"><span>Windows Defender</span>${rz(G.defender)}</div>
+          <div class="tva-row"><span>Güvenlik Duvarı</span>${rz(G.firewall)}</div>
+          <div class="tva-row"><span>Disk Şifreleme</span>${rz(G.disk_encryption)}</div>
+          <div class="tva-row"><span>Antivirüs</span>${G.antivirus_name
+            ? `<b class="${G.antivirus === 'aktif' ? 'tva-ok' : 'tva-no'}">${escapeHtml(G.antivirus_name)}</b>` : rz(G.antivirus)}</div>
+          <div class="tva-row"><span>OS Güncellemesi</span><b class="${G.os_update === 'guncel' ? 'tva-ok' : G.os_update === 'bekliyor' ? 'tva-uyari' : 'tva-bilinmiyor'}">
+            ${G.os_update === 'guncel' ? 'Güncel' : G.os_update === 'bekliyor' ? 'Bekliyor' : 'bilinmiyor'}</b></div>
+          <div class="tva-row"><span>Kritik Yama</span><b class="${G.critical_patches > 0 ? 'tva-no' : 'tva-ok'}">${G.critical_patches ?? '—'}</b></div>
+          <div class="tva-row"><span>Bekleyen Güncelleme</span><b>${G.pending_updates ?? '—'}</b></div>`
+        : '<p class="tva-bos">Bu cihazdan güvenlik durumu gelmedi.<br>Collector 1.2.0+ gerekiyor.</p>'}
+      </div>
+
+      <div class="tva-card">
+        <h4>Son Telemetri Grafikleri <small>son 24 saat</small></h4>
+        ${tvaChart(S.map(r => r.cpu_pct), 'var(--blue)', 'CPU Kullanımı (%)')}
+        ${tvaChart(S.map(r => yuzde(r.ram_used_gb, r.ram_total_gb)), 'var(--accent)', 'RAM Kullanımı (%)')}
+        ${tvaChart(S.map(r => yuzde(r.disk_used_gb, r.disk_total_gb)), 'var(--purple)', 'Disk Kullanımı (%)')}
+      </div>
+
+      <div class="tva-card tva-alerts">
+        <h4>Kritik Uyarılar <em>${uyarilar.length}</em></h4>
+        ${uyarilar.length
+          ? `<div class="tva-ul">${uyarilar.map(([tur, mesaj]) =>
+              `<div class="tva-u ${tur}"><i></i><span>${escapeHtml(mesaj)}</span></div>`).join('')}</div>`
+          : `<div class="tva-temiz">
+               <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg>
+               <b>Kritik Uyarı Yok</b>
+               <small>Bu cihazda tespit edilen sorun yok.</small>
+             </div>`}
+      </div>
+    </div>
+
+    <div class="tva-foot" id="tvaFoot"></div>
+  </div>`;
+}
+
+/* TV panosunu canlı tutar: saat her saniye, ölçümler + filo özeti TVA_YENILE
+   aralığıyla yenilenir. Duvar ekranı saatlerce açık kalıyor; elle yenilemeyi
+   kimse yapmaz. Zamanlayıcılar pano kapanınca MUTLAKA durdurulur — yoksa
+   arka planda sonsuza kadar istek atmaya devam ederdi. */
+function tvaDurdur() {
+  if (_tvaTimer) { clearInterval(_tvaTimer.saat); clearInterval(_tvaTimer.veri); _tvaTimer = null; }
+}
+
+function tvaBaslat(asset) {
+  tvaDurdur();
+  const saatYaz = () => {
+    const e = $(`#tvaClock`);
+    if (e) {
+      const d = new Date();
+      e.innerHTML = `${d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' })}
+        <b>${d.toLocaleTimeString('tr-TR')}</b>`;
+    }
+  };
+  saatYaz();
+  tvaFooter();
+
+  $(`#tvaExit`)?.addEventListener('click', () => {
+    tvaDurdur();
+    $(`#deviceModalOverlay`)?.classList.remove('open', 'tva-open');
+  });
+
+  _tvaTimer = {
+    saat: setInterval(saatYaz, 1000),
+    veri: setInterval(async () => {
+      // Pano kapandıysa kendini durdur (kapatma yolu ne olursa olsun)
+      if (!$(`#deviceModalOverlay`)?.classList.contains('open')) return tvaDurdur();
+      try {
+        const r = await fetch(`/api/assets/${asset.id}/telemetry`);
+        if (!r.ok) return;
+        const yeni = await r.json();
+        const d2 = _deviceModalAsset === asset ? { asset } : { asset };
+        // Yalnız ölçüm bloklarını tazele; tüm panoyu yeniden çizmek
+        // kaydırma/odak durumunu sıfırlar ve gözle görülür titreme yapar.
+        const kok = $(`#deviceModalBody`);
+        const eski = kok?.querySelector('.tva-metrics');
+        if (eski) {
+          const gecici = document.createElement('div');
+          gecici.innerHTML = renderTvAsset(asset, window._tvaDetay || d2, yeni);
+          const yeniMetrik = gecici.querySelector('.tva-metrics');
+          const yeniSerit = gecici.querySelector('.tva-strip');
+          if (yeniMetrik) eski.innerHTML = yeniMetrik.innerHTML;
+          const serit = kok.querySelector('.tva-strip');
+          if (serit && yeniSerit) serit.innerHTML = yeniSerit.innerHTML;
+        }
+        state.stats = null;          // filo sayıları da tazelensin
+        tvaFooter();
+      } catch { /* ağ kesildi: bir sonraki turda yeniden dener */ }
+    }, TVA_YENILE),
+  };
+}
+
+/* Alt bant: filo özeti. Tek cihaz ekranında bile duvar ekranının genel
+   durumu göstermesi bekleniyor. Sayılar /api/stats'tan GERÇEK gelir. */
+async function tvaFooter() {
+  const el = $(`#tvaFoot`);
+  if (!el) return;
+  try {
+    const st = state.stats || await fetchStats();
+    state.stats = st;
+    const by = st.by_status || {};
+    const top = st.total || 0;
+    const on = by.online || 0, off = by.offline || 0;
+    const pct = (n) => (top ? `%${Math.round((n / top) * 100)}` : '—');
+    el.innerHTML = `
+      <div class="tva-f"><span>Toplam Cihaz</span><b>${top.toLocaleString('tr-TR')}</b></div>
+      <div class="tva-f"><i class="yesil"></i><span>Online</span><b>${on.toLocaleString('tr-TR')} <small>${pct(on)}</small></b></div>
+      <div class="tva-f"><i class="kirmizi"></i><span>Offline</span><b>${off.toLocaleString('tr-TR')} <small>${pct(off)}</small></b></div>
+      <div class="tva-f"><i class="sari"></i><span>Depoda</span><b>${(by.depoda || 0).toLocaleString('tr-TR')}</b></div>
+      <div class="tva-f tva-f-son"><span>Son güncelleme</span><b>${new Date().toLocaleTimeString('tr-TR')}</b>
+        <small>otomatik yenileme ${TVA_YENILE / 1000}sn</small></div>`;
+  } catch {
+    el.innerHTML = '<div class="tva-f"><span>Filo özeti alınamadı</span></div>';
+  }
 }
 
 function tmKart({ baslik, ikon, renk, deger, alt, seri, sinif }) {
@@ -2401,6 +2735,18 @@ async function openDeviceModal(asset) {
     : katCizim(a.category);
 
   const satir = (k, v, cls = '') => `<div class="ad-row"><span>${k}</span><b class="${cls}">${v}</b></div>`;
+
+  /* TV MODU: modal yerine tam ekran tek-cihaz panosu. Duvar ekranında kimse
+     tıklamıyor — sekmeli düzen orada işe yaramaz, her şey aynı anda görünmeli
+     ve kendi kendine tazelenmeli. */
+  if (document.body.classList.contains('tv-mode')) {
+    body.innerHTML = renderTvAsset(a, d, tel);
+    overlay.classList.add('tva-open');
+    window._tvaDetay = d;          // yenilemede aynı detayı kullan (tek fetch)
+    tvaBaslat(a);
+    return;
+  }
+  overlay.classList.remove('tva-open');
 
   body.innerHTML = `
     <div class="ad-grid">
@@ -4794,8 +5140,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Cihaz detay modalı
   const devOverlay = $(`#deviceModalOverlay`);
-  $(`#closeDeviceModal`)?.addEventListener('click', () => devOverlay?.classList.remove('open'));
-  devOverlay?.addEventListener('click', (e) => { if (e.target === devOverlay) devOverlay.classList.remove('open'); });
+  // Kapanışta TV panosunun zamanlayıcıları da durur (aksi halde arka planda
+  // sonsuza kadar istek atmaya devam ederdi).
+  const devKapat = () => { tvaDurdur(); devOverlay?.classList.remove('open', 'tva-open'); };
+  $(`#closeDeviceModal`)?.addEventListener('click', devKapat);
+  devOverlay?.addEventListener('click', (e) => { if (e.target === devOverlay) devKapat(); });
   $(`#handoverPdfBtn`)?.addEventListener('click', () => printHandoverReceipt(_deviceModalAsset));
 
   // Ayarlar kaydet butonları
