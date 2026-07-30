@@ -386,7 +386,17 @@ app.post('/api/webhook', async (req, res) => {
 
     // Kayıtlı cihazı envanter satırıyla eşle (teşhis ve iptal için gerekiyor)
     if (kimlik.deviceId) {
-      try { await agentAuth.touch(kimlik.deviceId, { asset_id: result.id }); } catch (_) { /* kritik değil */ }
+      try {
+        await agentAuth.touch(kimlik.deviceId, {
+          asset_id: result.id,
+          serial_number: enriched.serial_number || payload.serial_number,
+        });
+      } catch (e) {
+        // Kayıt izi ve klon tespiti kritik yol değil — webhook'u düşürmüyoruz.
+        // Ama SESSİZ yutmak da yanlış: migration geride kalmışsa klon tespiti
+        // hiç çalışmaz ve kimse fark etmez.
+        console.warn('[AGENT] Kayıt izi güncellenemedi:', e.message);
+      }
     }
 
     res.json({

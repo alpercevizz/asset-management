@@ -247,3 +247,52 @@ kullanabilirdi. Bu yüzden kullanım sayısı veritabanında tutulur ve koşullu
 `/api/register/bulk` (Toplu Depo Kaydı) **public listeden çıkarıldı** —
 yalnızca girişli panelden çağrılıyor, açık olmasının hiçbir sebebi yoktu.
 
+---
+
+## Dağıtımdan önce: cihaz kimliği kontrolü
+
+Collector her makineyi bir **cihaz kimliği** ile tanır. Kimlik sırayla şuradan üretilir:
+
+| Sıra | Kaynak | Klonlanan imajda |
+|---|---|---|
+| 1 | **SMBIOS UUID** (anakart/hipervizör) | makineye özgü kalır ✅ |
+| 2 | BIOS seri no | makineye özgü kalır ✅ |
+| 3 | MachineGuid | **tüm makinelerde aynı olur** ❌ |
+
+**Neden önemli:** sysprep yapılmadan klonlanan imajlarda MachineGuid tüm
+makinelerde aynıdır. Kimlik ona düşerse ilk makine kaydolur, diğerlerinin
+hepsi `KAYITLI_CIHAZ_PAYLASILAN_ANAHTAR` ile reddedilir — 50 makinelik bir
+dağıtımda 49'u sessizce çalışmaz.
+
+Bunu **dağıtmadan önce** kontrol edin. Salt okunur, hiçbir yere bağlanmaz:
+
+```powershell
+.\check-device-id.ps1
+```
+
+Birden çok makinede:
+
+```powershell
+Invoke-Command -ComputerName PC1,PC2,PC3 -FilePath .\check-device-id.ps1
+```
+
+`CIHAZ KIMLIGI` satırlarını karşılaştırın. **Aynı çıkan iki makine varsa**
+imajı sysprep ile yeniden hazırlayın; yoksa envanterde iki bilgisayar tek
+cihaz olarak görünür.
+
+### Klon şüphesi işaretlemesi
+
+Bazı anakart üreticileri tüm partiye aynı SMBIOS UUID'yi yazıyor, sanal
+makineler bozuk değer dönebiliyor. Sunucu bunu yakalıyor: **kayıtlı bir
+kimlikten farklı seri numarası gelirse** kayıt "klon şüphesi" olarak
+işaretlenir ve **Ayarlar → Toplama Ajanları**'nda kırmızı uyarı çıkar.
+
+İstek reddedilmez — meşru anakart değişimi de aynı sinyali üretir, onu
+kırmak istemiyoruz. Karar yöneticinin.
+
+### Kimlik değişirse ne olur
+
+Cihaz kaydolduktan sonra kimlik `device.json` içinde saklanır ve bir daha
+hesaplanmaz. Yani **kayıtlı makineler bu değişiklikten etkilenmez.** Anakart
+değişimi gibi kimliğin gerçekten değiştiği durumlarda cihaz yeni bir kayıt
+açmaya çalışır; eski kaydı panelden silin.

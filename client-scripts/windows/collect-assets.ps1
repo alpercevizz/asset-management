@@ -43,15 +43,64 @@ function Get-SafeValue {
 # kapsar (yol ustunde degistirilemez) ve zaman damgasi + nonce icerir (eski bir
 # istek tekrar oynatilamaz).
 
-# Makine kimligi: kalici ve makineye ozgu olmali. MachineGuid Windows kurulumuyla
-# birlikte uretilir ve yeniden kuruluma kadar degismez. Hostname KULLANILMAZ:
-# degistirilebilir ve cakisabilir.
-function Get-MachineId {
+# Cihaz kimligi. KRITIK: sysprep yapilmadan klonlanan imajlarda MachineGuid
+# TUM makinelerde AYNI kalir. Kimlik yalniz ona dayansaydi ilk makine
+# kaydolur, digerlerinin hepsi "bu cihaz zaten kayitli" diye reddedilirdi —
+# 50 makinelik bir dagitimda 49'u sessizce calismaz.
+#
+# Oncelik sirasi:
+#   1) SMBIOS UUID  — anakarttan/hipervizorden gelir. Disk imaji klonlansa da
+#                     makineye ozgu kalir; OS yeniden kurulsa bile degismez.
+#   2) BIOS seri no — SMBIOS UUID sahte/bos ise.
+#   3) MachineGuid  — son care; klon imajda cakisir, log UYARI yazar.
+#
+# Bilinen SAHTE UUID'ler reddedilir: bazi anakart ureticileri tum partiye ayni
+# varsayilan degeri yaziyor, sanal makineler sifir/FF dondurebiliyor. Bunlari
+# kabul etmek MachineGuid'den daha kotu olurdu (sessiz, yayginn cakisma).
+$SAHTE_UUID = @(
+    '00000000-0000-0000-0000-000000000000',
+    'FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF',
+    '03000200-0400-0500-0006-000700080009',   # AMI varsayilani
+    '00020003-0004-0005-0006-000700080009'
+)
+$SAHTE_SERI = 'To be filled|Default string|System Serial|O\.E\.M|None|N/A|Not Specified|^\s*$'
+
+function Get-MachineIdentity {
+    $kaynak = 'yok'; $deger = $null; $uyari = $null
+
+    # 1) SMBIOS UUID
     try {
-        $g = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Cryptography' -Name MachineGuid -ErrorAction Stop).MachineGuid
-        if ($g) { return $g }
-    } catch { }
-    return $env:COMPUTERNAME    # son care
+        $u = (Get-CimInstance Win32_ComputerSystemProduct -ErrorAction Stop).UUID
+        if ($u -and ($SAHTE_UUID -notcontains $u.ToUpper())) {
+            $kaynak = 'smbios-uuid'; $deger = $u.ToUpper()
+        } elseif ($u) {
+            $uyari = "SMBIOS UUID bilinen sahte deger ($u) — atlandi"
+        }
+    } catch { $uyari = "SMBIOS UUID okunamadi: $($_.Exception.Message)" }
+
+    # 2) BIOS seri no
+    if (-not $deger) {
+        try {
+            $s = (Get-CimInstance Win32_BIOS -ErrorAction Stop).SerialNumber
+            if ($s -and ($s -notmatch $SAHTE_SERI)) { $kaynak = 'bios-seri'; $deger = "BIOS:$($s.Trim())" }
+        } catch { }
+    }
+
+    # 3) MachineGuid — klon imajda CAKISIR
+    if (-not $deger) {
+        try {
+            $g = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Cryptography' -Name MachineGuid -ErrorAction Stop).MachineGuid
+            if ($g) {
+                $kaynak = 'machineguid'; $deger = "MG:$g"
+                $uyari = 'Cihaz kimligi MachineGuid uzerinden uretildi. Sysprep yapilmamis bir imajdan klonlandiysa bu deger DIGER makinelerle AYNI olur ve yalniz ilk makine kaydolabilir.'
+            }
+        } catch { }
+    }
+
+    if (-not $deger) { $kaynak = 'hostname'; $deger = "HOST:$env:COMPUTERNAME"
+        $uyari = 'Hicbir donanim kimligi okunamadi; hostname kullaniliyor (degistirilebilir, cakisabilir).' }
+
+    return [pscustomobject]@{ Id = $deger; Kaynak = $kaynak; Uyari = $uyari }
 }
 
 function Get-DeviceState {
@@ -359,8 +408,11 @@ try {
     $jsonBody = $cleaned | ConvertTo-Json -Depth 3 -Compress
     Write-Log "Webhook'a gonderiliyor: $WebhookUrl"
 
-    $machineId = Get-MachineId
+    $kimlik    = Get-MachineIdentity
+    $machineId = $kimlik.Id
     $state     = Get-DeviceState -Path $StateFile
+    Write-Log "Cihaz kimligi kaynagi: $($kimlik.Kaynak)"
+    if ($kimlik.Uyari) { Write-Log $kimlik.Uyari "WARN" }
 
     # Cihaza ozel sir varsa ONU kullan; yoksa paylasilan anahtarla kaydol.
     # Kayitli cihaz icin sunucu paylasilan anahtari BILEREK reddeder.

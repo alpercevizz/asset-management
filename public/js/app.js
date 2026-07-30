@@ -1568,8 +1568,15 @@ async function loadAgents() {
       // 24 saatten uzun süredir rapor gelmiyorsa dikkat çek — ajan durmuş olabilir
       const t = Date.parse(a.last_seen_at);
       const bayat = !Number.isNaN(t) && (Date.now() - t) > 24 * 3600 * 1000;
+      /* Klon supheli kayit ACIKCA isaretlenir: iki makine ayni kimligi
+         paylasiyorsa envanterde tek cihaz gorunurler — sessiz kalmasi
+         yanlis envanter demek. */
+      const klon = a.clone_suspect
+        ? `<div style="color:var(--red);font-size:11px;margin-top:3px;line-height:1.45">⚠ ${escapeHtml(a.clone_note || 'Klon şüphesi')}</div>` : '';
       return `<tr>
-        <td class="hostname-cell"><span class="serial-cell">${escapeHtml(a.device_id)}</span></td>
+        <td class="hostname-cell"><span class="serial-cell">${escapeHtml(a.device_id)}</span>
+          ${a.serial_number ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">seri: ${escapeHtml(a.serial_number)}</div>` : ''}
+          ${klon}</td>
         <td>${a.asset_id ? '#' + a.asset_id : '<span style="color:var(--text-muted)">—</span>'}</td>
         <td>${a.agent_version ? escapeHtml(a.agent_version) : '<span style="color:var(--text-muted)">—</span>'}</td>
         <td>${fmtDate(a.enrolled_at)}</td>

@@ -97,11 +97,40 @@ async function enroll(deviceId, { agent_version = null, asset_id = null } = {}) 
   return satir;
 }
 
-async function touch(deviceId, { asset_id, agent_version } = {}) {
+async function touch(deviceId, { asset_id, agent_version, serial_number } = {}) {
   const yama = { last_seen_at: new Date().toISOString() };
   if (asset_id != null) yama.asset_id = asset_id;
   if (agent_version) yama.agent_version = agent_version;
   await db()('agent_enrollments').where({ device_id: String(deviceId) }).update(yama);
+  if (serial_number) await checkClone(deviceId, serial_number);
+}
+
+/* KLON TESPİTİ. Cihaz kimliği SMBIOS UUID'den üretiliyor ama bazı üreticiler
+   tüm partiye aynı UUID'yi yazıyor; sanal makineler de bozuk değer dönebiliyor.
+   O zaman iki AYRI makine aynı kimliği paylaşır ve envanterde tek kayda
+   çakışırlar — sessiz kalırsa iki bilgisayarı tek cihaz sanarsınız.
+
+   Sinyal: kayıtlı kimlikten gelen SERİ NUMARASI değişirse. Ya anakart
+   değişmiştir ya da klon vardır; ikisi de yöneticinin görmesi gereken durum.
+   İstek REDDEDİLMEZ (meşru donanım değişimini kırmak istemiyoruz), işaretlenir. */
+async function checkClone(deviceId, serial) {
+  const s = String(serial).trim();
+  if (!s) return null;
+  const kayit = await db()('agent_enrollments').where({ device_id: String(deviceId) }).first();
+  if (!kayit) return null;
+
+  if (!kayit.serial_number) {
+    await db()('agent_enrollments').where({ device_id: String(deviceId) }).update({ serial_number: s });
+    return null;
+  }
+  if (kayit.serial_number === s) return null;
+
+  const not = `Aynı cihaz kimliğinden farklı seri geldi: "${kayit.serial_number}" → "${s}". ` +
+    'Anakart değişimi olabilir; değilse iki makine aynı kimliği paylaşıyor (sysprep yapılmamış imaj).';
+  await db()('agent_enrollments').where({ device_id: String(deviceId) })
+    .update({ clone_suspect: 1, clone_note: not.slice(0, 300), serial_number: s });
+  console.warn(`[KLON ŞÜPHESİ] ${deviceId}: ${not}`);
+  return not;
 }
 
 async function revoke(deviceId) {
@@ -111,7 +140,8 @@ async function revoke(deviceId) {
 async function listEnrollments() {
   // secret ASLA dışarı verilmez
   return db()('agent_enrollments')
-    .select('device_id', 'asset_id', 'agent_version', 'enrolled_at', 'last_seen_at', 'revoked')
+    .select('device_id', 'asset_id', 'agent_version', 'enrolled_at', 'last_seen_at', 'revoked',
+      'serial_number', 'clone_suspect', 'clone_note')
     .orderBy('last_seen_at', 'desc');
 }
 
@@ -187,5 +217,5 @@ async function verifyRequest(req) {
 
 module.exports = {
   verifyRequest, mode, sharedSecret, imzala, govdeOzeti, imzaTabani,
-  getEnrollment, enroll, revoke, listEnrollments, touch, SKEW_MS,
+  getEnrollment, enroll, revoke, listEnrollments, touch, checkClone, SKEW_MS,
 };

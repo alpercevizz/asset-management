@@ -835,3 +835,39 @@ test('register-token: imza, süre, kullanım hakkı ve iptal', async () => {
   await db()('register_tokens').where({ created_by: 'test' }).del();
   delete process.env.REGISTER_SECRET;
 });
+
+// ── Klon cihaz tespiti (sysprep yapılmamış imaj) ─────────────────────────────
+test('agent-auth: aynı kimlikten farklı seri gelince klon şüphesi işaretlenir', async () => {
+  const crypto = require('crypto');
+  const auth = require('../agent/tools/agent-auth');
+  const { db } = require('../db');
+  const CIHAZ = 'KLON-TEST-' + crypto.randomBytes(4).toString('hex');
+  await db()('agent_enrollments').where({ device_id: CIHAZ }).del();
+  await auth.enroll(CIHAZ, { agent_version: '1.3.0' });
+
+  // 1) İlk seri sadece kaydedilir — şüphe YOK
+  assert.equal(await auth.checkClone(CIHAZ, 'SERI-AAA'), null);
+  let k = (await auth.listEnrollments()).find((x) => x.device_id === CIHAZ);
+  assert.equal(k.serial_number, 'SERI-AAA');
+  assert.equal(k.clone_suspect, 0);
+
+  // 2) Aynı seri tekrar gelirse yine şüphe yok
+  assert.equal(await auth.checkClone(CIHAZ, 'SERI-AAA'), null);
+
+  // 3) FARKLI seri → klon şüphesi işaretlenir (istek reddedilmez, işaretlenir:
+  //    meşru anakart değişimini kırmak istemiyoruz)
+  const not = await auth.checkClone(CIHAZ, 'SERI-BBB');
+  assert.ok(not && not.includes('SERI-AAA') && not.includes('SERI-BBB'));
+  k = (await auth.listEnrollments()).find((x) => x.device_id === CIHAZ);
+  assert.equal(k.clone_suspect, 1);
+  assert.equal(k.serial_number, 'SERI-BBB', 'son görülen seri güncellenmeli');
+  assert.ok(k.clone_note && k.clone_note.length <= 300);
+
+  // 4) Boş seri hiçbir şey yapmaz (telemetrisiz istek şüphe üretmemeli)
+  const oncekiNot = k.clone_note;
+  assert.equal(await auth.checkClone(CIHAZ, ''), null);
+  k = (await auth.listEnrollments()).find((x) => x.device_id === CIHAZ);
+  assert.equal(k.clone_note, oncekiNot);
+
+  await db()('agent_enrollments').where({ device_id: CIHAZ }).del();
+});
