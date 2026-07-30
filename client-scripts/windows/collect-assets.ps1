@@ -13,7 +13,7 @@ param(
     # Paylasilan anahtarin dosyadan okundugu yol. Komut satirinda anahtar
     # tasimak, gorev tanimini okuyabilen HERKESE anahtari gosterir; dosya
     # SYSTEM+Administrators'a kilitlenebiliyor.
-    [string]$AgentKeyFile  = "$env:ProgramData\AssetMangent.key",
+    [string]$AgentKeyFile  = "$env:ProgramData\AssetMan\agent.key",
     # Cihaza ozel sirrin saklandigi dosya. ProgramData bilincli: kullanici
     # profilinden bagimsiz, SYSTEM yazabiliyor.
     [string]$StateFile     = "$env:ProgramData\AssetMan\device.json"

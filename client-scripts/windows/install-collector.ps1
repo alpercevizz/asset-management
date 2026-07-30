@@ -130,22 +130,51 @@ Register-ScheduledTask -TaskName $TaskName `
 Write-Host "[+] Gorev kaydedildi: $TaskName (SYSTEM, her $IntervalMinutes dk)"
 
 # ── Dogrulama: hemen bir kez calistir ────────────────────────────────────────
-Write-Host "[i] Test calistirmasi baslatiliyor..."
+# BITMESINI BEKLE. Onceki surum 25 saniye bekleyip sonucu yaziyordu; toplama
+# 2-4 dakika suruyor (yazilim envanteri + Windows Update sorgusu), bu yuzden
+# her zaman 267009 (0x41301 = "gorev hala calisiyor") gosteriyor ve kullaniciya
+# basarili mi basarisiz mi oldugunu SOYLEMIYORDU.
+Write-Host "[i] Test calistirmasi baslatiliyor (2-4 dakika surebilir)..."
 Start-ScheduledTask -TaskName $TaskName
-Start-Sleep -Seconds 25
+
+$azamiSaniye = 360
+$gecen = 0
+while ($gecen -lt $azamiSaniye) {
+    Start-Sleep -Seconds 5
+    $gecen += 5
+    if ((Get-ScheduledTask -TaskName $TaskName).State -ne 'Running') { break }
+    if ($gecen % 30 -eq 0) { Write-Host "    ...calisiyor ($gecen sn)" }
+}
 
 $gorev = Get-ScheduledTaskInfo -TaskName $TaskName
+$kod = $gorev.LastTaskResult
+$aciklama = switch ($kod) {
+    0        { "BASARILI" }
+    267009   { "hala calisiyor (zaman asimi - logu kontrol edin)" }
+    267011   { "gorev henuz calismadi" }
+    default  { "HATA (0x" + ('{0:X}' -f $kod) + ") - logu kontrol edin" }
+}
+
 Write-Host ""
 Write-Host "  Son calisma  : $($gorev.LastRunTime)"
-Write-Host "  Sonuc kodu   : $($gorev.LastTaskResult)  (0 = basarili)"
+Write-Host "  Sonuc        : $kod  ->  $aciklama"
 Write-Host "  Sonraki      : $($gorev.NextRunTime)"
 Write-Host "  Log          : $logDosya"
 Write-Host ""
 if (Test-Path $logDosya) {
-    Write-Host "--- Log (son 20 satir) ---"
-    Get-Content $logDosya -Tail 20
+    Write-Host "--- Log (son 25 satir) ---"
+    Get-Content $logDosya -Tail 25
 }
-Write-Host ""
-Write-Host "Hangi olcumlerin okunabildigini yukaridaki logdan gorun."
-Write-Host "'okunamadi' satirlari NORMALDIR: sanal makinede sicaklik sensoru,"
-Write-Host "masaustunde pil yoktur. O alanlar panelde 'Olcum yok' gorunur."
+
+# Logda ERROR varsa kullaniciyi acikca uyar — "kuruldu" demek yetmez,
+# kurulmus ama her saat hata veren bir gorev en kotu sonuc.
+if ((Test-Path $logDosya) -and ((Get-Content $logDosya -Tail 25) -match '\[ERROR\]')) {
+    Write-Host ""
+    Write-Warning "Logda HATA var — collector veri gonderemedi. Yukaridaki ERROR satirlarina bakin."
+    Write-Warning "Sik neden: -AgentKey eksik/yanlis, ag veya TLS sorunu, sunucuda WEBHOOK_AUTH=required."
+} else {
+    Write-Host ""
+    Write-Host "Hangi olcumlerin okunabildigini yukaridaki logdan gorun."
+    Write-Host "'okunamadi' satirlari NORMALDIR: sanal makinede sicaklik sensoru,"
+    Write-Host "masaustunde pil yoktur. O alanlar panelde 'Olcum yok' gorunur."
+}
