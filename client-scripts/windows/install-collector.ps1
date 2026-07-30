@@ -135,6 +135,11 @@ Write-Host "[+] Gorev kaydedildi: $TaskName (SYSTEM, her $IntervalMinutes dk)"
 # her zaman 267009 (0x41301 = "gorev hala calisiyor") gosteriyor ve kullaniciya
 # basarili mi basarisiz mi oldugunu SOYLEMIYORDU.
 Write-Host "[i] Test calistirmasi baslatiliyor (2-4 dakika surebilir)..."
+# Log ONCEKI calismalarin satirlarini da tutuyor. Yalniz BU calismanin
+# satirlarina bakabilmek icin baslangic konumu kaydedilir; aksi halde eski
+# hatalar yuzunden basarili kurulumda da "logda HATA var" uyarisi cikiyordu.
+$logBaslangic = 0
+if (Test-Path $logDosya) { $logBaslangic = (Get-Content $logDosya).Count }
 Start-ScheduledTask -TaskName $TaskName
 
 $azamiSaniye = 360
@@ -161,14 +166,17 @@ Write-Host "  Sonuc        : $kod  ->  $aciklama"
 Write-Host "  Sonraki      : $($gorev.NextRunTime)"
 Write-Host "  Log          : $logDosya"
 Write-Host ""
+$buCalisma = @()
 if (Test-Path $logDosya) {
-    Write-Host "--- Log (son 25 satir) ---"
-    Get-Content $logDosya -Tail 25
+    $tum = Get-Content $logDosya
+    if ($tum.Count -gt $logBaslangic) { $buCalisma = $tum[$logBaslangic..($tum.Count - 1)] }
+    Write-Host "--- Bu calismanin logu ---"
+    if ($buCalisma.Count) { $buCalisma } else { Write-Host "(bu calismadan satir yok)" }
 }
 
 # Logda ERROR varsa kullaniciyi acikca uyar — "kuruldu" demek yetmez,
 # kurulmus ama her saat hata veren bir gorev en kotu sonuc.
-if ((Test-Path $logDosya) -and ((Get-Content $logDosya -Tail 25) -match '\[ERROR\]')) {
+if ($buCalisma -match '\[ERROR\]') {
     Write-Host ""
     Write-Warning "Logda HATA var — collector veri gonderemedi. Yukaridaki ERROR satirlarina bakin."
     Write-Warning "Sik neden: -AgentKey eksik/yanlis, ag veya TLS sorunu, sunucuda WEBHOOK_AUTH=required."

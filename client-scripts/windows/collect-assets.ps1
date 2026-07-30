@@ -361,7 +361,13 @@ try {
         $deviceId   = $response.enrollment.device_id
     }
 
-    Write-Log "Basarili! Yanit: $($response | ConvertTo-Json -Compress -Depth 3)"
+    # GUVENLIK: yanit cihaza ozel SIRRI iceriyor. Log dosyasini Users grubu
+    # OKUYABILIYOR (klasor ACL'i Users:RX) — sirri oldugu gibi yazmak,
+    # device.json'i SYSTEM'e kilitlemeyi anlamsiz kilardi: yerel kullanici
+    # sirri logdan okuyup bu cihaz adina rapor gonderebilirdi. Maskelenir.
+    $logYanit = $response | ConvertTo-Json -Compress -Depth 3
+    $logYanit = [regex]::Replace($logYanit, '("secret"\s*:\s*")[^"]*(")', '${1}<gizlendi>${2}')
+    Write-Log "Basarili! Yanit: $logYanit"
 
     # ── Yazılım & Lisans Toplama ─────────────────────────────────────────────
     Write-Log "Yazilim envanteri toplanıyor..."
