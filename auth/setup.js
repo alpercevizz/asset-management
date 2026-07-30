@@ -13,7 +13,7 @@ const SECRETS_FILE = process.env.SECRETS_FILE || path.join(__dirname, '..', 'dat
 // AGENT_SECRET: collector'ların istek imzalamada kullandığı PAYLAŞILAN anahtar.
 // Diğerleri gibi otomatik üretilir — kurulumda elle anahtar üretmeyi unutmak,
 // webhook'u kimlik doğrulamasız bırakmanın en kolay yolu olurdu.
-const KEYS = ['SESSION_SECRET', 'CHAIN_SECRET', 'WORM_SECRET', 'AGENT_SECRET'];
+const KEYS = ['SESSION_SECRET', 'CHAIN_SECRET', 'WORM_SECRET', 'AGENT_SECRET', 'REGISTER_SECRET'];
 const DEFAULT = 'assetman-demo-secret-degistir';
 
 function strong(v) {

@@ -225,7 +225,25 @@ kayıt açabilir. Bunu tamamen kapatmak için cihaz başına önceden dağıtıl
 kayıt jetonu veya mTLS gerekir. Sahte kayıtlar envanterde "yeni cihaz" olarak
 görünür ve `GET /api/agents` listesinde `enrolled_at` ile ayırt edilir.
 
-**Hâlâ korumasız:** `/api/register` ve `/api/register/bulk` (QR ile telefon
-self-servis kaydı). Bunları bir insan tarayıcıdan kullandığı için imzalanamaz;
-kapatmak imzalı/süreli QR jetonu gerektirir. Ayrı iş olarak duruyor.
+### QR ile telefon kaydı (`/api/register`)
+
+Bu uç telefondan çağrıldığı için collector gibi imza atamaz — karşıda insan ve
+tarayıcı var. Onun yerine **QR'ın içine yöneticinin ürettiği imzalı jeton**
+gömülür:
+
+1. Panelde **Varlıklar → Yeni Varlık Ekle → QR** sekmesinde kaç cihaz ve ne
+   kadar süre geçerli olacağı seçilir (varsayılan 1 cihaz / 1 gün).
+2. QR üretilirken sunucudan imzalı jeton alınır ve URL'ye eklenir.
+3. Telefon o jetonu geri gönderir; sunucu imzayı, süreyi ve **kullanım
+   hakkını** doğrular.
+
+İmza tek başına yetmez — aynı QR'ı ele geçiren biri onu sonsuz kez
+kullanabilirdi. Bu yüzden kullanım sayısı veritabanında tutulur ve koşullu
+`UPDATE` ile artırılır (iki telefon aynı anda okutursa yalnız biri geçer).
+
+Üst sınırlar: 7 gün, 100 kullanım. Jetonu üreten kullanıcı kaydedilir.
+İptal: `DELETE /api/register/tokens/<jti>`.
+
+`/api/register/bulk` (Toplu Depo Kaydı) **public listeden çıkarıldı** —
+yalnızca girişli panelden çağrılıyor, açık olmasının hiçbir sebebi yoktu.
 

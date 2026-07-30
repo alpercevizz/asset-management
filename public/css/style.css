@@ -2543,3 +2543,7 @@ body.tv-mode:not(.tv-full) .assets-rail .sev-count {
   .tva-metrics { grid-template-columns: repeat(3, 1fr); }
   .tva-r3 { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* QR jeton bilgisi: kaç cihaz / ne zamana kadar geçerli. Kullanıcı QR'ın
+   ömürlü olduğunu bilmezse süresi dolan kodla uğraşır. */
+.qr-note { font-size: 12px; line-height: 1.6; color: var(--text-muted); margin-top: 10px; }

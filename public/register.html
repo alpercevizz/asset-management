@@ -315,6 +315,10 @@
         os:            $('os').value.trim(),
         username:      $('username').value.trim(),
         location:      $('location').value.trim(),
+        // QR'a gömülü imzalı kayıt jetonu. Bu sayfa oturum açamıyor (telefonda
+        // anonim açılıyor); jeton oturumun yerini tutuyor. Jetonsuz istek
+        // sunucuda 401 alır.
+        reg_token:     new URLSearchParams(window.location.search).get("t") || '',
       };
 
       try {

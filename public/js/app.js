@@ -5310,7 +5310,34 @@ document.addEventListener('DOMContentLoaded', () => {
     reader.readAsText(file, 'utf-8');
   });
 
-  $(`#generateQr`)?.addEventListener('click', () => {
+  $(`#generateQr`)?.addEventListener('click', async () => {
+    const btn = $(`#generateQr`);
+    const uyari = $(`#qrTokenInfo`);
+    /* QR artik IMZALI JETON tasiyor. Jeton olmadan /api/register kayit kabul
+       etmiyor — aksi halde adresi bilen herkes envantere sahte cihaz ekler. */
+    let jeton;
+    try {
+      if (btn) { btn.disabled = true; }
+      const r = await fetch('/api/register/token', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hours: Number($(`#qrHours`)?.value) || 24,
+          uses: Number($(`#qrUses`)?.value) || 1,
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.detail || j.error || 'jeton üretilemedi');
+      jeton = j;
+    } catch (err) {
+      if (uyari) {
+        uyari.style.color = 'var(--red)';
+        uyari.textContent = 'QR üretilemedi: ' + err.message;
+      }
+      if (btn) btn.disabled = false;
+      return;
+    }
+    if (btn) btn.disabled = false;
+
     // Mobil kayıt URL'sini bu tarayıcının origin'inden kur (aynı ağdaki telefon erişebilsin)
     const params = new URLSearchParams();
     const cat  = $(`#qrCategory`)?.value || '';
@@ -5319,8 +5346,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (cat)  params.set('category', cat);
     if (loc)  params.set('location', loc);
     if (user) params.set('username', user);
+    params.set('t', jeton.token);
 
-    const registerUrl = `${location.origin}/register${params.toString() ? '?' + params.toString() : ''}`;
+    const registerUrl = `${location.origin}/register?${params.toString()}`;
     const qrSrc = `/api/qr?data=${encodeURIComponent(registerUrl)}`;
 
     $(`#qrImg`).src = qrSrc;
@@ -5329,6 +5357,12 @@ document.addEventListener('DOMContentLoaded', () => {
     $(`#qrPlaceholder`).style.display = 'none';
     $(`#qrBox`).style.display = 'flex';
     $(`#printQr`).style.display = 'flex';
+    if (uyari) {
+      uyari.style.color = 'var(--text-muted)';
+      uyari.textContent = `Bu QR ${jeton.max_uses} cihaz için geçerli, ` +
+        `${fmtDate(jeton.expires_at)} tarihinde geçerliliği bitiyor. ` +
+        'Süresi dolunca yenisini üretin.';
+    }
   });
 
   $(`#printQr`)?.addEventListener('click', () => {

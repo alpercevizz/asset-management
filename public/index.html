@@ -1696,6 +1696,29 @@
           </div>
         </div>
 
+        <!-- QR artık imzalı jeton taşıyor: kaç cihaz ve ne kadar süre geçerli
+             olacağı yöneticiye bırakıldı. Tek telefon için 1 kullanım / kısa
+             süre; depoya asılan basılı QR için çok kullanım / uzun süre. -->
+        <div class="qr-prefill">
+          <div class="field-sm">
+            <label>Kaç cihaz kaydedilebilir</label>
+            <select id="qrUses" class="select-sm">
+              <option value="1" selected>1 cihaz (tek kullanım)</option>
+              <option value="5">5 cihaz</option>
+              <option value="25">25 cihaz</option>
+            </select>
+          </div>
+          <div class="field-sm">
+            <label>Geçerlilik süresi</label>
+            <select id="qrHours" class="select-sm">
+              <option value="1">1 saat</option>
+              <option value="24" selected>1 gün</option>
+              <option value="168">7 gün</option>
+            </select>
+          </div>
+        </div>
+        <p class="qr-note" id="qrTokenInfo"></p>
+
         <div class="qr-display" id="qrDisplay">
           <div class="qr-placeholder" id="qrPlaceholder">
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><line x1="14" y1="14" x2="14" y2="14"/><line x1="21" y1="21" x2="21" y2="21"/><line x1="17" y1="17" x2="17" y2="17"/></svg>

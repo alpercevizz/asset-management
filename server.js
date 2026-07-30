@@ -264,6 +264,10 @@ app.get(['/', '/index.html'], requirePage, (req, res) => {
 
 // API koruması: allowlist dışındaki tüm /api yolları oturum ister.
 // Public: client scriptler ve telefon QR kaydı login olamaz.
+/* '/register' burada KALIYOR ama artik imzali QR JETONU zorunlu (bkz.
+   agent/tools/register-token.js) — telefon oturum acamiyor, jeton onun yerine
+   geciyor. '/register/bulk' LISTEDEN CIKARILDI: yalnizca girisli panelden
+   cagriliyor, public olmasi icin hicbir sebep yoktu. */
 const PUBLIC_API = new Set(['/login', '/logout', '/health', '/webhook', '/register', '/licenses/sync', '/qr', '/lifecycle/approve']);
 app.use('/api', (req, res, next) => {
   if (PUBLIC_API.has(req.path)) return next();
@@ -480,6 +484,18 @@ async function trackLocation(assetId, asset, location, source) {
 // Mobil formdan gelen cihaz kaydı (telefon, tablet, el terminali vb.)
 app.post('/api/register', async (req, res) => {
   try {
+    /* QR JETONU ZORUNLU. Bu uc telefondan cagriliyor, oturum yok — jeton
+       oturumun yerini tutuyor: imzali (uydurulamaz), sureli ve kullanim
+       hakki sinirli. Panelden uretilmemis bir QR ile kayit yapilamaz. */
+    const regToken = require('./agent/tools/register-token');
+    const jeton = await regToken.verifyAndConsume(
+      req.get('X-Register-Token') || (req.body && req.body.reg_token));
+    if (!jeton.ok) {
+      console.warn(`[REGISTER REDDEDİLDİ] ${jeton.code} — ${jeton.reason} ` +
+        `ip=${(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim()}`);
+      return res.status(401).json({ error: jeton.reason, code: jeton.code });
+    }
+
     const p = req.body || {};
     const hostname = (p.hostname || '').trim();
     if (!hostname && !p.serial_number) {
@@ -520,10 +536,46 @@ app.post('/api/register', async (req, res) => {
     // QR kaydında lokasyon formdan BEYAN edilir → kaynak 'qr' olarak izlenir (token'lı
     // ajan kadar güvenilir değil ama geçmiş tutulmazsa süre eşiği hiç çalışmaz).
     await trackLocation(result.id, enriched, enriched.location, 'qr');
-    res.json({ success: true, action, id: result.id });
+    res.json({ success: true, action, id: result.id, kalan_hak: jeton.kalan });
   } catch (err) {
     console.error('[POST /api/register]', err.message);
     res.status(500).json({ error: 'Cihaz kaydı hatası', detail: err.message });
+  }
+});
+
+/* ─── QR kayıt jetonları (it/admin) ────────────────────────────────────────*/
+app.post('/api/register/token', requireRole('it', 'admin'), async (req, res) => {
+  try {
+    const me = currentUser(req);
+    const regToken = require('./agent/tools/register-token');
+    await regToken.pruneExpired();
+    const t = await regToken.create({
+      hours: req.body && req.body.hours,
+      uses: req.body && req.body.uses,
+      by: me ? me.username : 'system',
+    });
+    console.log(`[REGISTER] QR jetonu üretildi: ${t.jti} (${t.max_uses} kullanım, ${t.hours}s) — ${me?.username}`);
+    res.json(t);
+  } catch (err) {
+    res.status(500).json({ error: 'Jeton üretilemedi', detail: err.message });
+  }
+});
+
+app.get('/api/register/tokens', requireRole('it', 'admin'), async (req, res) => {
+  try {
+    res.json({ results: await require('./agent/tools/register-token').list() });
+  } catch (err) {
+    res.status(500).json({ error: 'Jetonlar alınamadı', detail: err.message });
+  }
+});
+
+app.delete('/api/register/tokens/:jti', requireRole('it', 'admin'), async (req, res) => {
+  try {
+    const n = await require('./agent/tools/register-token').revoke(req.params.jti);
+    console.warn(`[REGISTER] QR jetonu iptal edildi: ${req.params.jti} — ${currentUser(req)?.username}`);
+    res.json({ success: true, revoked: n });
+  } catch (err) {
+    res.status(500).json({ error: 'İptal edilemedi', detail: err.message });
   }
 });
 

@@ -782,3 +782,56 @@ test('agent-auth: imza doğrulama, replay koruması ve cihaz kaydı', async () =
   await db()('agent_enrollments').where({ device_id: CIHAZ }).del();
   delete process.env.WEBHOOK_AUTH;
 });
+
+// ── QR kayıt jetonu ───────────────────────────────────────────────────────────
+test('register-token: imza, süre, kullanım hakkı ve iptal', async () => {
+  const crypto = require('crypto');
+  process.env.REGISTER_SECRET = 'test-register-secret-en-az-32-karakter-olmali';
+  const rt = require('../agent/tools/register-token');
+  const { db } = require('../db');
+
+  // 1) Jetonsuz / uydurma istek reddedilir
+  assert.equal((await rt.verifyAndConsume('')).code, 'JETON_YOK');
+  assert.equal((await rt.verifyAndConsume('uydurma.imza')).code, 'IMZA_GECERSIZ');
+
+  // 2) Üretilen jeton geçerli; imzası bozulunca reddedilir
+  const t = await rt.create({ hours: 24, uses: 2, by: 'test' });
+  assert.equal((await rt.verifyAndConsume(t.token.slice(0, -2) + 'XY')).code, 'IMZA_GECERSIZ');
+
+  // 3) Kullanım hakkı: 2 kullanım sonra biter
+  const k1 = await rt.verifyAndConsume(t.token);
+  assert.equal(k1.ok, true);
+  assert.equal(k1.kalan, 1);
+  assert.equal((await rt.verifyAndConsume(t.token)).kalan, 0);
+  assert.equal((await rt.verifyAndConsume(t.token)).code, 'HAK_BITTI',
+    'hakkı biten QR bir daha kullanılamamalı — imza tek başına yetmez');
+
+  // 4) Süresi geçmiş jeton (imzadaki exp geçmişte) reddedilir
+  const b64u = (x) => Buffer.from(x).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const govde = b64u(JSON.stringify({ jti: t.jti, exp: Date.now() - 60000 }));
+  const sig = crypto.createHmac('sha256', process.env.REGISTER_SECRET).update(govde)
+    .digest('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  assert.equal((await rt.verifyAndConsume(`${govde}.${sig}`)).code, 'SURE_DOLDU');
+
+  // 5) İptal edilen jeton reddedilir
+  const ipt = await rt.create({ hours: 24, uses: 5, by: 'test' });
+  await rt.revoke(ipt.jti);
+  assert.equal((await rt.verifyAndConsume(ipt.token)).code, 'IPTAL');
+
+  // 6) Eşzamanlı kullanım son hakkı İKİ KEZ harcatmamalı (koşullu UPDATE)
+  const yaris = await rt.create({ hours: 24, uses: 1, by: 'test' });
+  const sonuc = await Promise.all([rt.verifyAndConsume(yaris.token), rt.verifyAndConsume(yaris.token)]);
+  assert.equal(sonuc.filter((x) => x.ok).length, 1, 'tek hak yalnız bir istekte harcanmalı');
+
+  // 7) Sınırlar: aşırı istek kırpılır
+  const asiri = await rt.create({ hours: 9999, uses: 9999, by: 'test' });
+  assert.equal(asiri.hours, rt.AZAMI_SAAT);
+  assert.equal(asiri.max_uses, rt.AZAMI_KULLANIM);
+
+  // 8) Listede sır YOK (jeton gövdesi zaten imzanın içinde, saklanmıyor)
+  const liste = await rt.list();
+  assert.ok(liste.every((r) => r.token === undefined && r.secret === undefined));
+
+  await db()('register_tokens').where({ created_by: 'test' }).del();
+  delete process.env.REGISTER_SECRET;
+});
