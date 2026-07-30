@@ -2254,7 +2254,20 @@ body.tv-mode:not(.tv-full) .assets-rail .sev-count {
   /* Dar kolonda etiket/değer yan yana sıkışıyor; değer alta iner */
   .ad-row { flex-wrap: wrap; gap: 2px 12px; }
   .ad-row b { text-align: left; }
+
 }
+
+/* NOT — telemetri birleşik ızgarası (4 kart + 2 panel tek ızgarada) YALNIZ
+   monitör kuralında (≥1181px) uygulanır; orada sekme kartı tam genişlik olduğu
+   için telemetriye ~1090px kalıyor ve tasarımdaki ölçüler birebir oturuyor.
+   Tablette sekmeler 2 kolonu kaplıyor → telemetri alanı 1024px'te 556px,
+   1150px'te 638px. Birleşik ızgara denendi: kartlar 86-107px'e sıkıştı,
+   paneller sarmaktan 480-546px uzadı ve ızgara satırlarını şişirip kartları
+   da gerdi. Tablette bu yüzden kartlar ve paneller AYRI bloklar halinde kalır
+   (kart 177px, paneller altta 2 kolon) — okunabilirlik tasarım sadakatinden
+   önce geldi. Tasarımın çizildiği 1366px'lik tablet zaten monitör kuralına
+   giriyor ve orada birleşik ızgara uygulanıyor.
+   Bkz. commit mesajı: ölçümler. */
 
 /* Dikey tablet (768–900): 3 kolon sığmıyor → 2 kolon, doğal akış.
    Sıra: kimlik | zimmet · Temel | Durum · sekmeler (tam genişlik). */
@@ -2276,6 +2289,7 @@ body.tv-mode:not(.tv-full) .assets-rail .sev-count {
 }
 /* Mobil sekmeleri geniş ekranda gizle — orada bölümler zaten kolonda duruyor */
 .ad-tab--m { display: none; }
+.ad-chev { display: none; }
 /* Telefondan geniş ekrana dönülürse (döndürme) aktif sekme gizli bir düğmede
    kalıyor ve hiçbir sekme seçili görünmüyordu; pane zaten İşlem Geçmişi'ni
    gösterdiği için işareti oraya taşıyoruz. */
@@ -2287,75 +2301,101 @@ body.tv-mode:not(.tv-full) .assets-rail .sev-count {
 }
 
 /* ── VARLIK DETAYI · TELEFON ────────────────────────────────────────────────
-   Masaüstü 3 kolonu telefonda düz akışa çevrilince ~1900px'lik tek bir kaydırma
-   oluyor ve alttaki sekme çubuğuna kimse ulaşamıyordu. Telefonda düzen şu:
-   tam ekran sayfa · üstte sabit hero (hangi cihaza baktığın kaybolmasın) ·
-   altında yapışkan sekme çubuğu · yalnız aktif bölüm çizilir.
-   İçerik KOPYALANMIYOR: aynı DOM, display:contents ile yeniden sıralanıyor. */
+   Tasarım referansı: üstte hero + eylem düğmeleri, altında AKORDEON bilgi
+   kartları (Temel/Durum kapalı, Resmi Zimmet açık), sonra aktif sekmenin
+   içeriği, en altta SABİT sekme çubuğu ve zimmet tutanağı düğmesi.
+
+   Önceki sürümde sekmeler üstte yapışkandı ve bilgi kartları "Genel"/"Zimmet"
+   diye iki mobil sekmeye dağıtılmıştı. Akordeon daha iyi: kullanıcı sekme
+   değiştirmeden hem cihaz bilgisine hem telemetriye ulaşıyor.
+   İçerik KOPYALANMIYOR — aynı DOM, display:contents ile yeniden sıralanıyor. */
 @media (max-width: 760px) {
-  /* Gövde dolgusu sıfırlanır ki hero ve kartlar kartın kenarına dayansın. */
   #deviceModalOverlay .modal-body { padding: 0; flex: 1; min-height: 0; }
-  /* SABİT yükseklik. İçerik sekmeye göre 213px–1051px arası değişiyor; yükseklik
-     içeriğe bağlı kalırsa diyalog her sekmede zıplıyor, sekme çubuğu parmağın
-     altından kaçıyordu. Sabitleyip kaydırmayı gövdeye bırakıyoruz.
-     dvh → adres çubuğu açılıp kapanınca yeniden ölçülmez. Çıkarılan 88px:
-     üstte/altta arka planın görünmesi için bırakılan pay. */
+  /* SABİT yükseklik: içerik sekmeye göre çok değişiyor, yükseklik içeriğe
+     bağlı kalırsa diyalog her sekmede zıplıyordu. dvh → adres çubuğu açılıp
+     kapanınca yeniden ölçülmez. */
   #deviceModalOverlay .modal { height: calc(100dvh - 88px); max-height: calc(100dvh - 88px); }
-  /* Kartlar arası ayırıcı çizgi son kartta gereksiz (altında içerik yok) */
-  .ad-sec--durum { border-bottom: none; }
 
-  /* .ad-left kendi kutusunu bırakır → çocukları doğrudan sıralanabilir */
   .ad-grid { display: flex; flex-direction: column; gap: 0; }
-  .ad-left, .ad-idbox { display: contents; }
-  /* QR telefonda kimlik kartından ayrılıp 'Zimmet & Konum' sekmesine iner —
-     hero'yu şişirmemesi için (hero her sekmede görünüyor). */
-  .ad-qr { order: 3; display: none; margin: 0 16px; }
-  .ad-grid[data-mtab="zimmet"] .ad-qr { display: flex; }
-  .ad-tico { display: none; }          /* 6 sekme var, ikon genişlik yiyor */
+  .ad-left, .ad-idbox, .ad-tabs-wrap { display: contents; }
 
+  /* ── Hero: görsel solda, ad/kod/lokasyon sağda ── */
   .ad-hero {
     order: 1; display: flex; gap: 14px; align-items: center;
     padding: 14px 16px; border-bottom: 1px solid var(--border);
   }
   .ad-hero-t { min-width: 0; flex: 1; }
-  .ad-photo { min-height: 0; width: 84px; height: 84px; flex-shrink: 0; padding: 8px; }
+  .ad-photo { min-height: 0; width: 92px; height: 92px; flex-shrink: 0; padding: 8px; }
   .ad-photo .badge { display: none; }          /* rozet ad-ident'te zaten var */
-  .ad-img { max-height: 68px; }
-  .ad-illus { width: 52px; height: 52px; }
-  .ad-name { font-size: 16px; margin-bottom: 6px; overflow-wrap: anywhere; }
-  /* Kimlik satırları telefonda yan yana rozet şeridi olur */
+  .ad-img { max-height: 74px; }
+  .ad-illus { width: 56px; height: 56px; }
+  .ad-name { font-size: 17px; margin-bottom: 6px; overflow-wrap: anywhere; }
   .ad-ident { flex-direction: row; flex-wrap: wrap; gap: 6px 10px; }
   .ad-ident span { font-size: 11.5px; max-width: 100%; }
 
-  /* Yapışkan sekme çubuğu: hero'nun altında, kaydırırken tepede kalır.
-     .ad-tabs-wrap da kutusunu bırakmalı — sticky bir eleman yalnız KENDİ
-     ebeveyninin sınırları içinde yapışır; 73px'lik sarmalayıcının içinde
-     kalınca çubuk hemen kayıp gidiyordu. Contents ile çubuk ve pane doğrudan
-     .ad-grid'in çocuğu olur, sticky tüm içerik boyunca geçerli olur. */
-  .ad-tabs-wrap { display: contents; }
-  .ad-tabs {
-    order: 2; position: sticky; top: 0; z-index: 2; background: var(--bg-card);
-    border-bottom: 1px solid var(--border);
-    flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 0 8px;
-  }
-  .ad-tabs::-webkit-scrollbar { display: none; }
-  .ad-tab--m { display: block; }
-  .ad-tab { white-space: nowrap; padding: 13px 12px; font-size: 12.5px; }
-  .ad-pane { order: 3; padding: 14px 16px; }
-  /* 'Genel'/'Zimmet' sekmelerinde pane boş kalıyor; dolgusu 28px'lik hayalet
-     boşluk bırakıyordu. */
-  .ad-grid[data-mtab="genel"] .ad-pane,
-  .ad-grid[data-mtab="zimmet"] .ad-pane { display: none; }
+  /* ── Eylem düğmeleri (Etiket Yazdır | QR Kod) ── */
+  .ad-actions { order: 2; display: flex; gap: 10px; padding: 12px 16px; }
+  .ad-actions .btn-pdf { flex: 1; justify-content: center; padding: 11px 8px; }
+  /* QR bloğu düğmeyle açılır: sürekli görünen 98px'lik kutu asıl içeriği
+     aşağı itiyordu. */
+  .ad-qr { order: 3; display: none; margin: 0 16px 12px; }
+  .ad-qr.ad-qr--acik { display: flex; }
 
-  /* Bölümler: yalnız aktif sekmeninki görünür */
-  .ad-sec { order: 3; display: none; }
-  .ad-grid[data-mtab="genel"]  .ad-sec--genel,
-  .ad-grid[data-mtab="zimmet"] .ad-sec--zimmet { display: block; }
-  .ad-sec--zimmet { padding: 14px 16px; display: none; }
-  .ad-grid[data-mtab="zimmet"] .ad-sec--zimmet { display: flex; flex-direction: column; gap: 12px; }
-  .ad-card.ad-sec { border: none; border-radius: 0; border-bottom: 8px solid var(--bg); padding: 14px 16px; }
+  /* ── Akordeon bilgi kartları ── */
+  .ad-sec { order: 4; }
+  .ad-card.ad-sec {
+    border: none; border-radius: 0; border-bottom: 8px solid var(--bg); padding: 0;
+  }
+  .ad-card.ad-sec .ad-card-h {
+    padding: 14px 16px; margin-bottom: 0; border-bottom: none; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .ad-card.ad-sec .ad-row { padding: 8px 16px; }
+  .ad-card.ad-sec .ad-row:first-of-type { border-top: 1px solid var(--border); }
+  .ad-chev { display: block; color: var(--text-muted); transition: transform .18s; flex-shrink: 0; }
+  .ad-card.ad-kapali .ad-chev { transform: rotate(-90deg); }
+  /* Kapalı kartta başlık DIŞINDA her şey gizlenir */
+  .ad-card.ad-kapali > *:not(.ad-card-h) { display: none; }
+
+  .ad-sec--zimmet { order: 5; padding: 0 16px 12px; display: flex; flex-direction: column; gap: 12px; }
+
+  /* ── Sekme içeriği ── */
+  .ad-pane { order: 6; padding: 14px 16px; }
+
+  /* ── SABİT alt sekme çubuğu (tasarım) ──
+     Üstte yapışkan çubuk yerine altta sabit: telefonda başparmak menzili
+     ekranın altı. İkon + kısa etiket, 5 sekme yan yana sığıyor. */
+  /* position:fixed DEĞİL — diyalog ekrana 16/44px boşlukla oturuyor, viewport'a
+     sabitlenen çubuk modalın dışına, arka planın üstüne taşıyordu.
+     sticky + bottom:0 çubuğu gövdenin görünen alt kenarına yapıştırır ve
+     diyalogun içinde tutar. order:7 → içerikten SONRA gelmeli. */
+  .ad-tabs {
+    order: 7; position: sticky; bottom: 0; z-index: 5;
+    display: flex; padding: 0; border-top: 1px solid var(--border);
+    border-bottom: none; background: var(--bg-card);
+  }
+  .ad-tab {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 9px 2px; font-size: 9.5px; line-height: 1.15; text-align: center;
+    border-bottom: none; border-top: 2px solid transparent; min-width: 0;
+  }
+  .ad-tab.active { border-top-color: var(--accent); border-bottom-color: transparent; }
+  .ad-tico { display: block; width: 17px; height: 17px; margin: 0; }
+  /* Tutanak düğmesi sekme çubuğunun ALTINDA (tasarım böyle) */
+  #deviceModalOverlay .modal-footer { padding: 12px 16px max(12px, env(safe-area-inset-bottom)); }
+
+  /* ── Telemetri: 3 kolon (tasarım) ── */
+  .tm-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .tm-card { padding: 10px; }
+  .tm-h { font-size: 10.5px; margin-bottom: 6px; }
+  .tm-h .ad-ico { width: 18px; height: 18px; margin-right: 5px; }
+  .tm-v { font-size: 19px; }
+  .tm-alt { font-size: 10px; }
+  .tm-net { font-size: 12px; }
+  .tm-panels { grid-template-columns: 1fr; }
 
   /* Uzun değerler (IP/MAC, model) alta sarsın — yan yana sıkışmasın */
   .ad-row { flex-wrap: wrap; gap: 2px 14px; }
   .ad-row b { text-align: left; }
 }
+

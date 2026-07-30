@@ -2428,6 +2428,17 @@ async function openDeviceModal(asset) {
         </div>
         </div>
 
+        <!-- Telefonda QR bloğu gizli durur; "QR Kod" düğmesi açar. Küçük ekranda
+             sürekli görünen 98px'lik QR kutusu, asıl içeriği aşağı itiyordu. -->
+        <div class="ad-actions">
+          <button class="btn-pdf" id="adActLabel">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7"/><rect x="6" y="14" width="12" height="8"/><path d="M6 18H4a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-2"/></svg>
+            Etiket Yazdır</button>
+          <button class="btn-pdf" id="adActQr">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM19 19h2v2h-2z"/></svg>
+            QR Kod</button>
+        </div>
+
         <div class="ad-qr">
           <img id="adQr" alt="QR etiketi">
           <div>
@@ -2447,7 +2458,7 @@ async function openDeviceModal(asset) {
       <!-- Orta: temel bilgiler -->
       <div class="ad-card ad-sec ad-sec--genel ad-sec--temel">
         <div class="ad-card-h"><h4><span class="ad-ico kpi-ico--blue"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/></svg></span>Temel Bilgiler</h4>
-          ${state.role === 'admin' || state.role === 'it' ? '<button class="btn-pdf" id="adEditBasic">Düzenle</button>' : ''}</div>
+          ${state.role === 'admin' || state.role === 'it' ? '<button class="btn-pdf" id="adEditBasic">Düzenle</button>' : ''}<svg class="ad-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></div>
         ${satir('Varlık Kodu', det.asset_code
           ? `<span class="serial-cell">${escapeHtml(det.asset_code)}</span>`
           : '<span class="ad-bos">tanımlı değil</span>')}
@@ -2466,7 +2477,7 @@ async function openDeviceModal(asset) {
 
       <!-- Sağ: durum bilgileri -->
       <div class="ad-card ad-sec ad-sec--genel ad-sec--durum">
-        <div class="ad-card-h"><h4><span class="ad-ico kpi-ico--green"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>Durum Bilgileri</h4>${statusBadge(a.status)}</div>
+        <div class="ad-card-h"><h4><span class="ad-ico kpi-ico--green"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>Durum Bilgileri</h4>${statusBadge(a.status)}<svg class="ad-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></div>
         ${satir('Lokasyon', escapeHtml((a.location || '').trim() || '—'))}
         ${satir('Sorumlu Kişi', escapeHtml(d.assignment?.assigned_to || '—'))}
         ${satir('Son Giriş Yapan Kullanıcı', fmt(a.username))}
@@ -2486,10 +2497,6 @@ async function openDeviceModal(asset) {
       <!-- Alt: sekmeler -->
       <div class="ad-tabs-wrap">
         <div class="ad-tabs">
-          <!-- İlk iki sekme YALNIZ telefonda görünür: masaüstünde bu iki bölüm
-               zaten kolonlarda duruyor, sekmeye gerek yok (CSS gizler). -->
-          <button class="ad-tab ad-tab--m" data-t="genel">Genel</button>
-          <button class="ad-tab ad-tab--m" data-t="zimmet">Zimmet &amp; Konum</button>
           <button class="ad-tab" data-t="telemetri"><svg class="ad-tico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3v18h18"/><path d="m7 14 3-4 3 3 4-6"/></svg>Telemetri</button>
           <button class="ad-tab active" data-t="lifecycle"><svg class="ad-tico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>İşlem Geçmişi</button>
           <button class="ad-tab" data-t="maint"><svg class="ad-tico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14.7 6.3a4 4 0 0 1 5 5l-9.4 9.4a2 2 0 0 1-2.8-2.8z"/><path d="M9 5 5 9 2 6l3-3z"/></svg>Bakım Geçmişi</button>
@@ -2544,11 +2551,7 @@ async function openDeviceModal(asset) {
     if (grid) grid.dataset.mtab = t;
     const pane = $(`#adPane`);
     if (!pane) return;
-    /* 'genel'/'zimmet' mobil BÖLÜM sekmeleri — pane'e hiç dokunma. Boşaltmak
-       kırılgandı: telefondan geniş ekrana dönülünce (döndürme) pane boş kalıp
-       masaüstü düzeni yarım görünüyordu. Dokunmayınca pane her zaman dolu,
-       geri dönüş de anlık. */
-    if (t === 'genel' || t === 'zimmet') return;
+      if (t === 'genel' || t === 'zimmet') return;   // geriye dönük: artık kullanılmıyor
     pane.innerHTML = paneler[t]();
     if (t === 'lifecycle') loadDeviceHistory(a);
     $(`#adDocHandover`)?.addEventListener('click', () => printHandoverReceipt(a));
@@ -2561,14 +2564,39 @@ async function openDeviceModal(asset) {
     paneCiz(b.dataset.t);
   }));
 
-  /* Pane'i her zaman doldur (geniş ekranda alt bölüm boş kalmasın), sonra
-     telefonda 'Genel' sekmesini aç — kullanıcının ilk görmesi gereken bilgi.
-     Geniş ekranda 'Genel' zaten kolonda duruyor, orada 'İşlem Geçmişi' açılır. */
-  paneCiz('lifecycle');
-  if (window.matchMedia('(max-width: 760px)').matches) {
-    $$('.ad-tab').forEach(x => x.classList.toggle('active', x.dataset.t === 'genel'));
-    if (grid) grid.dataset.mtab = 'genel';
-  }
+  /* Telefonda ilk sekme Telemetri (tasarım böyle: cihazın anlık durumu önce
+     görünsün). Geniş ekranda da Telemetri ilk sekme. */
+  const ilkSekme = $(`.ad-tab[data-t="telemetri"]`) ? 'telemetri' : 'lifecycle';
+  $$('.ad-tab').forEach(x => x.classList.toggle('active', x.dataset.t === ilkSekme));
+  paneCiz(ilkSekme);
+
+  /* ── Telefon: bilgi kartları AKORDEON ──────────────────────────────────────
+     Telefonda Temel + Durum Bilgileri 19 satır tutuyor; hepsini açık bırakmak
+     asıl içeriği (telemetri) ekranın çok altına itiyordu. Tasarımda ikisi de
+     kapalı, Resmi Zimmet açık geliyor. Masaüstünde akordeon YOK — kartlar
+     kolonlarda zaten yan yana duruyor, gizlemenin anlamı olmaz. */
+  const telefon = window.matchMedia('(max-width: 760px)').matches;
+  body.querySelectorAll('.ad-sec--temel, .ad-sec--durum').forEach((kart) => {
+    if (telefon) kart.classList.add('ad-kapali');
+    const bas = kart.querySelector('.ad-card-h');
+    if (!bas) return;
+    bas.addEventListener('click', (e) => {
+      // Başlıktaki "Düzenle" düğmesi akordeonu tetiklemesin
+      if (e.target.closest('button.btn-pdf')) return;
+      if (!window.matchMedia('(max-width: 760px)').matches) return;
+      kart.classList.toggle('ad-kapali');
+    });
+  });
+
+  // Telefonda QR bloğu düğmeyle açılır (sürekli görünmesi yer harcıyordu)
+  $(`#adActLabel`)?.addEventListener('click', () => printAssetLabel(a));
+  $(`#adActQr`)?.addEventListener('click', () => {
+    const kutu = body.querySelector('.ad-qr');
+    if (kutu) {
+      kutu.classList.toggle('ad-qr--acik');
+      if (kutu.classList.contains('ad-qr--acik')) kutu.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  });
 
   loadDeviceAssignment(a);
   loadDeviceLocation(a);
