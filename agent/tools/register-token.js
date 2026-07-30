@@ -102,6 +102,21 @@ async function verifyAndConsume(token) {
   return { ok: true, jti: veri.jti, kalan: satir.max_uses - satir.uses - 1 };
 }
 
+/* Jetonla oluşan varlığı işaretle — panel "cihaz bağlandı mı?" diye
+   beklerken bunu okuyor. */
+async function recordAsset(jti, assetId) {
+  if (!jti || assetId == null) return;
+  await db()('register_tokens').where({ jti: String(jti) }).update({ last_asset_id: Number(assetId) });
+}
+
+/* Tek jetonun durumu (panel yoklaması). Jetonun KENDİSİ dönmez — yalnız
+   sayaçlar ve bağlanan varlığın kimliği. */
+async function status(jti) {
+  return db()('register_tokens')
+    .select('jti', 'expires_at', 'max_uses', 'uses', 'last_used_at', 'last_asset_id', 'revoked')
+    .where({ jti: String(jti) }).first() || null;
+}
+
 async function list() {
   return db()('register_tokens')
     .select('jti', 'created_at', 'created_by', 'expires_at', 'max_uses', 'uses', 'last_used_at', 'revoked')
@@ -118,4 +133,4 @@ async function pruneExpired() {
   return db()('register_tokens').where('expires_at', '<', new Date().toISOString()).del();
 }
 
-module.exports = { create, verifyAndConsume, list, revoke, pruneExpired, AZAMI_SAAT, AZAMI_KULLANIM };
+module.exports = { create, verifyAndConsume, recordAsset, status, list, revoke, pruneExpired, AZAMI_SAAT, AZAMI_KULLANIM };

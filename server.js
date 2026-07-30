@@ -536,6 +536,8 @@ app.post('/api/register', async (req, res) => {
     // QR kaydında lokasyon formdan BEYAN edilir → kaynak 'qr' olarak izlenir (token'lı
     // ajan kadar güvenilir değil ama geçmiş tutulmazsa süre eşiği hiç çalışmaz).
     await trackLocation(result.id, enriched, enriched.location, 'qr');
+    // Panel bu jetonu yokluyor: hangi cihazin bagland~igini buradan ogreniyor
+    await regToken.recordAsset(jeton.jti, result.id);
     res.json({ success: true, action, id: result.id, kalan_hak: jeton.kalan });
   } catch (err) {
     console.error('[POST /api/register]', err.message);
@@ -558,6 +560,24 @@ app.post('/api/register/token', requireRole('it', 'admin'), async (req, res) => 
     res.json(t);
   } catch (err) {
     res.status(500).json({ error: 'Jeton üretilemedi', detail: err.message });
+  }
+});
+
+/* Tek jetonun durumu — panel QR'i gosterirken 3 saniyede bir yokluyor.
+   Cihaz kaydolunca last_asset_id doluyor ve panel otomatik ilerliyor. */
+app.get('/api/register/tokens/:jti', requireRole('it', 'admin'), async (req, res) => {
+  try {
+    const regToken = require('./agent/tools/register-token');
+    const d = await regToken.status(req.params.jti);
+    if (!d) return res.status(404).json({ error: 'Jeton bulunamadı' });
+    let asset = null;
+    if (d.last_asset_id != null) {
+      const inv = await getAllAssets({ size: 200 });
+      asset = (inv.results || []).find(a => String(a.id) === String(d.last_asset_id)) || null;
+    }
+    res.json({ ...d, asset });
+  } catch (err) {
+    res.status(500).json({ error: 'Jeton durumu alınamadı', detail: err.message });
   }
 });
 

@@ -5200,7 +5200,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // QR ile Cihaz Ekle modalı
   const qrOverlay = $(`#qrModalOverlay`);
   $(`#openAddModal`)?.addEventListener('click', () => qrOverlay?.classList.add('open'));
-  $(`#closeQrModal`)?.addEventListener('click', () => qrOverlay?.classList.remove('open'));
+  $(`#closeQrModal`)?.addEventListener('click', () => { qrfDurdur(); qrOverlay?.classList.remove('open'); });
   qrOverlay?.addEventListener('click', (e) => { if (e.target === qrOverlay) qrOverlay.classList.remove('open'); });
 
   // Excel/CSV dışa aktarım
@@ -5310,18 +5310,137 @@ document.addEventListener('DOMContentLoaded', () => {
     reader.readAsText(file, 'utf-8');
   });
 
+  /* ═══ QR ile Kayıt akışı — form → bekleme → başarı ═════════════════════
+     Tasarım QR üretildikten sonra CANLI bekleme istiyor: cihaz kaydolunca
+     ekran kendiliğinden ilerliyor. Bunu jeton durumunu yoklayarak yapıyoruz
+     (/api/register/tokens/:jti). Sunucu jetonun hangi varlığı oluşturduğunu
+     tutuyor, panel de onu okuyup cihaz kartını çiziyor. */
+  let _qrfTimer = null;
+  let _qrfJeton = null;
+
+  function qrfDurdur() {
+    if (_qrfTimer) { clearInterval(_qrfTimer.sayac); clearInterval(_qrfTimer.yokla); _qrfTimer = null; }
+  }
+
+  function qrfDurum(ad) {
+    const goster = (id, v) => { const e = $(id); if (e) e.style.display = v; };
+    goster(`#qrfForm`, ad === 'form' ? '' : 'none');
+    goster(`#qrfWait`, ad === 'bekle' ? '' : 'none');
+    goster(`#qrfDone`, ad === 'bitti' ? '' : 'none');
+    goster(`#generateQr`, ad === 'form' ? '' : 'none');
+    goster(`#qrfCancel`, ad === 'bitti' ? 'none' : '');
+    goster(`#printQr`, ad === 'bekle' ? 'flex' : 'none');
+    goster(`#qrfContinue`, ad === 'bitti' ? '' : 'none');
+    goster(`#qrfAgain`, ad === 'bitti' ? '' : 'none');
+    const iptal = $(`#qrfCancel`);
+    if (iptal) iptal.textContent = ad === 'bekle' ? 'İptal Et' : 'İptal';
+  }
+
+  /* Bekleme adımları. Tasarımda "Aynı Ağ: Bağlı ✓" ve "Cihaz Açık: Kontrol
+     Ediliyor" vardı — sunucunun telefonun hangi ağda olduğunu ya da cihazın
+     açık olduğunu bilme yolu YOK. Uydurma onay koymak yerine ilk ikisi ÖN
+     KOŞUL olarak (nötr) gösteriliyor; yalnız sonuncusu gerçek durumu yansıtıyor. */
+  function qrfAdimlar(baglandi) {
+    const kutu = $(`#qrfSteps`);
+    if (!kutu) return;
+    const satir = (ad, durum, sinif) =>
+      `<div class="qrf-step ${sinif}"><span>${ad}</span><b>${durum}</b></div>`;
+    kutu.innerHTML =
+      satir('Aynı ağda olmalı', 'ön koşul', 'notr') +
+      satir('Cihaz açık olmalı', 'ön koşul', 'notr') +
+      satir('Cihaz kaydı', baglandi ? 'Tamamlandı' : 'Bekleniyor...', baglandi ? 'ok' : 'bekle');
+  }
+
+  function qrfSayac(bitis) {
+    const kalanMs = () => Math.max(0, new Date(bitis).getTime() - Date.now());
+    const toplam = kalanMs() || 1;
+    const yaz = () => {
+      const ms = kalanMs();
+      const sn = Math.floor(ms / 1000);
+      const el = $(`#qrfCountdown`);
+      if (el) {
+        el.textContent = sn >= 3600
+          ? `${Math.floor(sn / 3600)}s ${String(Math.floor((sn % 3600) / 60)).padStart(2, '0')}dk`
+          : `${String(Math.floor(sn / 60)).padStart(2, '0')}:${String(sn % 60).padStart(2, '0')}`;
+      }
+      const ring = $(`#qrfRing`);
+      if (ring) {
+        const c = 2 * Math.PI * 19;
+        ring.style.strokeDasharray = String(c);
+        ring.style.strokeDashoffset = String(c * (1 - ms / toplam));
+      }
+      if (ms <= 0) {
+        const t = $(`#qrfWaitTitle`);
+        if (t) t.textContent = 'QR süresi doldu';
+        qrfDurdur();
+      }
+    };
+    yaz();
+    return setInterval(yaz, 1000);
+  }
+
+  function qrfCihazKarti(a) {
+    const kutu = $(`#qrfDevice`);
+    if (!kutu || !a) return;
+    const satir = (k, v) => `<div class="ad-row"><span>${k}</span><b>${v}</b></div>`;
+    kutu.innerHTML = `
+      <div class="qrf-dev-head">
+        <div class="qrf-dev-ico">${katCizim(a.category)}</div>
+        <div>
+          <b>${fmt(a.hostname)}</b>
+          <small>${escapeHtml(a.serial_number || '')} · ${escapeHtml(a.category || 'Diğer')}</small>
+        </div>
+        ${statusBadge(a.status)}
+      </div>
+      ${satir('İşletim Sistemi', fmt(a.os))}
+      ${satir('IP Adresi', fmt(a.ip_address))}
+      ${satir('Lokasyon', escapeHtml((a.location || '').trim() || '—'))}
+      ${satir('Son Görülme', fmtDate(a.last_seen))}`;
+  }
+
+  async function qrfYokla() {
+    if (!_qrfJeton) return;
+    try {
+      const r = await fetch(`/api/register/tokens/${encodeURIComponent(_qrfJeton.jti)}`);
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d.asset) {
+        qrfDurdur();
+        qrfCihazKarti(d.asset);
+        qrfDurum('bitti');
+        loadAssets?.();           // envanter listesi tazelensin
+      }
+    } catch { /* ağ dalgalanması: bir sonraki turda yeniden dener */ }
+  }
+
+  $(`#qrfCancel`)?.addEventListener('click', () => {
+    qrfDurdur();
+    _qrfJeton = null;
+    qrfDurum('form');
+    $(`#qrModalOverlay`)?.classList.remove('open');
+  });
+
+  $(`#qrfContinue`)?.addEventListener('click', () => {
+    qrfDurdur(); _qrfJeton = null; qrfDurum('form');
+    $(`#qrModalOverlay`)?.classList.remove('open');
+  });
+
+  $(`#qrfAgain`)?.addEventListener('click', () => {
+    qrfDurdur(); _qrfJeton = null; qrfDurum('form');
+  });
+
   $(`#generateQr`)?.addEventListener('click', async () => {
     const btn = $(`#generateQr`);
     const uyari = $(`#qrTokenInfo`);
-    /* QR artik IMZALI JETON tasiyor. Jeton olmadan /api/register kayit kabul
-       etmiyor — aksi halde adresi bilen herkes envantere sahte cihaz ekler. */
+    /* QR IMZALI JETON tasiyor. Jeton olmadan /api/register kayit kabul etmiyor
+       — aksi halde adresi bilen herkes envantere sahte cihaz ekler. */
     let jeton;
     try {
-      if (btn) { btn.disabled = true; }
+      if (btn) btn.disabled = true;
       const r = await fetch('/api/register/token', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          hours: Number($(`#qrHours`)?.value) || 24,
+          hours: Number($(`#qrHours`)?.value) || 1,
           uses: Number($(`#qrUses`)?.value) || 1,
         }),
       });
@@ -5329,14 +5448,12 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!r.ok) throw new Error(j.detail || j.error || 'jeton üretilemedi');
       jeton = j;
     } catch (err) {
-      if (uyari) {
-        uyari.style.color = 'var(--red)';
-        uyari.textContent = 'QR üretilemedi: ' + err.message;
-      }
+      alert('QR üretilemedi: ' + err.message);
       if (btn) btn.disabled = false;
       return;
     }
     if (btn) btn.disabled = false;
+    _qrfJeton = jeton;
 
     // Mobil kayıt URL'sini bu tarayıcının origin'inden kur (aynı ağdaki telefon erişebilsin)
     const params = new URLSearchParams();
@@ -5349,20 +5466,23 @@ document.addEventListener('DOMContentLoaded', () => {
     params.set('t', jeton.token);
 
     const registerUrl = `${location.origin}/register?${params.toString()}`;
-    const qrSrc = `/api/qr?data=${encodeURIComponent(registerUrl)}`;
-
-    $(`#qrImg`).src = qrSrc;
+    $(`#qrImg`).src = `/api/qr?data=${encodeURIComponent(registerUrl)}`;
     $(`#qrLink`).textContent = registerUrl;
     $(`#qrLink`).href = registerUrl;
-    $(`#qrPlaceholder`).style.display = 'none';
-    $(`#qrBox`).style.display = 'flex';
-    $(`#printQr`).style.display = 'flex';
     if (uyari) {
-      uyari.style.color = 'var(--text-muted)';
       uyari.textContent = `Bu QR ${jeton.max_uses} cihaz için geçerli, ` +
-        `${fmtDate(jeton.expires_at)} tarihinde geçerliliği bitiyor. ` +
-        'Süresi dolunca yenisini üretin.';
+        `${fmtDate(jeton.expires_at)} tarihine kadar. Süresi dolunca yenisini üretin.`;
     }
+
+    qrfAdimlar(false);
+    qrfDurum('bekle');
+    qrfDurdur();
+    _qrfTimer = {
+      sayac: qrfSayac(jeton.expires_at),
+      // 3 saniye: cihaz kaydolunca ekran gecikmeden ilerlesin, ama sunucuyu
+      // gereksiz yormasın. QR süresi dolunca sayaç zaten durduruyor.
+      yokla: setInterval(qrfYokla, 3000),
+    };
   });
 
   $(`#printQr`)?.addEventListener('click', () => {

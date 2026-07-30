@@ -1659,82 +1659,162 @@
   <div class="modal-overlay" id="qrModalOverlay">
     <div class="modal">
       <div class="modal-header">
-        <h3>Cihaz Ekle</h3>
+        <h3>Yeni Varlık Ekle</h3>
         <button class="btn-icon" id="closeQrModal">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
       <div class="modal-tabs">
-        <button class="modal-tab active" data-tab="qr">QR ile (cihaz açıkken)</button>
+        <button class="modal-tab active" data-tab="qr">QR ile Kayıt</button>
         <button class="modal-tab" data-tab="bulk">Toplu Depo Kaydı</button>
       </div>
 
-      <!-- QR Tab -->
+      <!-- QR Tab — üç durum: form / bekleme / başarı (tasarım referansı) -->
       <div class="modal-body modal-tabpane" id="tab-qr">
-        <p class="modal-desc">İsteğe bağlı ortak bilgileri doldurun, QR üretin. Çalışan telefonuyla QR'ı okutup cihazını kaydetsin. Telefon/tablet bilgisayar ile <strong>aynı ağda</strong> olmalı.</p>
 
-        <div class="qr-prefill">
-          <div class="field-sm">
-            <label>Kategori</label>
-            <select id="qrCategory" class="select-sm">
-              <option value="">Cihazda seçilsin</option>
-              <option value="Telefon">📱 Telefon</option>
-              <option value="Tablet">📲 Tablet</option>
-              <option value="El Terminali">📟 El Terminali</option>
-              <option value="Yazıcı">🖨️ Yazıcı</option>
-              <option value="Ağ Aygıtı">🌐 Ağ Aygıtı</option>
-              <option value="Çevre Aygıtı">🖱️ Çevre Aygıtı</option>
-            </select>
+        <!-- ── 1) FORM ── -->
+        <div id="qrfForm">
+          <div class="qrf-info">
+            <span class="qrf-info-i">i</span>
+            <div>
+              <b>QR ile hızlı kayıt</b>
+              <p>Cihaz açık olmalı ve telefon/tablet ile <strong>aynı ağda</strong> bulunmalıdır.</p>
+            </div>
           </div>
-          <div class="field-sm">
-            <label>Lokasyon</label>
-            <input type="text" id="qrLocation" class="select-sm" placeholder="Örn: Depo" />
+
+          <div class="qr-prefill">
+            <div class="field-sm">
+              <label>Kategori</label>
+              <select id="qrCategory" class="select-sm">
+                <option value="">Cihazda seçilsin</option>
+                <option value="Telefon">📱 Telefon</option>
+                <option value="Tablet">📲 Tablet</option>
+                <option value="El Terminali">📟 El Terminali</option>
+                <option value="Yazıcı">🖨️ Yazıcı</option>
+                <option value="Ağ Aygıtı">🌐 Ağ Aygıtı</option>
+                <option value="Çevre Aygıtı">🖱️ Çevre Aygıtı</option>
+              </select>
+            </div>
+            <div class="field-sm">
+              <label>Lokasyon</label>
+              <input type="text" id="qrLocation" class="select-sm" placeholder="Örn: Depo" />
+            </div>
+            <div class="field-sm">
+              <label>Kullanıcı</label>
+              <input type="text" id="qrUsername" class="select-sm" placeholder="Örn: ahmet.yilmaz" />
+            </div>
           </div>
-          <div class="field-sm">
-            <label>Kullanıcı</label>
-            <input type="text" id="qrUsername" class="select-sm" placeholder="Örn: ahmet.yilmaz" />
+
+          <!-- QR imzalı jeton taşıyor: kaç cihaz ve ne kadar süre geçerli olacağı
+               yöneticiye bırakıldı. Tek telefon için 1 kullanım / kısa süre;
+               depoya asılan basılı QR için çok kullanım / uzun süre. -->
+          <div class="qr-prefill">
+            <div class="field-sm">
+              <label>Kaç cihaz kaydedilebilir</label>
+              <select id="qrUses" class="select-sm">
+                <option value="1" selected>1 cihaz (tek kullanım)</option>
+                <option value="5">5 cihaz</option>
+                <option value="25">25 cihaz</option>
+              </select>
+            </div>
+            <div class="field-sm">
+              <label>Geçerlilik süresi</label>
+              <select id="qrHours" class="select-sm">
+                <option value="1" selected>1 saat</option>
+                <option value="24">1 gün</option>
+                <option value="168">7 gün</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="qrf-help">
+            <h4><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Nasıl çalışır?</h4>
+            <ol>
+              <li>QR kodu oluşturun.</li>
+              <li>Cihazda kamerayla QR'ı okutun veya kayıt adresini açın.</li>
+              <li>Formu doldurun, kayıt otomatik tamamlanır.</li>
+            </ol>
+          </div>
+
+          <div class="qr-display" id="qrDisplay">
+            <div class="qr-placeholder" id="qrPlaceholder">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><line x1="14" y1="14" x2="14" y2="14"/><line x1="21" y1="21" x2="21" y2="21"/><line x1="17" y1="17" x2="17" y2="17"/></svg>
+              <span>QR henüz oluşturulmadı</span>
+              <small>Formu doldurun ve “QR Oluştur” düğmesine basın.</small>
+            </div>
+          </div>
+
+          <!-- Bu iki kutu ÖN KOŞUL hatırlatması; sistem bunları doğrulayamaz.
+               Tasarımda yeşil onay vardı — sunucunun telefonun hangi ağda
+               olduğunu veya cihazın açık olduğunu bilme yolu yok, onay
+               işareti koymak uydurma olurdu. -->
+          <div class="qrf-req">
+            <div><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1"/></svg>
+              <b>Aynı Ağ</b><small>Cihaz ve bu bilgisayar aynı ağda olmalı.</small></div>
+            <div><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg>
+              <b>Cihaz Açık</b><small>Cihazın açık olduğundan emin olun.</small></div>
           </div>
         </div>
 
-        <!-- QR artık imzalı jeton taşıyor: kaç cihaz ve ne kadar süre geçerli
-             olacağı yöneticiye bırakıldı. Tek telefon için 1 kullanım / kısa
-             süre; depoya asılan basılı QR için çok kullanım / uzun süre. -->
-        <div class="qr-prefill">
-          <div class="field-sm">
-            <label>Kaç cihaz kaydedilebilir</label>
-            <select id="qrUses" class="select-sm">
-              <option value="1" selected>1 cihaz (tek kullanım)</option>
-              <option value="5">5 cihaz</option>
-              <option value="25">25 cihaz</option>
-            </select>
+        <!-- ── 2) BEKLEME ── -->
+        <div id="qrfWait" style="display:none;">
+          <div class="qrf-ok">
+            <span class="qrf-dot"></span>
+            <div><b>QR kodu oluşturuldu</b><p>Cihazdan okutarak kaydı tamamlayın.</p></div>
           </div>
-          <div class="field-sm">
-            <label>Geçerlilik süresi</label>
-            <select id="qrHours" class="select-sm">
-              <option value="1">1 saat</option>
-              <option value="24" selected>1 gün</option>
-              <option value="168">7 gün</option>
-            </select>
-          </div>
-        </div>
-        <p class="qr-note" id="qrTokenInfo"></p>
 
-        <div class="qr-display" id="qrDisplay">
-          <div class="qr-placeholder" id="qrPlaceholder">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><line x1="14" y1="14" x2="14" y2="14"/><line x1="21" y1="21" x2="21" y2="21"/><line x1="17" y1="17" x2="17" y2="17"/></svg>
-            <span>QR henüz üretilmedi</span>
+          <div class="qrf-card">
+            <h4><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>QR Kod</h4>
+            <div class="qr-box" id="qrBox">
+              <img id="qrImg" alt="Cihaz kayıt QR kodu" />
+              <a class="qr-link" id="qrLink" href="#" target="_blank"></a>
+            </div>
           </div>
-          <div class="qr-box" id="qrBox" style="display:none;">
-            <img id="qrImg" alt="Cihaz kayıt QR kodu" />
-            <a class="qr-link" id="qrLink" href="#" target="_blank"></a>
+
+          <div class="qrf-card qrf-timer">
+            <div>
+              <b id="qrfWaitTitle">Bekleniyor...</b>
+              <p>Cihaz kaydı tamamlandığında bu ekran otomatik ilerler.</p>
+            </div>
+            <div class="qrf-ring">
+              <svg viewBox="0 0 44 44"><circle class="qrf-ring-bg" cx="22" cy="22" r="19"/><circle class="qrf-ring-f" id="qrfRing" cx="22" cy="22" r="19"/></svg>
+              <span id="qrfCountdown">--:--</span>
+            </div>
           </div>
+
+          <div class="qrf-steps" id="qrfSteps"></div>
+
+          <div class="qrf-help qrf-help--warn">
+            <h4>Bağlanamıyor musunuz?</h4>
+            <ul>
+              <li>Cihazın açık ve ağa bağlı olduğundan emin olun.</li>
+              <li>Telefonun bu bilgisayarla aynı ağda olduğunu kontrol edin.</li>
+              <li>Güvenlik duvarı veya VPN bağlantısını kontrol edin.</li>
+              <li>QR'ın süresi dolduysa yenisini üretin.</li>
+            </ul>
+          </div>
+          <p class="qr-note" id="qrTokenInfo"></p>
         </div>
-        <div class="modal-footer">
-          <button class="btn-report" id="generateQr">QR Üret</button>
+
+        <!-- ── 3) BAŞARI ── -->
+        <div id="qrfDone" style="display:none;">
+          <div class="qrf-done-head">
+            <span class="qrf-check"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg></span>
+            <b>Cihaz Bağlandı!</b>
+            <small>Aşağıdaki cihaz envantere kaydedildi.</small>
+          </div>
+          <div class="qrf-card" id="qrfDevice"></div>
+        </div>
+
+        <div class="modal-footer" id="qrfFooter">
+          <button class="btn-pdf" id="qrfCancel">İptal</button>
+          <button class="btn-report" id="generateQr">QR Oluştur</button>
           <button class="btn-pdf" id="printQr" style="display:none;">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 6,2 18,2 18,9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
             Yazdır
           </button>
+          <button class="btn-report" id="qrfContinue" style="display:none;">Devam Et</button>
+          <button class="btn-pdf" id="qrfAgain" style="display:none;">Başka Cihaz Ekle</button>
         </div>
       </div>
 

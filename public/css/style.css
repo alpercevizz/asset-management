@@ -2547,3 +2547,97 @@ body.tv-mode:not(.tv-full) .assets-rail .sev-count {
 /* QR jeton bilgisi: kaç cihaz / ne zamana kadar geçerli. Kullanıcı QR'ın
    ömürlü olduğunu bilmezse süresi dolan kodla uğraşır. */
 .qr-note { font-size: 12px; line-height: 1.6; color: var(--text-muted); margin-top: 10px; }
+
+/* ══ YENİ VARLIK EKLE · QR AKIŞI ═════════════════════════════════════════════
+   Üç durum: form → bekleme (canlı) → başarı. Tasarım mobil önce çizildi;
+   kartlar tam genişlik, düğmeler altta sabit. */
+.qrf-info, .qrf-ok {
+  display: flex; gap: 12px; align-items: flex-start;
+  border-radius: 12px; padding: 13px 14px; margin-bottom: 16px;
+}
+.qrf-info { background: var(--accent-glow); border: 1px solid var(--border); }
+.qrf-ok { background: rgba(16,185,129,.10); border: 1px solid rgba(16,185,129,.28); }
+.qrf-info-i {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  background: var(--accent); color: #fff; font-size: 12px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; font-style: italic;
+}
+.qrf-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--green); flex-shrink: 0; margin-top: 4px; }
+.qrf-info b, .qrf-ok b { display: block; font-size: 13.5px; margin-bottom: 3px; }
+.qrf-info p, .qrf-ok p { font-size: 12.5px; line-height: 1.55; color: var(--text-dim); }
+
+.qrf-help {
+  border: 1px solid var(--border); border-radius: 12px; padding: 13px 15px;
+  margin: 16px 0; background: var(--bg-card2);
+}
+.qrf-help h4 { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 700; margin-bottom: 9px; }
+.qrf-help ol, .qrf-help ul { margin: 0; padding-left: 20px; }
+.qrf-help li { font-size: 12.5px; line-height: 1.75; color: var(--text-dim); }
+.qrf-help--warn { border-color: var(--border-strong); }
+
+/* Ön koşul kutuları — DOĞRULANMIŞ durum değil, hatırlatma. Sunucu telefonun
+   hangi ağda olduğunu bilemez; yeşil onay koymak uydurma olurdu. */
+.qrf-req { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.qrf-req > div {
+  border: 1px dashed var(--border-strong); border-radius: 12px; padding: 12px;
+  display: flex; flex-direction: column; gap: 4px; color: var(--text-muted);
+}
+.qrf-req b { font-size: 12.5px; color: var(--text); }
+.qrf-req small { font-size: 11.5px; line-height: 1.5; }
+
+.qrf-card { border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+.qrf-card h4 { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 700; margin-bottom: 11px; }
+
+.qrf-timer { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.qrf-timer b { display: block; font-size: 13.5px; margin-bottom: 3px; }
+.qrf-timer p { font-size: 12px; line-height: 1.5; color: var(--text-muted); }
+.qrf-ring { position: relative; width: 62px; height: 62px; flex-shrink: 0; }
+.qrf-ring svg { width: 62px; height: 62px; transform: rotate(-90deg); }
+.qrf-ring circle { fill: none; stroke-width: 3.5; }
+.qrf-ring-bg { stroke: var(--border); }
+.qrf-ring-f { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset .9s linear; }
+.qrf-ring span {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+
+.qrf-steps { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.qrf-step {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  border: 1px solid var(--border); border-radius: 11px; padding: 11px 14px; font-size: 13px;
+}
+.qrf-step b { font-size: 12.5px; font-weight: 600; }
+.qrf-step.notr b { color: var(--text-muted); font-style: italic; font-weight: 500; }
+.qrf-step.bekle b { color: var(--orange); }
+.qrf-step.ok { border-color: rgba(16,185,129,.35); }
+.qrf-step.ok b { color: var(--green); }
+
+.qrf-done-head { text-align: center; padding: 16px 0 20px; }
+.qrf-check {
+  width: 66px; height: 66px; border-radius: 50%; margin: 0 auto 14px;
+  background: rgba(16,185,129,.13); color: var(--green);
+  display: flex; align-items: center; justify-content: center;
+}
+.qrf-done-head b { display: block; font-size: 18px; font-weight: 800; letter-spacing: -.02em; }
+.qrf-done-head small { display: block; font-size: 12.5px; color: var(--text-muted); margin-top: 5px; }
+
+.qrf-dev-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.qrf-dev-ico {
+  width: 52px; height: 52px; border-radius: 12px; flex-shrink: 0; color: var(--accent);
+  background: var(--bg-card2); display: flex; align-items: center; justify-content: center;
+}
+.qrf-dev-ico svg { width: 30px; height: 30px; }
+.qrf-dev-head > div { min-width: 0; flex: 1; }
+.qrf-dev-head b { display: block; font-size: 14.5px; overflow-wrap: anywhere; }
+.qrf-dev-head small { display: block; font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+
+/* ── Telefon: modal tam ekrana yakın, düğmeler altta ── */
+@media (max-width: 760px) {
+  #qrModalOverlay .modal { max-width: 100%; }
+  #qrModalOverlay .modal-body { padding: 16px; }
+  .qr-prefill { grid-template-columns: 1fr; }
+  .qrf-req { grid-template-columns: 1fr; }
+  #qrfFooter { flex-wrap: wrap; }
+  #qrfFooter button { flex: 1 1 46%; justify-content: center; }
+  .qrf-timer { flex-direction: row; }
+}
