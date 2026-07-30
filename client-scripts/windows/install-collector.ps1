@@ -53,7 +53,8 @@ if ($Uninstall) {
 # Sunucu WEBHOOK_AUTH=required ile calisiyorsa imzasiz istek reddedilir.
 # Anahtarsiz kurulum, her saat sessizce 401 alan bir gorev birakirdi.
 $zatenKayitli = Test-Path (Join-Path $InstallDir "device.json")
-if (-not $AgentKey -and -not $zatenKayitli) {
+$anahtarVar   = Test-Path (Join-Path $InstallDir "agent.key")
+if (-not $AgentKey -and -not $zatenKayitli -and -not $anahtarVar) {
     Write-Warning "-AgentKey verilmedi ve bu cihaz henuz kayitli degil."
     Write-Warning "Sunucudaki AGENT_SECRET degerini kullanin (data/secrets.json veya .env)."
     Write-Warning "Sunucuda WEBHOOK_AUTH=off degilse collector 401 alacaktir."
@@ -84,7 +85,14 @@ $argListesi = @(
     "-StateFile", "`"$InstallDir\device.json`""
 )
 if ($LicenseUrl) { $argListesi += @("-LicenseUrl", "`"$LicenseUrl`"") }
-if ($AgentKey)   { $argListesi += @("-AgentKey", "`"$AgentKey`"") }
+# Anahtar gorev argumanina KONMAZ — gorev tanimini okuyabilen herkes gorurdu.
+# Kilitli dosyaya yazilir, collector oradan okur.
+if ($AgentKey) {
+    $anahtarDosya = Join-Path $InstallDir "agent.key"
+    Set-Content -Path $anahtarDosya -Value $AgentKey -Encoding ascii -NoNewline
+    icacls $anahtarDosya /inheritance:r /grant "SYSTEM:F" /grant "Administrators:F" | Out-Null
+    Write-Host "[+] Paylasilan anahtar kilitli dosyaya yazildi (yalniz SYSTEM+Administrators)"
+}
 
 $eylem = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
                                  -Argument ($argListesi -join ' ')

@@ -1475,6 +1475,28 @@
 
         <div class="card">
           <div class="card-header">
+            <h3>Toplama Ajanları (Collector)</h3>
+            <span class="link-small" id="agentMode">yükleniyor…</span>
+          </div>
+          <div class="chart-container">
+            <p style="font-size:12.5px;color:var(--text-muted);line-height:1.7;margin-bottom:12px">
+              Her cihaz ilk bağlantıda paylaşılan anahtarla kaydolur ve kendine özel bir sır alır.
+              Sonrasında paylaşılan anahtar o cihaz için <strong>kabul edilmez</strong> — anahtarı ele
+              geçiren biri kayıtlı bir cihazı taklit edemez.
+              Cihaz yeniden kurulduğunda sırrı kaybolur; kaydı buradan silin, cihaz temiz bir kayıt açsın.
+              Cihaz sırları burada <strong>gösterilmez</strong> ve sunucudan hiç dışarı verilmez.
+            </p>
+            <div class="table-wrap">
+              <table class="asset-table">
+                <thead><tr><th>Cihaz Kimliği</th><th>Varlık</th><th>Agent</th><th>Kayıt</th><th>Son Görülme</th><th></th></tr></thead>
+                <tbody id="agentBody"><tr><td colspan="6" class="loading-cell">Yükleniyor...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
             <h3>Cihaz Model Görselleri</h3>
             <span class="link-small">Görsel modele bağlanır — o modeldeki tüm cihazlarda görünür</span>
           </div>

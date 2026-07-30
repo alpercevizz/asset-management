@@ -10,6 +10,10 @@ param(
     # Sunucudaki AGENT_SECRET ile ayni PAYLASILAN anahtar. Yalnizca ILK
     # baglantida (kayit/enrollment) kullanilir; sonrasinda cihaza ozel sir gecer.
     [string]$AgentKey      = "",
+    # Paylasilan anahtarin dosyadan okundugu yol. Komut satirinda anahtar
+    # tasimak, gorev tanimini okuyabilen HERKESE anahtari gosterir; dosya
+    # SYSTEM+Administrators'a kilitlenebiliyor.
+    [string]$AgentKeyFile  = "$env:ProgramData\AssetMangent.key",
     # Cihaza ozel sirrin saklandigi dosya. ProgramData bilincli: kullanici
     # profilinden bagimsiz, SYSTEM yazabiliyor.
     [string]$StateFile     = "$env:ProgramData\AssetMan\device.json"
@@ -318,6 +322,12 @@ try {
 
     # Cihaza ozel sir varsa ONU kullan; yoksa paylasilan anahtarla kaydol.
     # Kayitli cihaz icin sunucu paylasilan anahtari BILEREK reddeder.
+    # -AgentKey verilmediyse korumali dosyadan oku
+    if (-not $AgentKey -and (Test-Path $AgentKeyFile)) {
+        try { $AgentKey = (Get-Content $AgentKeyFile -Raw).Trim() }
+        catch { Write-Log "Anahtar dosyasi okunamadi ($AgentKeyFile): $($_.Exception.Message)" "WARN" }
+    }
+
     if ($state -and $state.secret) {
         $signingKey = $state.secret
         $deviceId   = $state.device_id
@@ -327,7 +337,7 @@ try {
         $deviceId   = $machineId
         Write-Log "Imzalama: paylasilan anahtar (ilk kayit yapilacak)"
     } else {
-        throw "Imzalama anahtari yok. -AgentKey verin (sunucudaki AGENT_SECRET) veya cihaz $StateFile ile kayitli olsun."
+        throw "Imzalama anahtari yok. -AgentKey verin, $AgentKeyFile dosyasina yazin (sunucudaki AGENT_SECRET) veya cihaz $StateFile ile kayitli olsun."
     }
 
     $uri     = [Uri]$WebhookUrl

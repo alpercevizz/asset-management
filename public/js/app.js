@@ -1537,6 +1537,68 @@ function renderLocationChart(assets) {
 
 
 
+
+/* ═══ Toplama Ajanları (Ayarlar · admin) ══════════════════════════════════
+   Cihaz sırları BURADA GÖSTERİLMEZ — sunucu zaten listede döndürmüyor.
+   Ekranın asıl işi: hangi cihaz kayıtlı, en son ne zaman rapor verdi ve
+   yeniden kurulan bir makinenin kaydını sıfırlayabilmek. */
+async function loadAgents() {
+  const body = $(`#agentBody`);
+  const mod = $(`#agentMode`);
+  if (!body) return;
+  try {
+    const r = await fetch('/api/agents');
+    if (r.status === 403) { body.innerHTML = '<tr><td colspan="6" class="loading-cell">Bu bölüm yalnız yöneticilere açık.</td></tr>'; return; }
+    const j = await r.json();
+
+    if (mod) {
+      const zorunlu = j.mode === 'required';
+      mod.innerHTML = zorunlu
+        ? '<span style="color:var(--green)">Kimlik doğrulama: zorunlu</span>'
+        : `<span style="color:var(--red)">Kimlik doğrulama: ${escapeHtml(j.mode)} — imzasız istek kabul ediliyor</span>`;
+    }
+
+    const rows = j.results || [];
+    if (!rows.length) {
+      body.innerHTML = `<tr><td colspan="6" class="loading-cell">
+        Henüz kayıtlı ajan yok. Kurulum: <code>docs/COLLECTOR-KURULUM.md</code></td></tr>`;
+      return;
+    }
+    body.innerHTML = rows.map((a) => {
+      // 24 saatten uzun süredir rapor gelmiyorsa dikkat çek — ajan durmuş olabilir
+      const t = Date.parse(a.last_seen_at);
+      const bayat = !Number.isNaN(t) && (Date.now() - t) > 24 * 3600 * 1000;
+      return `<tr>
+        <td class="hostname-cell"><span class="serial-cell">${escapeHtml(a.device_id)}</span></td>
+        <td>${a.asset_id ? '#' + a.asset_id : '<span style="color:var(--text-muted)">—</span>'}</td>
+        <td>${a.agent_version ? escapeHtml(a.agent_version) : '<span style="color:var(--text-muted)">—</span>'}</td>
+        <td>${fmtDate(a.enrolled_at)}</td>
+        <td${bayat ? ' style="color:var(--red)"' : ''}>${a.last_seen_at ? gecenSure(a.last_seen_at) : '—'}${bayat ? ' ⚠' : ''}</td>
+        <td style="text-align:right"><button class="btn-pdf" data-agentdel="${escapeHtml(a.device_id)}" style="color:var(--red)">Kaydı sıfırla</button></td>
+      </tr>`;
+    }).join('');
+
+    body.querySelectorAll('[data-agentdel]').forEach((b) =>
+      b.addEventListener('click', () => agentRevoke(b.dataset.agentdel)));
+  } catch (err) {
+    body.innerHTML = `<tr><td colspan="6" class="loading-cell" style="color:var(--red)">${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+async function agentRevoke(deviceId) {
+  if (!confirm(`"${deviceId}" cihazının kaydı silinsin mi?
+
+` +
+    'Cihaz bir sonraki bağlantısında paylaşılan anahtarla YENİDEN kaydolur. ' +
+    'Yalnızca yeniden kurulan makineler için kullanın — kayıt silinmiş bir cihazı ' +
+    'ele geçiren biri onun adına rapor gönderebilir.')) return;
+  try {
+    const r = await fetch('/api/agents/' + encodeURIComponent(deviceId), { method: 'DELETE' });
+    if (!r.ok) throw new Error((await r.json()).detail || 'silinemedi');
+    loadAgents();
+  } catch (err) { alert('Silinemedi: ' + err.message); }
+}
+
 /* ═══ Cihaz model görselleri (Ayarlar) ════════════════════════════════════
    Görsel MODELE bağlanır. Dosya tarayıcıda base64'e çevrilip JSON ile gönderilir
    (multipart bağımlılığı eklemeye gerek kalmadı); sunucu tür ve boyut doğrular.
@@ -1610,6 +1672,7 @@ async function imageUpload(file) {
     if (!r.ok) throw new Error(j.detail || j.error);
     if (msg) { msg.style.color = 'var(--green)'; msg.textContent = '✓ Görsel yüklendi'; setTimeout(() => msg.textContent = '', 3000); }
     loadImageTable();
+    loadAgents();
   } catch (err) {
     if (msg) { msg.style.color = 'var(--red)'; msg.textContent = 'Hata: ' + err.message; }
   } finally { _imgHedef = null; }
@@ -1621,6 +1684,7 @@ async function imageDelete(id) {
     const r = await fetch('/api/device-images/' + id, { method: 'DELETE' });
     if (!r.ok) throw new Error((await r.json()).detail || 'silinemedi');
     loadImageTable();
+    loadAgents();
   } catch (err) { alert('Silinemedi: ' + err.message); }
 }
 
@@ -1681,6 +1745,7 @@ async function geoSave(location, lat, lon, label) {
     state.locGeo = null;                      // önbelleği düşür → harita tazelensin
     loadGeoTable();
     loadImageTable();
+    loadAgents();
   } catch (err) { alert('Kaydedilemedi: ' + err.message); }
 }
 
@@ -1692,6 +1757,7 @@ async function geoDelete(location) {
     state.locGeo = null;
     loadGeoTable();
     loadImageTable();
+    loadAgents();
   } catch (err) { alert('Silinemedi: ' + err.message); }
 }
 
@@ -1710,6 +1776,7 @@ async function geoSeed() {
     state.locGeo = null;
     loadGeoTable();
     loadImageTable();
+    loadAgents();
   } catch (err) { if (msg) { msg.style.color = 'var(--red)'; msg.textContent = 'Hata: ' + err.message; } }
 }
 
@@ -2073,6 +2140,7 @@ async function loadSettings() {
     loadLocationSetup(data.system || {});
     loadGeoTable();
     loadImageTable();
+    loadAgents();
   } catch (err) {
     $(`#systemStatusBody`).innerHTML = `<tr><td colspan="2" class="loading-cell" style="color:var(--red)">${escapeHtml(err.message)}</td></tr>`;
   }

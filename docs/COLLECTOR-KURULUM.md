@@ -98,11 +98,15 @@ Computer Configuration
   -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "\\dc01\NETLOGON\AssetMan\collect-assets.ps1" -WebhookUrl "https://envanter.alperceviz.com/api/webhook" -LogFile "C:\ProgramData\AssetMan\collector.log" -StateFile "C:\ProgramData\AssetMan\device.json" -AgentKey "<AGENT_SECRET>"
   ```
 
-  > `-AgentKey` yalnız **ilk kayıt** için gerekli; cihaz kaydolduktan sonra
-  > kendi sırrıyla imzalar ve bu anahtar o cihaz için geçersizleşir. Yine de
-  > GPO argümanında duracağı için: bu anahtar makinede oturum açan herkesçe
-  > görülebilir (görev tanımı okunabilir). Kabul edilen risk — ele geçiren kişi
-  > **kayıtlı** cihazları taklit edemez, yalnız yeni kayıt açabilir.
+  > **Anahtarı GPO argümanına KOYMAYIN.** Görev tanımını okuyabilen herkes
+  > görür. Bunun yerine anahtarı makinelere kilitli bir dosya olarak dağıtın:
+  > `C:\ProgramData\AssetMangent.key` (yalnız SYSTEM + Administrators
+  > okuyabilsin). Collector `-AgentKey` verilmediğinde bu dosyadan okur.
+  > Dosyayı GPO ile dağıtmak için: Computer Configuration → Preferences →
+  > Windows Settings → Files.
+  >
+  > Anahtar yalnız **ilk kayıt** için gerekli; cihaz kaydolduktan sonra kendi
+  > sırrıyla imzalar ve paylaşılan anahtar o cihaz için geçersizleşir.
 - **Triggers**: At startup (5 dk gecikme) + Daily, repeat every 1 hour
 - **Settings**: ✅ Start only if network available, ✅ Run as soon as possible
   after a scheduled start is missed, ⏱ Stop if runs longer than 10 minutes
@@ -198,8 +202,10 @@ anlamsız olurdu. Yönetici kaydı silince cihaz temiz bir kayıt açar:
 curl -X DELETE https://envanter.alperceviz.com/api/agents/<device_id> -b "am_session=..."
 ```
 
-Kayıtları listelemek için (yalnız admin): `GET /api/agents`. Cihaz sırları
-listede **asla** yer almaz.
+Panelden: **Ayarlar → Toplama Ajanları**. Hangi cihaz kayıtlı, hangi agent
+sürümü, en son ne zaman rapor verdiği görünür; 24 saatten uzun süredir sessiz
+kalan ajanlar kırmızı işaretlenir. "Kaydı sıfırla" düğmesi yeniden kurulan
+makineler içindir. Cihaz sırları ne ekranda ne API yanıtında yer alır.
 
 ### Modlar (`WEBHOOK_AUTH`)
 
