@@ -3042,38 +3042,127 @@ body.tv-mode .blk-onay-kutu { display: block; }
   .lf-pager { justify-content: space-between; }
 }
 
-/* ══ HAT EKLE MODALI ═════════════════════════════════════════════════════════ */
-.hat-modal { max-width: 620px; }
-.hm-h { display: flex; align-items: center; gap: 12px; min-width: 0; }
+/* ══ HAT EKLE MODALI ═════════════════════════════════════════════════════════
+   İki kolon: solda form, sağda CANLI önizleme. Önizleme formdaki değerlerle
+   anlık dolar — kaydetmeden önce ne oluşacağını göstermek, "kaydettim ama
+   beklediğim gibi olmadı" turunu ortadan kaldırıyor. */
+.hat-modal { max-width: 1180px; width: 100%; }
+.hm-bas { padding: 22px 26px; align-items: flex-start; }
+.hm-h { display: flex; align-items: center; gap: 15px; min-width: 0; }
 .hm-ico {
-  width: 38px; height: 38px; border-radius: 11px; flex-shrink: 0; color: var(--accent);
-  background: var(--accent-glow); display: flex; align-items: center; justify-content: center;
+  width: 50px; height: 50px; border-radius: 14px; flex-shrink: 0; color: #fff;
+  background: var(--accent); display: flex; align-items: center; justify-content: center;
 }
-.hm-h h3 { margin-bottom: 2px; }
-.hm-h .modal-desc { margin: 0; font-size: 12.5px; }
+.hm-h h3 { font-size: 24px; font-weight: 800; letter-spacing: -.02em; margin-bottom: 3px; }
+.hm-h .modal-desc { margin: 0; font-size: 13.5px; }
+.hm-kapat { width: 38px; height: 38px; border-radius: 11px; }
 
-.hm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.hm-tam { grid-column: 1 / -1; }
-.hm-grid .blk-f { margin-bottom: 0; }
+.hm-govde { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 0; padding: 0; }
+.hm-form { padding: 24px 26px 26px; min-width: 0; }
+.hm-onizleme { padding: 24px 26px 26px; border-left: 1px solid var(--border); min-width: 0; }
 
-.hm-ipucu { font-size: 11.5px; line-height: 1.5; color: var(--text-muted); margin-top: 6px; min-height: 16px; }
+/* Etiketler tasarımdaki gibi VERSAL ve harf aralıklı */
+.hm-f { margin-bottom: 18px; }
+.hm-f > label {
+  display: flex; align-items: center; gap: 7px; margin-bottom: 9px;
+  font-size: 11.5px; font-weight: 700; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--text-dim);
+}
+.hm-i {
+  width: 15px; height: 15px; border-radius: 50%; flex-shrink: 0; cursor: help;
+  font-style: normal; font-size: 10px; font-weight: 700; text-transform: none;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-card2); border: 1px solid var(--border-strong); color: var(--text-muted);
+}
+
+/* Alan kutusu: solda ikon karesi, ortada girdi, sağda isteğe bağlı düğme */
+.hm-alan {
+  display: flex; align-items: center; gap: 12px; padding: 9px 12px;
+  border: 1px solid var(--border); border-radius: 13px; background: var(--bg-card2);
+}
+.hm-alan:focus-within { border-color: var(--accent); }
+.hm-alan-ico {
+  width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0; color: var(--accent);
+  background: var(--accent-glow); display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700;
+}
+.hm-alan input, .hm-alan select {
+  flex: 1; min-width: 0; border: none; background: none; outline: none;
+  font-family: inherit; font-size: 16px; color: var(--text); padding: 6px 0;
+}
+.hm-alan select { cursor: pointer; appearance: none; }
+.hm-alan input::placeholder { color: var(--text-muted); }
+.hm-alan-btn {
+  width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: 1px solid var(--border); color: var(--text-muted);
+}
+.hm-alan-btn:hover { color: var(--accent); border-color: var(--accent); }
+/* Açılır alanlarda sağda ok — native select oku gizlendiği için elle çizilir */
+.hm-alan--sec { position: relative; padding-right: 40px; }
+.hm-alan--sec::after {
+  content: ""; position: absolute; right: 16px; top: 50%; width: 9px; height: 9px;
+  border-right: 2px solid var(--text-muted); border-bottom: 2px solid var(--text-muted);
+  transform: translateY(-70%) rotate(45deg); pointer-events: none;
+}
+.hm-alan--sec .hm-alan-btn { margin-right: 6px; }
+.hm-nokta { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; margin-left: 4px; }
+
+.hm-ikili { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.hm-ipucu { font-size: 11.5px; line-height: 1.5; color: var(--text-muted); margin-top: 7px; min-height: 16px; }
 .hm-ipucu.hm-ok { color: var(--accent); }
 .hm-ipucu.hm-dikkat { color: var(--orange); }
 
-/* Çakışma uyarısı — kaydete basmadan önce görünsün */
 .hm-uyari {
-  display: none; margin-top: 14px; padding: 11px 13px; font-size: 12.5px; line-height: 1.55;
+  display: none; margin: 4px 0 16px; padding: 11px 13px; font-size: 12.5px; line-height: 1.55;
   color: var(--orange); background: rgba(245,158,11,.10);
   border: 1px solid rgba(245,158,11,.30); border-radius: 10px;
 }
 .hm-uyari.goster { display: block; }
 
-.hat-modal .modal-footer { align-items: center; }
-.hat-modal .modal-footer .btn-add { min-width: 120px; justify-content: center; }
+.hm-dugmeler { display: flex; gap: 12px; margin-top: 6px; }
+.hm-dugmeler .btn-pdf, .hm-dugmeler .btn-add { min-width: 130px; justify-content: center; padding: 13px 22px; font-size: 14.5px; }
 
-@media (max-width: 640px) {
-  .hm-grid { grid-template-columns: 1fr; }
-  .hat-modal .modal-footer { flex-wrap: wrap; }
-  .hat-modal .modal-footer .blk-bilgi { flex: 1 1 100%; margin-bottom: 6px; }
-  .hat-modal .modal-footer button { flex: 1 1 45%; justify-content: center; }
+/* ── Önizleme paneli ── */
+.hm-onizleme > h4 { font-size: 15px; font-weight: 700; margin-bottom: 16px; }
+.hm-sim { display: flex; justify-content: center; margin-bottom: 20px; }
+.hm-sim svg { width: 100%; max-width: 215px; height: auto; border-radius: 12px; }
+
+.hm-oz { border-top: 1px solid var(--border); }
+.hm-oz-r {
+  display: flex; align-items: center; gap: 10px; padding: 13px 0;
+  border-bottom: 1px solid var(--border); font-size: 13px;
+}
+.hm-oz-r > span:nth-child(2) { color: var(--text-muted); flex-shrink: 0; }
+.hm-oz-r b { margin-left: auto; text-align: right; overflow-wrap: anywhere; font-weight: 600; }
+.hm-oz-ico { color: var(--accent); display: flex; flex-shrink: 0; }
+.hm-oz-nokta { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+.hm-onizleme-not {
+  display: flex; align-items: flex-start; gap: 8px; margin-top: 16px;
+  font-size: 12px; line-height: 1.55; color: var(--text-muted);
+}
+.hm-onizleme-not svg { flex-shrink: 0; margin-top: 1px; }
+
+/* ── Kamera ile barkod okuma ── */
+.scan-ov {
+  display: none; position: fixed; inset: 0; z-index: 1200;
+  background: rgba(0,0,0,.9); align-items: center; justify-content: center; padding: 20px;
+}
+.scan-ov.open { display: flex; }
+.scan-kutu { position: relative; width: 100%; max-width: 460px; text-align: center; }
+.scan-kutu video { width: 100%; border-radius: 14px; background: #000; display: block; }
+.scan-cerceve {
+  position: absolute; top: 34%; left: 8%; right: 8%; height: 24%;
+  border: 3px solid var(--accent); border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,.35); pointer-events: none;
+}
+.scan-yazi { color: #fff; margin: 16px 0; font-size: 14px; opacity: .9; }
+
+/* ── Dar ekran: tek kolon, önizleme forma taşınır ── */
+@media (max-width: 980px) {
+  .hm-govde { grid-template-columns: 1fr; }
+  .hm-onizleme { border-left: none; border-top: 1px solid var(--border); }
+  .hm-ikili { grid-template-columns: 1fr; }
+  .hm-dugmeler { flex-wrap: wrap; }
+  .hm-dugmeler button { flex: 1 1 45%; }
 }

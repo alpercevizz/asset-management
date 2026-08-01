@@ -2010,13 +2010,21 @@ function msisdnBicim(v) {
    marka varlıklarını gömmek ayrı bir izin konusu. Operatörün baş harfi,
    ada göre sabit bir renkle gösteriliyor (aynı operatör hep aynı renk). */
 const OP_RENK = ['blue', 'accent', 'green', 'purple', 'orange', 'teal'];
+
+/* Operatör rengi ADA göre sabit: aynı operatör tabloda da, Hat Ekle
+   modalında da aynı renkte görünür. Rastgele olsaydı iki yer tutmazdı. */
+function opRenkSinifi(ad) {
+  const t = String(ad || '').trim();
+  if (!t) return 'kpi-ico--muted';
+  let h = 0;
+  for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) >>> 0;
+  return 'kpi-ico--' + OP_RENK[h % OP_RENK.length];
+}
+
 function opRozet(ad) {
   const t = String(ad || '').trim();
   if (!t) return '<span style="color:var(--text-muted)">—</span>';
-  let h = 0;
-  for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) >>> 0;
-  const renk = OP_RENK[h % OP_RENK.length];
-  return `<span class="op-rozet"><i class="kpi-ico--${renk}">${escapeHtml(t.slice(0, 1).toLocaleUpperCase('tr-TR'))}</i>${escapeHtml(t)}</span>`;
+  return `<span class="op-rozet"><i class="${opRenkSinifi(t)}">${escapeHtml(t.slice(0, 1).toLocaleUpperCase('tr-TR'))}</i>${escapeHtml(t)}</span>`;
 }
 
 function lineFiltrele() {
@@ -2201,24 +2209,58 @@ function normMsisdnIstemci(v) {
   return s;
 }
 
-/* Girdiler değiştikçe: ne kaydedileceğini göster ve AYNI numaranın/SIM'in
-   zaten kayıtlı olup olmadığını uyar. Sunucu da doğruluyor ama hatayı
-   kaydete basmadan görmek çok daha iyi. */
+const LINE_DURUM_RENK = { aktif: 'var(--green)', pasif: 'var(--text-muted)', iptal: 'var(--red)' };
+
+/* Form her değiştiğinde: sağdaki önizlemeyi tazele, ne kaydedileceğini göster
+   ve aynı numaranın/SIM'in zaten kayıtlı olup olmadığını uyar. Sunucu da
+   doğruluyor ama hatayı Kaydet'e basmadan görmek çok daha iyi. */
 function lineFormKontrol() {
-  const ms = normMsisdnIstemci($(`#lineMsisdn`)?.value);
+  const msHam = $(`#lineMsisdn`)?.value || '';
+  const ms = normMsisdnIstemci(msHam);
   const ic = String($(`#lineIccid`)?.value || '').replace(/[^0-9]/g, '');
+  const op = ($(`#lineOperator`)?.value || '').trim();
+  const tf = ($(`#lineTariff`)?.value || '').trim();
+  const dr = $(`#lineStatus`)?.value || 'aktif';
+
   const yaz = (sel, metin, sinif) => {
     const e = $(sel);
     if (!e) return;
     e.textContent = metin;
     e.className = 'hm-ipucu' + (sinif ? ' ' + sinif : '');
   };
-
-  yaz(`#lineMsisdnOnizleme`, ms ? `Kaydedilecek: ${msisdnBicim(ms)}` : '', 'hm-ok');
+  yaz(`#lineMsisdnOnizleme`, ms ? `Kaydedilecek: ${msisdnBicim(ms)}` : 'Başında 0 ile veya 0 olmadan girebilirsiniz.', ms ? 'hm-ok' : '');
   yaz(`#lineIccidOnizleme`, ic ? `${ic.length} hane` : '',
     ic && (ic.length < 18 || ic.length > 22) ? 'hm-dikkat' : '');
 
-  // Aynı hat zaten var mı? (ekrandaki listeden — sunucu da ayrıca kontrol eder)
+  // Operatör rozeti: tablodakiyle aynı renk kuralı (aynı ad → aynı renk)
+  const rozet = $(`#lineOpRozet`);
+  if (rozet) {
+    rozet.textContent = op ? op.slice(0, 1).toLocaleUpperCase('tr-TR') : '?';
+    rozet.className = 'hm-alan-ico hm-op-rozet ' + opRenkSinifi(op);
+  }
+
+  // Durum noktası seçime göre renklenir (native select içine nokta konamıyor)
+  const nokta = $(`#lineStatusNokta`);
+  if (nokta) nokta.style.background = LINE_DURUM_RENK[dr] || 'var(--text-muted)';
+
+  // Tarife temizleme düğmesi yalnız doluyken
+  const temizle = $(`#lineTariffTemizle`);
+  if (temizle) temizle.style.display = tf ? 'flex' : 'none';
+
+  // ── Önizleme paneli ──
+  const set = (sel, v) => { const e = $(sel); if (e) e.textContent = v; };
+  set(`#ozOperator`, op || '—');
+  set(`#ozTarife`, tf || '—');
+  set(`#ozTelefon`, ms ? msisdnBicim(ms) : '—');
+  const oz = $(`#ozDurum`);
+  if (oz) {
+    oz.innerHTML = `<i class="hm-oz-nokta" style="background:${LINE_DURUM_RENK[dr] || 'var(--text-muted)'}"></i>` +
+      escapeHtml(dr.charAt(0).toLocaleUpperCase('tr-TR') + dr.slice(1));
+  }
+  const marka = document.getElementById('simMarka');
+  if (marka) marka.textContent = op || '';
+
+  // ── Çakışma uyarısı ──
   const uyari = $(`#lineUyari`);
   if (!uyari) return;
   const cakisma = (_lines || []).find((l) =>
@@ -2253,6 +2295,54 @@ function openLineModal() {
   lineFormKontrol();
   $(`#lineModalOverlay`)?.classList.add('open');
   setTimeout(() => $(`#lineMsisdn`)?.focus(), 60);
+}
+
+/* ── SIM barkodunu kamerayla oku ────────────────────────────────────────────
+   Native BarcodeDetector; harici kütüphane YOK. Tarayıcı desteklemiyorsa
+   düğme hiç gösterilmez — çalışmayan düğme kullanıcıyı yanıltır. */
+let _lineScanStream = null, _lineScanLoop = null, _lineDetector = null;
+
+function lineScanKur() {
+  if (!('BarcodeDetector' in window)) return;
+  try {
+    _lineDetector = new BarcodeDetector({
+      formats: ['code_128', 'code_39', 'ean_13', 'itf', 'qr_code', 'data_matrix', 'codabar'],
+    });
+  } catch { try { _lineDetector = new BarcodeDetector(); } catch { _lineDetector = null; } }
+  const b = $(`#lineIccidScan`);
+  if (_lineDetector && b) b.style.display = 'flex';
+}
+
+async function lineScanBaslat() {
+  const ov = $(`#lineScanOverlay`), video = $(`#lineScanVideo`);
+  if (!_lineDetector || !ov || !video) return;
+  try {
+    _lineScanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } });
+    video.srcObject = _lineScanStream;
+    await video.play();
+    ov.classList.add('open');
+    _lineScanLoop = setInterval(async () => {
+      try {
+        const kodlar = await _lineDetector.detect(video);
+        const ham = kodlar && kodlar[0] && kodlar[0].rawValue;
+        if (!ham) return;
+        const rakam = String(ham).replace(/[^0-9]/g, '');
+        if (rakam.length < 10) return;          // gürültü: ICCID bu kadar kısa olmaz
+        const el = $(`#lineIccid`);
+        if (el) { el.value = rakam; lineFormKontrol(); }
+        lineScanDurdur();
+      } catch { /* kare okunamadı: bir sonrakini dene */ }
+    }, 400);
+  } catch (err) {
+    alert('Kamera açılamadı: ' + err.message);
+    lineScanDurdur();
+  }
+}
+
+function lineScanDurdur() {
+  if (_lineScanLoop) { clearInterval(_lineScanLoop); _lineScanLoop = null; }
+  if (_lineScanStream) { _lineScanStream.getTracks().forEach((t) => t.stop()); _lineScanStream = null; }
+  $(`#lineScanOverlay`)?.classList.remove('open');
 }
 
 async function saveLine() {
@@ -5559,9 +5649,20 @@ document.addEventListener('DOMContentLoaded', () => {
   $(`#linesMore`)?.addEventListener('click', () => exportLinesCsv());
 
   $(`#openAddLine`)?.addEventListener('click', openLineModal);
-  ['#lineMsisdn', '#lineIccid'].forEach((sel) =>
+  // Form her değişiklikte önizlemeyi tazeler
+  ['#lineMsisdn', '#lineIccid', '#lineOperator', '#lineTariff'].forEach((sel) =>
     $(sel)?.addEventListener('input', lineFormKontrol));
+  $(`#lineStatus`)?.addEventListener('change', lineFormKontrol);
   $(`#cancelLineBtn`)?.addEventListener('click', () => $(`#lineModalOverlay`)?.classList.remove('open'));
+  $(`#lineTariffTemizle`)?.addEventListener('click', () => {
+    const e = $(`#lineTariff`); if (e) { e.value = ''; e.focus(); }
+    lineFormKontrol();
+  });
+  lineScanKur();
+  $(`#lineIccidScan`)?.addEventListener('click', lineScanBaslat);
+  $(`#lineScanClose`)?.addEventListener('click', lineScanDurdur);
+  // Modal kapanınca kamera da kapanmalı — açık kalan kamera ışığı ürkütücü
+  $(`#closeLineModal`)?.addEventListener('click', lineScanDurdur);
   $(`#closeLineModal`)?.addEventListener('click', () => lineOverlay?.classList.remove('open'));
   lineOverlay?.addEventListener('click', (e) => { if (e.target === lineOverlay) lineOverlay.classList.remove('open'); });
   $(`#saveLineBtn`)?.addEventListener('click', saveLine);
