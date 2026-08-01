@@ -2189,10 +2189,70 @@ function exportLinesCsv() {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/* Sunucudaki normMsisdn ile BİREBİR aynı (agent/tools/line-tools.js).
+   Önizleme farklı davransaydı kullanıcıya yanlış numarayı vaat ederdik. */
+function normMsisdnIstemci(v) {
+  let s = String(v || '').replace(/[^0-9+]/g, '');
+  if (s && !s.startsWith('+')) {
+    if (s.startsWith('00')) s = '+' + s.slice(2);
+    else if (s.startsWith('0')) s = '+9' + s;
+    else if (s.startsWith('5')) s = '+90' + s;
+  }
+  return s;
+}
+
+/* Girdiler değiştikçe: ne kaydedileceğini göster ve AYNI numaranın/SIM'in
+   zaten kayıtlı olup olmadığını uyar. Sunucu da doğruluyor ama hatayı
+   kaydete basmadan görmek çok daha iyi. */
+function lineFormKontrol() {
+  const ms = normMsisdnIstemci($(`#lineMsisdn`)?.value);
+  const ic = String($(`#lineIccid`)?.value || '').replace(/[^0-9]/g, '');
+  const yaz = (sel, metin, sinif) => {
+    const e = $(sel);
+    if (!e) return;
+    e.textContent = metin;
+    e.className = 'hm-ipucu' + (sinif ? ' ' + sinif : '');
+  };
+
+  yaz(`#lineMsisdnOnizleme`, ms ? `Kaydedilecek: ${msisdnBicim(ms)}` : '', 'hm-ok');
+  yaz(`#lineIccidOnizleme`, ic ? `${ic.length} hane` : '',
+    ic && (ic.length < 18 || ic.length > 22) ? 'hm-dikkat' : '');
+
+  // Aynı hat zaten var mı? (ekrandaki listeden — sunucu da ayrıca kontrol eder)
+  const uyari = $(`#lineUyari`);
+  if (!uyari) return;
+  const cakisma = (_lines || []).find((l) =>
+    (ms && normMsisdnIstemci(l.msisdn) === ms) || (ic && String(l.iccid) === ic));
+  if (cakisma) {
+    uyari.className = 'hm-uyari goster';
+    uyari.textContent = `Bu ${normMsisdnIstemci(cakisma.msisdn) === ms ? 'telefon numarası' : 'SIM numarası'} ` +
+      `zaten kayıtlı (${msisdnBicim(cakisma.msisdn)}). Kaydederseniz mevcut kayıt güncellenir.`;
+  } else {
+    uyari.className = 'hm-uyari';
+    uyari.textContent = '';
+  }
+}
+
 function openLineModal() {
   ['lineMsisdn', 'lineIccid', 'lineTariff'].forEach(id => { const el = $(`#${id}`); if (el) el.value = ''; });
   const op = $(`#lineOperator`); if (op) op.value = 'Turkcell';
+  const st = $(`#lineStatus`); if (st) st.value = 'aktif';
+
+  // Operatör/tarife önerileri mevcut hatlardan — sabit liste yazılsaydı
+  // kurumun kendi tarifeleri hiç görünmezdi.
+  const doldur = (sel, degerler) => {
+    const e = $(sel);
+    if (!e) return;
+    e.innerHTML = [...new Set(degerler.filter(Boolean))]
+      .sort((a, b) => String(a).localeCompare(String(b), 'tr'))
+      .map((v) => `<option value="${escapeHtml(v)}">`).join('');
+  };
+  doldur(`#lineOpList`, (_lines || []).map((l) => l.operator));
+  doldur(`#lineTariffList`, (_lines || []).map((l) => l.tariff));
+
+  lineFormKontrol();
   $(`#lineModalOverlay`)?.classList.add('open');
+  setTimeout(() => $(`#lineMsisdn`)?.focus(), 60);
 }
 
 async function saveLine() {
@@ -5499,6 +5559,9 @@ document.addEventListener('DOMContentLoaded', () => {
   $(`#linesMore`)?.addEventListener('click', () => exportLinesCsv());
 
   $(`#openAddLine`)?.addEventListener('click', openLineModal);
+  ['#lineMsisdn', '#lineIccid'].forEach((sel) =>
+    $(sel)?.addEventListener('input', lineFormKontrol));
+  $(`#cancelLineBtn`)?.addEventListener('click', () => $(`#lineModalOverlay`)?.classList.remove('open'));
   $(`#closeLineModal`)?.addEventListener('click', () => lineOverlay?.classList.remove('open'));
   lineOverlay?.addEventListener('click', (e) => { if (e.target === lineOverlay) lineOverlay.classList.remove('open'); });
   $(`#saveLineBtn`)?.addEventListener('click', saveLine);

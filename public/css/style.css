@@ -3041,3 +3041,39 @@ body.tv-mode .blk-onay-kutu { display: block; }
   .lines-foot { flex-direction: column; align-items: stretch; gap: 10px; }
   .lf-pager { justify-content: space-between; }
 }
+
+/* ══ HAT EKLE MODALI ═════════════════════════════════════════════════════════ */
+.hat-modal { max-width: 620px; }
+.hm-h { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.hm-ico {
+  width: 38px; height: 38px; border-radius: 11px; flex-shrink: 0; color: var(--accent);
+  background: var(--accent-glow); display: flex; align-items: center; justify-content: center;
+}
+.hm-h h3 { margin-bottom: 2px; }
+.hm-h .modal-desc { margin: 0; font-size: 12.5px; }
+
+.hm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.hm-tam { grid-column: 1 / -1; }
+.hm-grid .blk-f { margin-bottom: 0; }
+
+.hm-ipucu { font-size: 11.5px; line-height: 1.5; color: var(--text-muted); margin-top: 6px; min-height: 16px; }
+.hm-ipucu.hm-ok { color: var(--accent); }
+.hm-ipucu.hm-dikkat { color: var(--orange); }
+
+/* Çakışma uyarısı — kaydete basmadan önce görünsün */
+.hm-uyari {
+  display: none; margin-top: 14px; padding: 11px 13px; font-size: 12.5px; line-height: 1.55;
+  color: var(--orange); background: rgba(245,158,11,.10);
+  border: 1px solid rgba(245,158,11,.30); border-radius: 10px;
+}
+.hm-uyari.goster { display: block; }
+
+.hat-modal .modal-footer { align-items: center; }
+.hat-modal .modal-footer .btn-add { min-width: 120px; justify-content: center; }
+
+@media (max-width: 640px) {
+  .hm-grid { grid-template-columns: 1fr; }
+  .hat-modal .modal-footer { flex-wrap: wrap; }
+  .hat-modal .modal-footer .blk-bilgi { flex: 1 1 100%; margin-bottom: 6px; }
+  .hat-modal .modal-footer button { flex: 1 1 45%; justify-content: center; }
+}

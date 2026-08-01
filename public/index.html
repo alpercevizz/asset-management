@@ -2057,26 +2057,72 @@
 
   <!-- Hat Ekle / Ata Modalı -->
   <div class="modal-overlay" id="lineModalOverlay">
-    <div class="modal" style="max-width:480px;">
+    <div class="modal hat-modal">
       <div class="modal-header">
-        <h3 id="lineModalTitle">Hat Ekle</h3>
-        <button class="btn-icon" id="closeLineModal">
+        <div class="hm-h">
+          <span class="hm-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M11 18h2"/></svg></span>
+          <div><h3 id="lineModalTitle">Hat Ekle</h3>
+            <p class="modal-desc">Telefon numarası ve SIM kartı bilgilerini girin.</p></div>
+        </div>
+        <button class="btn-icon" id="closeLineModal" aria-label="Kapat">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
+
       <div class="modal-body">
-        <div class="qr-prefill" style="grid-template-columns:1fr 1fr;">
-          <div class="field-sm"><label>Telefon No (MSISDN)</label><input id="lineMsisdn" class="select-sm" placeholder="0532 123 45 67" /></div>
-          <div class="field-sm"><label>SIM No (ICCID)</label><input id="lineIccid" class="select-sm" placeholder="8990011..." /></div>
-          <div class="field-sm"><label>Operatör</label><input id="lineOperator" class="select-sm" value="Turkcell" /></div>
-          <div class="field-sm"><label>Durum</label>
-            <select id="lineStatus" class="select-sm"><option value="aktif">Aktif</option><option value="pasif">Pasif</option><option value="iptal">İptal</option></select>
+        <div class="hm-grid">
+          <div class="blk-f">
+            <label for="lineMsisdn">Telefon No (MSISDN)</label>
+            <small>Başında 0 ile de yazabilirsiniz</small>
+            <input id="lineMsisdn" class="select-sm" placeholder="0532 123 45 67" autocomplete="off" />
+            <!-- Sunucu numarayı +90 biçimine çeviriyor. Kaydetmeden ÖNCE ne
+                 kaydedileceğini göstermek, sonradan "neden değişti?" sorusunu
+                 ortadan kaldırıyor. -->
+            <p class="hm-ipucu" id="lineMsisdnOnizleme"></p>
           </div>
-          <div class="field-sm" style="grid-column:1/-1"><label>Tarife / Paket</label><input id="lineTariff" class="select-sm" placeholder="Kurumsal Ses+Data 20GB" /></div>
+
+          <div class="blk-f">
+            <label for="lineIccid">SIM No (ICCID)</label>
+            <small>Yalnızca rakamlar (genelde 19–20 hane)</small>
+            <input id="lineIccid" class="select-sm" placeholder="8990011122233344455" autocomplete="off" />
+            <p class="hm-ipucu" id="lineIccidOnizleme"></p>
+          </div>
+
+          <div class="blk-f">
+            <label for="lineOperator">Operatör</label>
+            <small>Mevcut operatörlerden seçin veya yeni yazın</small>
+            <input id="lineOperator" class="select-sm" list="lineOpList" value="Turkcell" autocomplete="off" />
+            <datalist id="lineOpList"></datalist>
+          </div>
+
+          <div class="blk-f">
+            <label for="lineStatus">Durum</label>
+            <small>Hattın kullanım durumu</small>
+            <select id="lineStatus" class="select-sm">
+              <option value="aktif">Aktif</option>
+              <option value="pasif">Pasif</option>
+              <option value="iptal">İptal</option>
+            </select>
+          </div>
+
+          <div class="blk-f hm-tam">
+            <label for="lineTariff">Tarife / Paket</label>
+            <small>Mevcut tarifelerden seçin veya yeni yazın</small>
+            <input id="lineTariff" class="select-sm" list="lineTariffList" placeholder="Kurumsal Ses+Data 20GB" autocomplete="off" />
+            <datalist id="lineTariffList"></datalist>
+          </div>
         </div>
+
+        <p class="hm-uyari" id="lineUyari"></p>
       </div>
+
       <div class="modal-footer">
-        <button class="btn-add" id="saveLineBtn" style="flex:1;justify-content:center;">Kaydet</button>
+        <p class="blk-bilgi">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+          <span><b>Bilgilendirme</b>Hat kaydedildikten sonra listeden bir telefona bağlayabilirsiniz.</span>
+        </p>
+        <button class="btn-pdf" id="cancelLineBtn">İptal</button>
+        <button class="btn-add" id="saveLineBtn">Kaydet</button>
       </div>
     </div>
   </div>
