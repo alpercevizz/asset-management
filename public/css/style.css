@@ -3166,3 +3166,104 @@ body.tv-mode .blk-onay-kutu { display: block; }
   .hm-dugmeler { flex-wrap: wrap; }
   .hm-dugmeler button { flex: 1 1 45%; }
 }
+
+/* ── Geri düğmesi ve adım göstergesi: yalnız telefonda ── */
+.hm-geri, .hm-adim { display: none; }
+
+/* ══ TELEFON: tam ekran sayfa + adım göstergesi + yatay önizleme ══════════ */
+@media (max-width: 560px) {
+  /* Modal kart görünümünü bırakır, sayfa olur; kartlaşan kısım gövdedir */
+  #lineModalOverlay { padding: 0; align-items: stretch; }
+  #lineModalOverlay .hat-modal {
+    width: 100%; max-width: none; max-height: none; height: 100%;
+    border: 0; border-radius: 0; box-shadow: none;
+    background: var(--bg); display: flex; flex-direction: column;
+    padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Başlık: geri | ortalanmış başlık | kapat */
+  .hm-bas {
+    display: grid; grid-template-columns: 46px minmax(0, 1fr) 46px;
+    align-items: center; gap: 10px; padding: 6px 0 16px; border-bottom: 0;
+  }
+  .hm-geri {
+    display: flex; align-items: center; justify-content: center;
+    width: 46px; height: 46px; border-radius: 14px;
+  }
+  .hm-ico { display: none; }                 /* başlık ortada tek başına */
+  .hm-h { flex-direction: column; text-align: center; gap: 0; }
+  .hm-h h3 { font-size: 22px; margin-bottom: 2px; }
+  .hm-h .modal-desc { font-size: 13px; line-height: 1.45; }
+  .hm-kapat { width: 46px; height: 46px; border-radius: 14px; }
+
+  /* Adım göstergesi */
+  .hm-adim {
+    display: flex; align-items: center; gap: 0;
+    padding: 4px 8px 18px; flex-shrink: 0;
+  }
+  .hm-adim-n {
+    width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 700;
+    color: var(--text-muted); border: 2px solid var(--border); background: transparent;
+    transition: color .2s, border-color .2s, background .2s;
+  }
+  .hm-adim-n.is-aktif {
+    color: #fff; background: var(--accent); border-color: var(--accent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+  .hm-adim-cizgi {
+    flex: 1; height: 4px; border-radius: 3px; margin: 0 10px;
+    background: var(--border); overflow: hidden;
+  }
+  .hm-adim-cizgi i {
+    display: block; height: 100%; width: 0; border-radius: 3px;
+    background: var(--accent); transition: width .25s ease;
+  }
+
+  /* Gövde: kaydırılabilir tek kart.
+     Tasarımda sıra "alanlar → Önizleme → düğmeler" ama düğmeler HTML'de
+     .hm-form içinde, önizleme ise kardeşi. display:contents ile form'un
+     çocukları gövdenin doğrudan çocuğu olur → order ile sıralanabilir.
+     (Markup'ı bozmak yerine; masaüstü düzeni aynı kalsın.) */
+  .hm-govde {
+    flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    border: 1px solid var(--border); border-radius: 20px; background: var(--card);
+    display: flex; flex-direction: column; padding: 20px 16px 18px;
+  }
+  .hm-form { display: contents; }
+  .hm-f { margin-bottom: 16px; }
+  .hm-f > label { font-size: 12px; letter-spacing: .06em; margin-bottom: 9px; }
+
+  /* Alanlar: dokunma hedefi 56px, değer 17px */
+  .hm-alan { min-height: 56px; border-radius: 14px; padding: 0 10px; gap: 12px; }
+  .hm-alan-ico { width: 40px; height: 40px; border-radius: 11px; }
+  /* 16px altına inilmiyor: iOS Safari daha küçük yazıda alanı otomatik
+     yakınlaştırır ve düzen kayar. */
+  .hm-alan input, .hm-alan select { font-size: 16px; }
+  .hm-alan--sec { padding-right: 38px; }
+  .hm-alan--sec .hm-alan-btn { margin-right: 2px; }
+  .hm-ipucu { font-size: 12px; margin-top: 8px; }
+
+  /* Önizleme: gövdenin içinde ayrı kart, SIM solda / satırlar sağda */
+  .hm-onizleme {
+    order: 90; margin: 2px 0 16px; padding: 16px 14px;
+    border: 1px solid var(--border); border-radius: 18px; background: var(--bg-soft, transparent);
+    display: grid; grid-template-columns: 86px minmax(0, 1fr);
+    grid-template-areas: "bas bas" "sim ozet"; gap: 14px 12px; align-items: center;
+  }
+  .hm-onizleme > h4 { grid-area: bas; margin-bottom: 0; font-size: 16px; }
+  .hm-sim { grid-area: sim; margin-bottom: 0; }
+  .hm-sim svg { max-width: 86px; }
+  .hm-oz { grid-area: ozet; border-top: 0; }
+  /* Değerler tek satırda kalsın diye SIM sütunu dar, satır yazısı küçük */
+  .hm-oz-r { padding: 9px 0; gap: 8px; font-size: 12.5px; }
+  .hm-onizleme-not { display: none; }        /* tasarımda yok; alan dar */
+
+  /* Uyarı ve düğmeler önizlemeden SONRA gelir (tasarımdaki sıra) */
+  .hm-uyari { order: 95; margin: 0 0 12px; }
+  .hm-dugmeler { order: 100; flex-wrap: nowrap; margin-top: 0; }
+  .hm-dugmeler .btn-pdf { flex: 1 1 42%; min-width: 0; }
+  .hm-dugmeler .btn-add { flex: 1 1 58%; min-width: 0; }
+  .hm-dugmeler .btn-pdf, .hm-dugmeler .btn-add { padding: 15px 12px; font-size: 15.5px; border-radius: 14px; }
+}

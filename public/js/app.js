@@ -2260,6 +2260,13 @@ function lineFormKontrol() {
   const marka = document.getElementById('simMarka');
   if (marka) marka.textContent = op || '';
 
+  // Adım göstergesi (telefon): 2. adım Önizleme'dir, kayıt için gereken
+  // telefon + operatör girilince etkinleşir. Çubuk her alanla yarı yarıya dolar.
+  const bar = document.getElementById('lineAdimBar');
+  if (bar) bar.style.width = ((ms ? 50 : 0) + (op ? 50 : 0)) + '%';
+  const adim2 = document.getElementById('lineAdim2');
+  if (adim2) adim2.classList.toggle('is-aktif', !!(ms && op));
+
   // ── Çakışma uyarısı ──
   const uyari = $(`#lineUyari`);
   if (!uyari) return;
@@ -5653,7 +5660,6 @@ document.addEventListener('DOMContentLoaded', () => {
   ['#lineMsisdn', '#lineIccid', '#lineOperator', '#lineTariff'].forEach((sel) =>
     $(sel)?.addEventListener('input', lineFormKontrol));
   $(`#lineStatus`)?.addEventListener('change', lineFormKontrol);
-  $(`#cancelLineBtn`)?.addEventListener('click', () => $(`#lineModalOverlay`)?.classList.remove('open'));
   $(`#lineTariffTemizle`)?.addEventListener('click', () => {
     const e = $(`#lineTariff`); if (e) { e.value = ''; e.focus(); }
     lineFormKontrol();
@@ -5661,10 +5667,12 @@ document.addEventListener('DOMContentLoaded', () => {
   lineScanKur();
   $(`#lineIccidScan`)?.addEventListener('click', lineScanBaslat);
   $(`#lineScanClose`)?.addEventListener('click', lineScanDurdur);
-  // Modal kapanınca kamera da kapanmalı — açık kalan kamera ışığı ürkütücü
-  $(`#closeLineModal`)?.addEventListener('click', lineScanDurdur);
-  $(`#closeLineModal`)?.addEventListener('click', () => lineOverlay?.classList.remove('open'));
-  lineOverlay?.addEventListener('click', (e) => { if (e.target === lineOverlay) lineOverlay.classList.remove('open'); });
+  // Modal her nasıl kapanırsa kapansın kamera da kapanmalı — açık kalan
+  // kamera ışığı ürkütücü. Tek kapatma yolu: kapat / geri / iptal / dışarı.
+  const lineKapat = () => { lineScanDurdur(); lineOverlay?.classList.remove('open'); };
+  ['#closeLineModal', '#lineModalGeri', '#cancelLineBtn'].forEach((sel) =>
+    $(sel)?.addEventListener('click', lineKapat));
+  lineOverlay?.addEventListener('click', (e) => { if (e.target === lineOverlay) lineKapat(); });
   $(`#saveLineBtn`)?.addEventListener('click', saveLine);
   $(`#importLinesBtn`)?.addEventListener('click', () => $(`#lineCsvInput`)?.click());
   $(`#lineCsvInput`)?.addEventListener('change', (e) => {
