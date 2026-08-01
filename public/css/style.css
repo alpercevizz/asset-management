@@ -2964,3 +2964,18 @@ body.tv-mode #tab-bulk .blk-grid {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
   grid-template-areas: "form onizleme ozet" "nasil nasil nasil";
 }
+
+/* Telefonla onay kutusu — yalnız monitör/TV'de (klavyesiz ekranlar) */
+.blk-onay-kutu { display: none; margin-top: 14px; }
+@media (min-width: 1400px) { .blk-onay-kutu { display: block; } }
+body.tv-mode .blk-onay-kutu { display: block; }
+.blk-onay-kutu > button { width: 100%; justify-content: center; }
+.blk-qr { text-align: center; }
+.blk-qr img {
+  width: 100%; max-width: 190px; background: #fff; border-radius: 10px;
+  padding: 8px; margin: 0 auto 10px; display: block;
+}
+.blk-qr p { font-size: 12px; line-height: 1.55; color: var(--text-muted); margin-bottom: 10px; }
+.blk-qr p.blk-qr-ok { color: var(--green); font-weight: 600; }
+.blk-qr p.blk-qr-hata { color: var(--red); }
+.blk-qr > button { width: 100%; justify-content: center; }

@@ -268,7 +268,7 @@ app.get(['/', '/index.html'], requirePage, (req, res) => {
    agent/tools/register-token.js) — telefon oturum acamiyor, jeton onun yerine
    geciyor. '/register/bulk' LISTEDEN CIKARILDI: yalnizca girisli panelden
    cagriliyor, public olmasi icin hicbir sebep yoktu. */
-const PUBLIC_API = new Set(['/login', '/logout', '/health', '/webhook', '/register', '/licenses/sync', '/qr', '/lifecycle/approve']);
+const PUBLIC_API = new Set(['/login', '/logout', '/health', '/webhook', '/register', '/licenses/sync', '/qr', '/lifecycle/approve', '/register/bulk/confirm']);
 app.use('/api', (req, res, next) => {
   if (PUBLIC_API.has(req.path)) return next();
   if (isAuthed(req)) return next();
@@ -665,47 +665,140 @@ app.get('/api/register/bulk/preview', requireRole('it', 'admin'), async (req, re
   }
 });
 
+/* Taslak kayıtları OLUŞTUR. Hem panel düğmesi hem telefon onayı bu fonksiyonu
+   çağırır — iki yol ayrı kod olsaydı biri düzeltilip diğeri unutulurdu. */
+async function bulkOlustur({ category = 'Diğer', location = '', quantity, prefix, kaynak = 'panel' }) {
+  const qty = parseInt(quantity, 10);
+  if (!qty || qty < 1 || qty > 200) throw new Error('quantity 1-200 arası olmalı');
+
+  const plan = await bulkPlan({ category, prefix, quantity: qty });
+  const now = new Date().toISOString();
+  const created = [];
+  for (let i = 1; i <= qty; i++) {
+    const hostname = `${plan.prefix}-${String(plan.maxNum + i).padStart(3, '0')}`;
+    const row = {
+      hostname,
+      serial_number: hostname,   // bilinmiyor → geçici olarak hostname
+      category,
+      status: 'depoda',
+      last_seen: now,
+      collector_ver: 'manual-bulk-1.0.0',
+    };
+    if (location) row.location = location;
+    const r = await createAsset(row);
+    created.push({ id: r.id, hostname });
+  }
+  console.log(`[BULK] ${qty} adet '${category}' taslak oluşturuldu (${plan.prefix}-...) kaynak=${kaynak}`);
+  return { count: created.length, prefix: plan.prefix, items: created };
+}
+
 app.post('/api/register/bulk', async (req, res) => {
   try {
     const { category = 'Diğer', location = '', quantity, prefix } = req.body || {};
-    const qty = parseInt(quantity, 10);
-    if (!qty || qty < 1 || qty > 200) {
-      return res.status(400).json({ error: 'quantity 1-200 arası olmalı' });
-    }
-
-    const plan = await bulkPlan({ category, prefix, quantity: qty });
-    const pfx = plan.prefix;
-    const maxNum = plan.maxNum;
-
-    const now = new Date().toISOString();
-    const created = [];
-    for (let i = 1; i <= qty; i++) {
-      const num = String(maxNum + i).padStart(3, '0');
-      const hostname = `${pfx}-${num}`;
-      const row = {
-        hostname,
-        serial_number: hostname,   // bilinmiyor → geçici olarak hostname
-        category,
-        status: 'depoda',
-        last_seen: now,
-        collector_ver: 'manual-bulk-1.0.0',
-      };
-      if (location) row.location = location;
-      const r = await createAsset(row);
-      created.push({ id: r.id, hostname });
-    }
-
-    console.log(`[BULK] ${qty} adet '${category}' taslak oluşturuldu (${pfx}-...)`);
-    res.json({ success: true, count: created.length, prefix: pfx, items: created });
+    const r = await bulkOlustur({ category, location, quantity, prefix, kaynak: 'panel' });
+    res.json({ success: true, ...r });
   } catch (err) {
     console.error('[POST /api/register/bulk]', err.message);
-    res.status(500).json({ error: 'Toplu kayıt hatası', detail: err.message });
+    res.status(err.message.includes('quantity') ? 400 : 500)
+      .json({ error: 'Toplu kayıt hatası', detail: err.message });
+  }
+});
+
+/* ─── TV/kiosk: telefonla onay akışı ───────────────────────────────────────
+   Ekranda klavye yok. Operatör planı kurar, QR'ı telefonuyla okutup onaylar.
+   Plan JETONA DONDURULUR; onay isteği kategori/adet göndermez. */
+app.post('/api/register/bulk/token', requireRole('it', 'admin'), async (req, res) => {
+  try {
+    const bt = require('./agent/tools/bulk-token');
+    await bt.pruneExpired();
+    const me = currentUser(req);
+    const b = req.body || {};
+    const t = await bt.create({
+      category: b.category, quantity: b.quantity, location: b.location,
+      prefix: b.prefix, minutes: b.minutes, by: me ? me.username : 'system',
+    });
+    const plan = await bulkPlan({ category: b.category, prefix: b.prefix, quantity: b.quantity });
+    console.log(`[BULK] Onay kodu üretildi: ${t.jti} (${b.quantity}×${b.category}) — ${me?.username}`);
+    res.json({ ...t, plan });
+  } catch (err) {
+    res.status(400).json({ error: 'Onay kodu üretilemedi', detail: err.message });
+  }
+});
+
+app.get('/api/register/bulk/token/:jti', requireRole('it', 'admin'), async (req, res) => {
+  try {
+    const d = await require('./agent/tools/bulk-token').status(req.params.jti);
+    if (!d) return res.status(404).json({ error: 'Onay kodu bulunamadı' });
+    res.json(d);
+  } catch (err) {
+    res.status(500).json({ error: 'Durum alınamadı', detail: err.message });
+  }
+});
+
+app.delete('/api/register/bulk/token/:jti', requireRole('it', 'admin'), async (req, res) => {
+  try {
+    await require('./agent/tools/bulk-token').revoke(req.params.jti);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'İptal edilemedi', detail: err.message });
+  }
+});
+
+/* Telefonun okuduğu plan — PUBLIC ama jeton zorunlu. Yalnız okur, tüketmez:
+   kullanıcı onaylamadan kayıt oluşmamalı. */
+app.get('/api/register/bulk/confirm', async (req, res) => {
+  try {
+    const p = await require('./agent/tools/bulk-token').peek(req.query.t);
+    if (!p.ok) return res.status(401).json({ error: p.reason, code: p.code });
+    const plan = await bulkPlan({
+      category: p.satir.category, prefix: p.satir.prefix, quantity: p.satir.quantity,
+    });
+    res.json({
+      category: p.satir.category, quantity: p.satir.quantity,
+      location: p.satir.location || '', expires_at: p.satir.expires_at, plan,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Plan alınamadı', detail: err.message });
+  }
+});
+
+/* ONAY — kayıtları oluşturur. PUBLIC ama jeton zorunlu ve TEK KULLANIMLIK.
+   Gövdeden kategori/adet OKUNMAZ: ne oluşacağı jetondaki dondurulmuş plandan
+   gelir, telefon değiştiremez. */
+app.post('/api/register/bulk/confirm', async (req, res) => {
+  try {
+    const bt = require('./agent/tools/bulk-token');
+    const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+    const c = await bt.consume((req.body && req.body.t) || req.query.t, ip);
+    if (!c.ok) {
+      console.warn(`[BULK ONAY REDDEDİLDİ] ${c.code} — ${c.reason} ip=${ip}`);
+      return res.status(401).json({ error: c.reason, code: c.code });
+    }
+    const r = await bulkOlustur({
+      category: c.plan.category, location: c.plan.location,
+      quantity: c.plan.quantity, prefix: c.plan.prefix, kaynak: 'telefon-onay',
+    });
+    await bt.sonucYaz(c.jti, {
+      count: r.count,
+      first: r.items[0] && r.items[0].hostname,
+      last: r.items[r.items.length - 1] && r.items[r.items.length - 1].hostname,
+    });
+    res.json({ success: true, ...r });
+  } catch (err) {
+    console.error('[POST /api/register/bulk/confirm]', err.message);
+    res.status(500).json({ error: 'Onay işlenemedi', detail: err.message });
   }
 });
 
 // Mobil kayıt sayfası (QR ile açılır)
 app.get('/register', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'register.html'));
+});
+
+/* Toplu kayıt onay sayfası — telefonda oturum AÇMADAN açılır, jetonla
+   korunur (bkz. agent/tools/bulk-token.js). */
+app.get('/bulk-confirm', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'bulk-confirm.html'));
 });
 
 // ─── Lisanslar ────────────────────────────────────────────────────────────────

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Toplu Kayıt Onayı — AssetMan</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    /* Bu sayfa telefonda, oturum AÇMADAN açılıyor: tek işi ekrandaki planı
+       göstermek ve onaylatmak. Panelin kabuğu (menü, üst çubuk) yok. */
+    body { display: flex; align-items: center; justify-content: center; min-height: 100dvh; padding: 18px; }
+    .bc { width: 100%; max-width: 420px; }
+    .bc-card { border: 1px solid var(--border); border-radius: 16px; padding: 22px; background: var(--bg-card); }
+    .bc-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+    .bc-logo b { font-size: 17px; font-weight: 800; letter-spacing: -.02em; }
+    .bc-logo span { font-size: 11px; color: var(--text-muted); }
+    .bc h1 { font-size: 19px; font-weight: 800; letter-spacing: -.02em; margin-bottom: 6px; }
+    .bc-alt { font-size: 13px; color: var(--text-dim); line-height: 1.6; margin-bottom: 18px; }
+    .bc-row { display: flex; justify-content: space-between; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+    .bc-row:last-of-type { border-bottom: none; }
+    .bc-row span { color: var(--text-muted); }
+    .bc-row b { text-align: right; overflow-wrap: anywhere; }
+    .bc-aralik { margin: 16px 0; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card2); }
+    .bc-aralik h4 { font-size: 12px; font-weight: 700; margin-bottom: 9px; color: var(--text-dim); }
+    .bc-aralik code { display: block; font-family: var(--font-mono); font-size: 13px; text-align: center; padding: 3px 0; }
+    .bc-btn { width: 100%; justify-content: center; padding: 15px; font-size: 15px; margin-top: 6px; }
+    .bc-durum { text-align: center; padding: 20px 0; }
+    .bc-durum svg { color: var(--green); }
+    .bc-durum.hata svg { color: var(--red); }
+    .bc-durum b { display: block; font-size: 17px; margin-top: 12px; }
+    .bc-durum p { font-size: 13px; color: var(--text-dim); margin-top: 6px; line-height: 1.6; }
+    .bc-uyari { font-size: 12px; color: var(--text-muted); line-height: 1.6; margin-top: 14px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="bc">
+    <div class="bc-card" id="kart">
+      <div class="bc-logo">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" style="color:var(--accent)"><path d="m12 2 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/></svg>
+        <div><b>AssetMan</b><br><span>Toplu Kayıt Onayı</span></div>
+      </div>
+      <div id="icerik"><p class="bc-alt">Yükleniyor…</p></div>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const jeton = new URLSearchParams(window.location.search).get('t') || '';
+
+    function durum(ok, baslik, mesaj) {
+      $('icerik').innerHTML = `
+        <div class="bc-durum ${ok ? '' : 'hata'}">
+          ${ok
+            ? '<svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg>'
+            : '<svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v5M12 16h.01"/></svg>'}
+          <b>${esc(baslik)}</b>
+          <p>${esc(mesaj)}</p>
+        </div>`;
+    }
+
+    async function yukle() {
+      if (!jeton) return durum(false, 'Onay kodu yok', 'Bu bağlantı eksik. Ekrandaki QR kodu tekrar okutun.');
+      try {
+        const r = await fetch('/api/register/bulk/confirm?t=' + encodeURIComponent(jeton));
+        const j = await r.json();
+        if (!r.ok) return durum(false, 'Onay alınamadı', j.error || 'Kod geçersiz');
+
+        $('icerik').innerHTML = `
+          <h1>Bu kayıtları oluştur</h1>
+          <p class="bc-alt">Ekranda hazırlanan plan aşağıda. Onaylarsanız kayıtlar
+             <strong>"depoda"</strong> durumunda taslak olarak oluşturulur.</p>
+          <div class="bc-row"><span>Kategori</span><b>${esc(j.category)}</b></div>
+          <div class="bc-row"><span>Adet</span><b>${esc(j.quantity)}</b></div>
+          <div class="bc-row"><span>Lokasyon</span><b>${esc(j.location || '—')}</b></div>
+          <div class="bc-row"><span>ID Öneki</span><b>${esc(j.plan.prefix)}</b></div>
+          <div class="bc-aralik">
+            <h4>Oluşacak ID Aralığı</h4>
+            <code>${esc(j.plan.ilk)}</code>
+            <code style="color:var(--text-muted)">↓</code>
+            <code>${esc(j.plan.son)}</code>
+          </div>
+          <button class="btn-report bc-btn" id="onayla">Onayla ve Oluştur</button>
+          <p class="bc-uyari">Bu onay <strong>tek kullanımlıktır</strong> ve kısa süre sonra geçersiz olur.</p>`;
+
+        $('onayla').addEventListener('click', onayla);
+      } catch (err) {
+        durum(false, 'Bağlantı hatası', err.message);
+      }
+    }
+
+    async function onayla() {
+      const b = $('onayla');
+      b.disabled = true;
+      b.textContent = 'Oluşturuluyor…';
+      try {
+        const r = await fetch('/api/register/bulk/confirm', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ t: jeton }),
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || 'Onay işlenemedi');
+        durum(true, `${j.count} kayıt oluşturuldu`,
+          `${j.items[0].hostname} → ${j.items[j.items.length - 1].hostname}. Ekrana dönebilirsiniz.`);
+      } catch (err) {
+        durum(false, 'Oluşturulamadı', err.message);
+      }
+    }
+
+    yukle();
+  </script>
+</body>
+</html>

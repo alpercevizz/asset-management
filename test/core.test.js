@@ -903,3 +903,53 @@ test('bulkPlan: önek türetme, kaçış ve numaralandırmanın devam etmesi', (
   assert.equal(no(maxNum + 1), 'DEPO-TELEFON-004');
   assert.equal(no(maxNum + 10), 'DEPO-TELEFON-013');
 });
+
+// ── Toplu kayıt onay jetonu (TV/kiosk telefonla onay) ────────────────────────
+test('bulk-token: plan dondurulur, tek kullanımlık, iptal ve süre denetlenir', async () => {
+  process.env.REGISTER_SECRET = 'test-register-secret-en-az-32-karakter-olmali';
+  const bt = require('../agent/tools/bulk-token');
+  const { db } = require('../db');
+
+  // 1) Geçersiz girdiler
+  assert.equal((await bt.peek('')).code, 'JETON_YOK');
+  assert.equal((await bt.peek('uydurma.imza')).code, 'IMZA_GECERSIZ');
+  await assert.rejects(() => bt.create({ category: 'Telefon', quantity: 500 }), /quantity/);
+
+  // 2) PLAN JETONA DONDURULUR — asıl koruma bu. Telefon "evet" der, ne
+  //    oluşacağını değiştiremez.
+  const t = await bt.create({ category: 'Telefon', quantity: 3, location: 'Ana Depo', by: 'test' });
+  const p = await bt.peek(t.token);
+  assert.equal(p.ok, true);
+  assert.equal(p.satir.category, 'Telefon');
+  assert.equal(p.satir.quantity, 3);
+  assert.equal(p.satir.location, 'Ana Depo');
+
+  // 3) peek TÜKETMEZ — onay sayfası planı gösterirken kayıt oluşmamalı
+  assert.equal((await bt.peek(t.token)).ok, true, 'peek tekrar okunabilmeli');
+
+  // 4) consume bir kez işler
+  const c1 = await bt.consume(t.token, '1.2.3.4');
+  assert.equal(c1.ok, true);
+  assert.equal(c1.plan.quantity, 3);
+  assert.equal((await bt.consume(t.token)).code, 'KULLANILDI', 'ikinci onay reddedilmeli');
+
+  // 5) Eşzamanlı: tek hak iki istekte harcanamaz
+  const y = await bt.create({ category: 'Tablet', quantity: 2, by: 'test' });
+  const ikisi = await Promise.all([bt.consume(y.token), bt.consume(y.token)]);
+  assert.equal(ikisi.filter((x) => x.ok).length, 1);
+
+  // 6) İptal
+  const i = await bt.create({ category: 'Tablet', quantity: 2, by: 'test' });
+  await bt.revoke(i.jti);
+  assert.equal((await bt.consume(i.token)).code, 'IPTAL');
+
+  // 7) Süre HEM imzadan HEM veritabanından denetlenir
+  const s = await bt.create({ category: 'Tablet', quantity: 1, by: 'test' });
+  await db()('bulk_tokens').where({ jti: s.jti })
+    .update({ expires_at: new Date(Date.now() - 1000).toISOString() });
+  assert.equal((await bt.consume(s.token)).code, 'SURE_DOLDU',
+    'DB süresi geçmişse imza geçerli olsa bile reddedilmeli');
+
+  await db()('bulk_tokens').where({ created_by: 'test' }).del();
+  delete process.env.REGISTER_SECRET;
+});

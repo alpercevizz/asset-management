@@ -1,11 +1,26 @@
-/* ─── Oturum: 401 dönerse login sayfasına yönlendir ──────────────────────── */
+/* ─── Oturum: 401 dönerse login sayfasına yönlendir ────────────────────────
+   DİKKAT: her 401 "oturum bitti" DEĞİL. Jetonla korunan uçlar da 401 döner
+   (süresi dolmuş QR, iptal edilmiş onay, geçersiz imza...). Hepsini oturum
+   bitişi sayan bir guard, kullanıcıyı geçerli oturumdayken login'e atardı.
+   Sunucu oturum reddini `code: 'UNAUTHORIZED'` ile işaretliyor; yalnız ona
+   bakıyoruz. Gövde okunurken KOPYA kullanılır, yoksa çağıran taraf boş
+   gövdeyle karşılaşır. */
 (function installAuthGuard() {
   const origFetch = window.fetch.bind(window);
   window.fetch = async (...args) => {
     const res = await origFetch(...args);
     if (res.status === 401) {
-      window.location.href = '/login';
-      throw new Error('Oturum sonlandı');
+      let oturumBitti = false;
+      try {
+        const j = await res.clone().json();
+        oturumBitti = j && j.code === 'UNAUTHORIZED';
+      } catch {
+        oturumBitti = true;   // gövde okunamadı: güvenli taraf, oturuma say
+      }
+      if (oturumBitti) {
+        window.location.href = '/login';
+        throw new Error('Oturum sonlandı');
+      }
     }
     return res;
   };
@@ -5214,7 +5229,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // QR ile Cihaz Ekle modalı
   const qrOverlay = $(`#qrModalOverlay`);
   $(`#openAddModal`)?.addEventListener('click', () => qrOverlay?.classList.add('open'));
-  $(`#closeQrModal`)?.addEventListener('click', () => { qrfDurdur(); qrOverlay?.classList.remove('open'); });
+  $(`#closeQrModal`)?.addEventListener('click', () => { qrfDurdur(); blkQrKapat(); qrOverlay?.classList.remove('open'); });
   qrOverlay?.addEventListener('click', (e) => { if (e.target === qrOverlay) qrOverlay.classList.remove('open'); });
 
   // Excel/CSV dışa aktarım
@@ -5641,6 +5656,87 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   $(`#bulkIptal`)?.addEventListener('click', () => $(`#qrModalOverlay`)?.classList.remove('open'));
+
+  /* ═══ TV/kiosk: telefonla onay ═══════════════════════════════════════════
+     Duvar ekranında klavye yok. Operatör planı kurar, QR'ı telefonuyla okutup
+     onaylar; kayıtlar o anda oluşur. Panel jetonu yoklayarak sonucu gösterir.
+     Plan JETONA DONDURULUR — telefon kategoriyi/adedi değiştiremez. */
+  let _blkQrTimer = null;
+  let _blkQrJti = null;
+
+  function blkQrDurdur() {
+    if (_blkQrTimer) { clearInterval(_blkQrTimer); _blkQrTimer = null; }
+  }
+
+  function blkQrKapat() {
+    blkQrDurdur();
+    // Ekrandan vazgeçilen onay kodu SUNUCUDA da iptal edilir; aksi halde
+    // süresi dolana kadar geçerli kalır ve o QR'ı gören biri kullanabilirdi.
+    if (_blkQrJti) {
+      fetch('/api/register/bulk/token/' + encodeURIComponent(_blkQrJti), { method: 'DELETE' }).catch(() => {});
+      _blkQrJti = null;
+    }
+    const alan = $(`#blkQrAlan`);
+    if (alan) alan.style.display = 'none';
+    const btn = $(`#blkQrUret`);
+    if (btn) btn.style.display = '';
+  }
+
+  $(`#blkQrUret`)?.addEventListener('click', async () => {
+    const a = blkAlanlar();
+    if (!a.quantity || a.quantity < 1) { alert('Önce adet girin.'); return; }
+    const btn = $(`#blkQrUret`);
+    if (btn) btn.disabled = true;
+    try {
+      const r = await fetch('/api/register/bulk/token', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category: a.category, quantity: a.quantity, location: a.location, prefix: a.prefix }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.detail || j.error || 'onay kodu üretilemedi');
+      _blkQrJti = j.jti;
+
+      const url = `${location.origin}/bulk-confirm?t=${encodeURIComponent(j.token)}`;
+      $(`#blkQrImg`).src = `/api/qr?data=${encodeURIComponent(url)}`;
+      $(`#blkQrDurum`).textContent =
+        `${a.quantity} adet ${a.category} — telefonla okutup onaylayın. Kod ${j.minutes} dakika geçerli.`;
+      $(`#blkQrDurum`).className = '';
+      $(`#blkQrAlan`).style.display = '';
+      if (btn) btn.style.display = 'none';
+
+      blkQrDurdur();
+      _blkQrTimer = setInterval(blkQrYokla, 2500);
+    } catch (err) {
+      alert('Onay kodu üretilemedi: ' + err.message);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
+
+  async function blkQrYokla() {
+    if (!_blkQrJti) return blkQrDurdur();
+    try {
+      const r = await fetch('/api/register/bulk/token/' + encodeURIComponent(_blkQrJti));
+      if (!r.ok) return;
+      const d = await r.json();
+      const dur = $(`#blkQrDurum`);
+      if (d.used_at && d.result_count != null) {
+        blkQrDurdur();
+        _blkQrJti = null;                       // onaylandı: iptal etme
+        if (dur) {
+          dur.className = 'blk-qr-ok';
+          dur.textContent = `✓ ${d.result_count} kayıt oluşturuldu (${d.first_id} → ${d.last_id}).`;
+        }
+        loadAssets?.();
+        blkOnizle();                            // aralık ilerledi
+      } else if (new Date(d.expires_at).getTime() < Date.now()) {
+        blkQrDurdur();
+        if (dur) { dur.className = 'blk-qr-hata'; dur.textContent = 'Onay kodunun süresi doldu. Yeniden üretin.'; }
+      }
+    } catch { /* ağ dalgalanması: bir sonraki turda dener */ }
+  }
+
+  $(`#blkQrIptal`)?.addEventListener('click', blkQrKapat);
 
   $(`#createBulk`)?.addEventListener('click', async () => {
     const btn = $(`#createBulk`);

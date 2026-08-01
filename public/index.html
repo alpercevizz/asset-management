@@ -1911,6 +1911,21 @@
           <div class="blk-card blk-idler">
             <h4 class="blk-bolum"><i>2</i>Önizleme</h4>
             <div class="blk-id-liste" id="blkIdListe"></div>
+
+            <!-- Telefonla onay: TV/kiosk'ta klavye yok. QR okutulup onaylanınca
+                 kayıtlar oluşur. Plan JETONA DONDURULUR — telefon ne oluşacağını
+                 değiştiremez (bkz. agent/tools/bulk-token.js). -->
+            <div class="blk-onay-kutu" id="blkOnayKutu">
+              <button class="btn-pdf" id="blkQrUret">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3z"/></svg>
+                Telefonla onayla (QR)
+              </button>
+              <div class="blk-qr" id="blkQrAlan" style="display:none;">
+                <img id="blkQrImg" alt="Toplu kayıt onay QR kodu" />
+                <p id="blkQrDurum">Telefonla okutun ve onaylayın.</p>
+                <button class="btn-pdf" id="blkQrIptal">Vazgeç</button>
+              </div>
+            </div>
             <div class="blk-mini">
               <div><span class="ad-ico kpi-ico--blue"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M11 18h2"/></svg></span>
                 <small>Kategori</small><b id="blkMiniKat">—</b></div>
