@@ -3162,10 +3162,12 @@ body.tv-mode .blk-onay-kutu { display: block; }
 .hm-ozet { display: none; }
 
 /* ══ TABLET: alanlar 2'li, önizleme solda, sağda Özet Bilgiler ═══════════ */
-/* Alt sınır 1020: 2 form sütunu + 390px özet paneli ancak bu genişlikten
+/* Tablet (1020–1366) ve monitör (1600+) aynı iskeleti paylaşır: alanlar 2'li,
+   önizleme solda, sağda özet paneli. Aradaki 1367–1599 laptop düzenidir.
+   Alt sınır 1020: 2 form sütunu + 390px özet paneli ancak bu genişlikten
    sonra sıkışmadan sığıyor (900'de sütunlar 168px'e düşüyordu). Dikey tablet
    (820px) alttaki tek sütunlu düzeni alır. */
-@media (min-width: 1020px) and (max-width: 1366px) {
+@media (min-width: 1020px) and (max-width: 1366px), (min-width: 1600px) {
   #lineModalOverlay .hat-modal { max-width: 1180px; width: calc(100% - 36px); }
   .hm-kapat { display: none; }            /* kapatma sağ paneldeki X'te */
 
@@ -3232,6 +3234,40 @@ body.tv-mode .blk-onay-kutu { display: block; }
     display: flex; align-items: center; justify-content: center;
     font-size: 11px; font-weight: 700;
   }
+  /* SIM görseli ve not kutusu yalnız monitörde (tablette panel dar) */
+  .hm-ozet-sim, .hm-ozet-not { display: none; }
+}
+
+/* ══ MONITÖR: geniş modal, sağ panelde SIM + yatay satırlar + not ═════════ */
+@media (min-width: 1600px) {
+  #lineModalOverlay .hat-modal { max-width: 1400px; }
+  .hm-kapat { display: flex; }            /* kapatma başlıkta */
+  .hm-ozet-kapat { display: none; }
+  .hm-govde { column-gap: 30px; padding: 26px 30px 28px; }
+  .hm-alan { min-height: 54px; }
+
+  /* Panel sütunu boyunca uzar; ayırıcı çizgi görevini de kartın kenarı görür */
+  .hm-ozet { align-self: stretch; padding: 20px 22px; }
+  .hm-ozet-bas h4 { font-size: 16px; }
+  .hm-ozet-g { margin-top: 0; border-top: 0; padding-top: 0; }
+
+  .hm-ozet-sim { display: flex; justify-content: center; margin: 18px 0 20px; }
+  .hm-ozet-sim svg { width: 100%; max-width: 205px; height: auto; border-radius: 12px; }
+
+  /* Satırlar yatay: etiket solda, değer sağda */
+  .hm-ozet-r { align-items: center; padding: 14px 0; }
+  .hm-ozet-r + .hm-ozet-r { border-top: 1px solid var(--border); }
+  .hm-ozet-r span:first-child { margin-top: 0; }
+  .hm-ozet-r > div { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex: 1; }
+  .hm-ozet-r div > span { display: inline; margin-bottom: 0; font-size: 13.5px; }
+  .hm-ozet-r b { font-size: 14px; text-align: right; }
+
+  .hm-ozet-not {
+    display: flex; align-items: flex-start; gap: 10px; margin-top: 18px;
+    padding: 14px 15px; border: 1px solid var(--border); border-radius: 12px;
+    font-size: 12.5px; line-height: 1.55; color: var(--text-muted);
+  }
+  .hm-ozet-not svg { flex-shrink: 0; margin-top: 1px; }
 }
 
 /* ── Dar ekran: tek kolon, önizleme forma taşınır ── */

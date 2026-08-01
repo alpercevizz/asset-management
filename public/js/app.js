@@ -2256,8 +2256,11 @@ function lineFormKontrol() {
     escapeHtml(dr.charAt(0).toLocaleUpperCase('tr-TR') + dr.slice(1));
   const oz = $(`#ozDurum`);
   if (oz) oz.innerHTML = durumHtml;
-  const marka = document.getElementById('simMarka');
-  if (marka) marka.textContent = op || '';
+  // İki SIM görseli var (sol önizleme + monitörde sağ panel); ikisi de yazar
+  ['simMarka', 'simMarka2'].forEach((id) => {
+    const e = document.getElementById(id);
+    if (e) e.textContent = op || '';
+  });
 
   // ── Özet Bilgiler paneli (tablet düzeni; aynı veriler, dikey dizilim) ──
   set(`#ozgTelefon`, ms ? msisdnBicim(ms) : '—');
