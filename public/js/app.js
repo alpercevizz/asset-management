@@ -2315,8 +2315,44 @@ function openLineModal() {
   doldur(`#lineTariffList`, (_lines || []).map((l) => l.tariff));
 
   lineFormKontrol();
+  // Panel başlığı TV'de "Bilgi Özeti", diğer düzenlerde "Özet Bilgiler"
+  const tv = document.body.classList.contains('tv-mode');
+  const ozBas = document.querySelector('.hm-ozet-bas h4');
+  if (ozBas) ozBas.textContent = tv ? 'Bilgi Özeti' : 'Özet Bilgiler';
+  if (tv) lineTvKur();
   $(`#lineModalOverlay`)?.classList.add('open');
   setTimeout(() => $(`#lineMsisdn`)?.focus(), 60);
+}
+
+/* ── TV/duvar ekranı başlığı: sistem durumu + saat ──────────────────────────
+   Durum uydurulmuyor: panodaki uyarı sayısı henüz hesaplanmadıysa
+   "bilinmiyor" yazar. Duvar ekranında yanlış bir "normal" en kötü yalandır. */
+let _lineTvSaat = null;
+
+function lineTvKur() {
+  const durum = $(`#lineTvDurum`);
+  if (durum) {
+    const n = _toplamUyari;
+    const [sinif, metin] = n === null ? ['bilinmiyor', 'Sistem durumu bilinmiyor']
+      : n === 0 ? ['normal', 'Sistem Normal']
+        : ['dikkat', `${n} uyarı`];
+    durum.className = 'hm-tv-durum ' + sinif;
+    durum.querySelector('b').textContent = metin;
+  }
+  const yaz = () => {
+    const e = $(`#lineTvSaat`);
+    if (!e) return;
+    const d = new Date();
+    e.innerHTML = `<b>${d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</b>` +
+      `<span>${d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' })}</span>`;
+  };
+  yaz();
+  if (_lineTvSaat) clearInterval(_lineTvSaat);
+  _lineTvSaat = setInterval(yaz, 1000);
+}
+
+function lineTvDurdur() {
+  if (_lineTvSaat) { clearInterval(_lineTvSaat); _lineTvSaat = null; }
 }
 
 /* ── SIM barkodunu kamerayla oku ────────────────────────────────────────────
@@ -4503,7 +4539,12 @@ async function loadAlerts(showLoading = true) {
   }
 }
 
+/* Son hesaplanan toplam uyarı sayısı. null = henüz hesaplanmadı; TV başlığında
+   "bilinmiyor" ile "normal" ayrımını yapabilmek için ayrı tutuluyor. */
+let _toplamUyari = null;
+
 function updateAlertsBadge(count) {
+  _toplamUyari = Number.isFinite(count) ? count : null;
   // Topbar zil rozeti aynı sayıyı gösterir
   const bell = $(`#bellBadge`);
   if (bell) {
@@ -5684,7 +5725,27 @@ document.addEventListener('DOMContentLoaded', () => {
   $(`#lineScanClose`)?.addEventListener('click', lineScanDurdur);
   // Modal her nasıl kapanırsa kapansın kamera da kapanmalı — açık kalan
   // kamera ışığı ürkütücü. Tek kapatma yolu: kapat / geri / iptal / dışarı.
-  const lineKapat = () => { lineScanDurdur(); lineOverlay?.classList.remove('open'); };
+  const lineKapat = () => { lineScanDurdur(); lineTvDurdur(); lineOverlay?.classList.remove('open'); };
+
+  /* Uzaktan kumanda: OK/Enter Kaydet'i tetikler, Geri/Escape modalı kapatır.
+     TV modunda başlıktaki X gizli olduğu için Escape'in bağlı olması ŞART —
+     yoksa kumandayla açılan modaldan çıkış yolu kalmaz. */
+  /* Escape belge düzeyinde ve YAKALAMA evresinde: odak modalın dışında olsa
+     bile çalışsın, ayrıca TV modundan çıkış dinleyicisinden önce koşup onu
+     durdursun — tek Escape'te hem modalı kapatıp hem TV'den çıkmak
+     beklenmedik olurdu. */
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !lineOverlay?.classList.contains('open')) return;
+    e.stopImmediatePropagation();
+    lineKapat();
+  }, true);
+
+  lineOverlay?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || !document.body.classList.contains('tv-mode')) return;
+    if (e.target.closest('button, select, textarea, a')) return;
+    e.preventDefault();
+    $(`#saveLineBtn`)?.click();
+  });
   ['#closeLineModal', '#lineModalGeri', '#cancelLineBtn', '#lineOzetKapat'].forEach((sel) =>
     $(sel)?.addEventListener('click', lineKapat));
   lineOverlay?.addEventListener('click', (e) => { if (e.target === lineOverlay) lineKapat(); });

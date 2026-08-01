@@ -3270,6 +3270,137 @@ body.tv-mode .blk-onay-kutu { display: block; }
   .hm-ozet-not svg { flex-shrink: 0; margin-top: 1px; }
 }
 
+/* ══ TV / DUVAR EKRANI ═══════════════════════════════════════════════════════
+   Modal kart olmayı bırakır, ekranı kaplar. Metrelerce öteden okunacağı için
+   yazılar iri; fare olmadığı için ipucu balonları (i) gizlenir — dokunulamayan
+   bir ipucu ekranda gürültüden ibaret. */
+.hm-tv-bilgi, .hm-tv-ipucu, .hm-tv-ikon { display: none; }
+
+body.tv-mode #lineModalOverlay { padding: 0; }
+body.tv-mode #lineModalOverlay .hat-modal {
+  width: 100%; max-width: none; height: 100%; max-height: none;
+  border: 0; border-radius: 0; box-shadow: none;
+  display: flex; flex-direction: column; padding: 26px 34px 18px;
+}
+
+/* Başlık: solda ikon+başlık, sağda sistem durumu + saat (kapatma X'i yok;
+   çıkış İPTAL ve kumandanın Geri/Escape tuşuyla — ikisi de bağlı) */
+body.tv-mode #lineModalOverlay .hm-bas { padding: 0 0 22px; border-bottom: 0; }
+body.tv-mode #lineModalOverlay .hm-kapat { display: none; }
+body.tv-mode #lineModalOverlay .hm-ico { width: 62px; height: 62px; border-radius: 16px; }
+body.tv-mode #lineModalOverlay .hm-ico svg { width: 28px; height: 28px; }
+body.tv-mode #lineModalOverlay .hm-h h3 {
+  font-size: 38px; letter-spacing: .01em; text-transform: uppercase;
+}
+body.tv-mode #lineModalOverlay .hm-h h3::before { content: 'Yeni '; }
+body.tv-mode #lineModalOverlay .hm-h .modal-desc { font-size: 17px; }
+body.tv-mode #lineModalOverlay .hm-i { display: none; }
+
+.hm-tv-bilgi { align-items: center; gap: 26px; margin-left: auto; }
+body.tv-mode .hm-tv-bilgi { display: flex; }
+.hm-tv-durum { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 600; }
+.hm-tv-durum i { width: 12px; height: 12px; border-radius: 50%; background: var(--text-muted); }
+.hm-tv-durum.normal { color: var(--green); }
+.hm-tv-durum.normal i { background: var(--green); }
+.hm-tv-durum.dikkat { color: var(--orange); }
+.hm-tv-durum.dikkat i { background: var(--orange); }
+.hm-tv-durum.bilinmiyor { color: var(--text-muted); }
+.hm-tv-saat { display: block; text-align: right; padding-left: 26px; border-left: 1px solid var(--border); }
+.hm-tv-saat b { display: block; font-size: 30px; font-weight: 700; line-height: 1.1; }
+.hm-tv-saat span { display: block; font-size: 13px; color: var(--text-muted); margin-top: 3px; }
+
+/* Gövde ekranı doldurur; iki panel de çerçeveli kart */
+body.tv-mode #lineModalOverlay .hm-govde {
+  flex: 1; min-height: 0; overflow-y: auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 500px;
+  column-gap: 30px; row-gap: 0; padding: 0; align-items: start;
+}
+body.tv-mode #lineModalOverlay .hm-form,
+body.tv-mode #lineModalOverlay .hm-ikili { display: contents; }
+body.tv-mode #lineModalOverlay .hm-f:has(#lineMsisdn)   { grid-column: 1; }
+body.tv-mode #lineModalOverlay .hm-f:has(#lineIccid)    { grid-column: 2; }
+body.tv-mode #lineModalOverlay .hm-f:has(#lineOperator) { grid-column: 1; }
+body.tv-mode #lineModalOverlay .hm-f:has(#lineStatus)   { grid-column: 2; }
+body.tv-mode #lineModalOverlay .hm-f:has(#lineTariff)   { grid-column: 1 / 3; }
+
+body.tv-mode #lineModalOverlay .hm-f > label { font-size: 15px; letter-spacing: .05em; }
+body.tv-mode #lineModalOverlay .hm-alan { min-height: 66px; border-radius: 14px; }
+body.tv-mode #lineModalOverlay .hm-alan-ico { width: 44px; height: 44px; border-radius: 11px; }
+body.tv-mode #lineModalOverlay .hm-alan input,
+body.tv-mode #lineModalOverlay .hm-alan select { font-size: 21px; }
+body.tv-mode #lineModalOverlay .hm-ipucu { font-size: 14px; }
+
+body.tv-mode #lineModalOverlay .hm-onizleme {
+  grid-column: 1 / 3; order: 90; margin: 6px 0 0; padding: 20px 24px;
+  border: 1px solid var(--border); border-radius: 16px;
+  display: grid; grid-template-columns: 190px minmax(0, 1fr);
+  grid-template-areas: "bas bas" "sim ozet"; gap: 12px 30px; align-items: center;
+}
+body.tv-mode #lineModalOverlay .hm-onizleme > h4 {
+  grid-area: bas; margin-bottom: 0; font-size: 15px; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--text-muted);
+}
+body.tv-mode #lineModalOverlay .hm-sim { grid-area: sim; margin-bottom: 0; }
+body.tv-mode #lineModalOverlay .hm-sim svg { max-width: 190px; }
+body.tv-mode #lineModalOverlay .hm-oz { grid-area: ozet; border-top: 0; }
+body.tv-mode #lineModalOverlay .hm-oz-r { font-size: 18px; padding: 13px 0; }
+body.tv-mode #lineModalOverlay .hm-onizleme-not { display: none; }
+body.tv-mode #lineModalOverlay .hm-uyari { grid-column: 1 / 3; order: 95; font-size: 16px; }
+
+/* Sağ panel: BİLGİ ÖZETİ */
+body.tv-mode #lineModalOverlay .hm-ozet {
+  display: block; grid-column: 3; grid-row: 1 / span 99; align-self: stretch;
+  border: 1px solid var(--border); border-radius: 18px; padding: 22px 26px;
+}
+body.tv-mode #lineModalOverlay .hm-ozet-bas h4 {
+  font-size: 17px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted);
+}
+body.tv-mode #lineModalOverlay .hm-ozet-kapat,
+body.tv-mode #lineModalOverlay .hm-ozet-sim { display: none; }
+body.tv-mode #lineModalOverlay .hm-ozet-g { margin-top: 8px; border-top: 0; padding-top: 0; }
+body.tv-mode #lineModalOverlay .hm-ozet-r { align-items: center; padding: 19px 0; gap: 16px; }
+body.tv-mode #lineModalOverlay .hm-ozet-r + .hm-ozet-r { border-top: 1px solid var(--border); }
+body.tv-mode #lineModalOverlay .hm-ozet-r span:first-child { margin-top: 0; }
+body.tv-mode #lineModalOverlay .hm-ozet-r > div {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex: 1;
+}
+body.tv-mode #lineModalOverlay .hm-ozet-r div > span { display: inline; margin-bottom: 0; font-size: 18px; }
+body.tv-mode #lineModalOverlay .hm-ozet-r b { font-size: 19px; text-align: right; }
+body.tv-mode #lineModalOverlay .hm-ozet-op { width: 30px; height: 30px; border-radius: 9px; font-size: 14px; }
+body.tv-mode #lineModalOverlay .hm-ozet-not {
+  display: flex; align-items: flex-start; gap: 12px; margin-top: 20px;
+  padding: 18px 20px; border: 1px solid var(--border); border-radius: 14px;
+  font-size: 16px; line-height: 1.5; color: var(--text-muted);
+}
+body.tv-mode #lineModalOverlay .hm-ozet-not svg { flex-shrink: 0; margin-top: 2px; }
+
+/* Düğmeler: tam genişlik, iri, büyük harf */
+body.tv-mode #lineModalOverlay .hm-dugmeler {
+  grid-column: 1 / -1; order: 100; margin-top: 22px; gap: 22px;
+}
+body.tv-mode #lineModalOverlay .hm-dugmeler .btn-pdf,
+body.tv-mode #lineModalOverlay .hm-dugmeler .btn-add {
+  min-width: 0; padding: 24px; font-size: 22px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; border-radius: 14px;
+}
+body.tv-mode #lineModalOverlay .hm-dugmeler .btn-pdf { flex: 0 0 36%; }
+body.tv-mode #lineModalOverlay .hm-dugmeler .btn-add { flex: 1 1 auto; }
+body.tv-mode #lineModalOverlay .hm-dugmeler svg { width: 22px; height: 22px; }
+body.tv-mode #lineModalOverlay .hm-tv-ikon { display: block; }
+
+/* Kumanda ipucu şeridi */
+body.tv-mode #lineModalOverlay .hm-tv-ipucu {
+  display: flex; align-items: center; justify-content: center; gap: 42px;
+  padding: 18px 0 4px; border-top: 1px solid var(--border); margin-top: 18px;
+  font-size: 16px; color: var(--text-muted); flex-shrink: 0;
+}
+.hm-tv-ipucu span { display: flex; align-items: center; gap: 11px; }
+.hm-tus {
+  display: flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; border-radius: 50%;
+  border: 1px solid var(--border); font-size: 13px; font-weight: 700; font-style: normal;
+}
+
 /* ── Dar ekran: tek kolon, önizleme forma taşınır ── */
 @media (max-width: 1019px) {
   /* Sıra "alanlar → Önizleme → düğmeler" olsun diye display:contents + order

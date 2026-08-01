@@ -2070,6 +2070,11 @@
             <p class="modal-desc">Yeni bir hat ve SIM kart bilgilerini girin.</p>
           </div>
         </div>
+        <!-- TV/duvar ekranı: sistem durumu + saat (yalnız body.tv-mode) -->
+        <div class="hm-tv-bilgi">
+          <span class="hm-tv-durum" id="lineTvDurum"><i></i><b>—</b></span>
+          <span class="hm-tv-saat" id="lineTvSaat"></span>
+        </div>
         <button class="btn-icon hm-kapat" id="closeLineModal" aria-label="Kapat">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
@@ -2154,7 +2159,10 @@
           <p class="hm-uyari" id="lineUyari"></p>
 
           <div class="hm-dugmeler">
-            <button class="btn-pdf" id="cancelLineBtn">İptal</button>
+            <button class="btn-pdf" id="cancelLineBtn">
+              <svg class="hm-tv-ikon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+              İptal
+            </button>
             <button class="btn-add" id="saveLineBtn">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>
               Kaydet
@@ -2269,6 +2277,16 @@
             Kaydettiğiniz hatlar, Hatlar listesinde görüntülenecektir.
           </p>
         </aside>
+      </div>
+
+      <!-- Uzaktan kumanda ipucu (yalnız TV modu). Üçü de gerçekten bağlı:
+           yön tuşları tarayıcının odak sırasını kullanır, OK/Enter Kaydet'i,
+           Geri/Escape modalı kapatır. Bağlı olmayan tuş göstermek duvar
+           ekranında kullanıcıyı kilitler. -->
+      <div class="hm-tv-ipucu">
+        <span><i class="hm-tus"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 4v16M4 12h16M12 4l-3 3M12 4l3 3M12 20l-3-3M12 20l3-3M4 12l3-3M4 12l3 3M20 12l-3-3M20 12l-3 3"/></svg></i>Navigasyon</span>
+        <span><i class="hm-tus hm-tus--ok">OK</i>Seç</span>
+        <span><i class="hm-tus"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></i>Geri</span>
       </div>
     </div>
   </div>
