@@ -1672,8 +1672,20 @@
       <!-- QR Tab — üç durum: form / bekleme / başarı (tasarım referansı) -->
       <div class="modal-body modal-tabpane" id="tab-qr">
 
+        <!-- Adım göstergesi: YALNIZ TV modunda görünür. Duvar ekranında
+             kullanıcı uzaktan bakıyor; nerede olduğunu tek bakışta görmeli.
+             Adımlar akışın GERÇEK durumundan sürülür (form/bekleme/başarı). -->
+        <div class="qrf-nav" id="qrfNav">
+          <div class="qrf-nav-s" data-s="1"><i>1</i><span>Bilgileri Girin</span></div>
+          <div class="qrf-nav-s" data-s="2"><i>2</i><span>QR Oluşturun</span></div>
+          <div class="qrf-nav-s" data-s="3"><i>3</i><span>Cihaz Bağlansın</span></div>
+        </div>
+
         <!-- ── 1) FORM ── -->
         <div id="qrfForm">
+          <!-- Tablette/masaustunde iki kolon: form solda, QR paneli sagda.
+               Telefonda alt alta yigilir (tek kolon). -->
+          <div class="qrf-left">
           <div class="qrf-info">
             <span class="qrf-info-i">i</span>
             <div>
@@ -1727,7 +1739,7 @@
             </div>
           </div>
 
-          <div class="qrf-help">
+          <div class="qrf-help qrf-help--nasil">
             <h4><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Nasıl çalışır?</h4>
             <ol>
               <li>QR kodu oluşturun.</li>
@@ -1736,24 +1748,33 @@
             </ol>
           </div>
 
+          <p class="qrf-tv-hint">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            Devam etmek için uzaktan kumandada <strong>OK</strong> (Enter) tuşuna basın.
+          </p>
+          </div><!-- /qrf-left -->
+
+          <div class="qrf-right">
+          <h4 class="qrf-right-h"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>QR Kod</h4>
           <div class="qr-display" id="qrDisplay">
             <div class="qr-placeholder" id="qrPlaceholder">
               <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><line x1="14" y1="14" x2="14" y2="14"/><line x1="21" y1="21" x2="21" y2="21"/><line x1="17" y1="17" x2="17" y2="17"/></svg>
               <span>QR henüz oluşturulmadı</span>
               <small>Formu doldurun ve “QR Oluştur” düğmesine basın.</small>
             </div>
-          </div>
 
           <!-- Bu iki kutu ÖN KOŞUL hatırlatması; sistem bunları doğrulayamaz.
                Tasarımda yeşil onay vardı — sunucunun telefonun hangi ağda
                olduğunu veya cihazın açık olduğunu bilme yolu yok, onay
                işareti koymak uydurma olurdu. -->
-          <div class="qrf-req">
-            <div><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1"/></svg>
-              <b>Aynı Ağ</b><small>Cihaz ve bu bilgisayar aynı ağda olmalı.</small></div>
-            <div><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg>
-              <b>Cihaz Açık</b><small>Cihazın açık olduğundan emin olun.</small></div>
-          </div>
+            <div class="qrf-req">
+              <div><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1"/></svg>
+                <b>Aynı Ağ</b><small>Cihaz ve bu bilgisayar aynı ağda olmalı.</small></div>
+              <div><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg>
+                <b>Cihaz Açık</b><small>Cihazın açık olduğundan emin olun.</small></div>
+            </div>
+          </div><!-- /qr-display -->
+          </div><!-- /qrf-right -->
         </div>
 
         <!-- ── 2) BEKLEME ── -->

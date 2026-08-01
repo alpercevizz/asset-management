@@ -5004,7 +5004,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Hızlı İşlemler
-  $(`#qaAddAsset`)?.addEventListener('click', () => $(`#qrModalOverlay`)?.classList.add('open'));
+  /* Modal her açılışta FORM durumuna döner: adım göstergesi 1'e oturur ve
+     önceki oturumdan kalan bekleme/başarı ekranı görünmez. */
+  const qrAc = () => { qrfDurdur(); _qrfJeton = null; qrfDurum('form'); $(`#qrModalOverlay`)?.classList.add('open'); };
+  $(`#qaAddAsset`)?.addEventListener('click', qrAc);
   $(`#qaBulk`)?.addEventListener('click', () => {
     $(`#qrModalOverlay`)?.classList.add('open');
     $(`.modal-tab[data-tab="bulk"]`)?.click();
@@ -5013,7 +5016,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $(`#qaReport`)?.addEventListener('click', () => showView('reports'));
 
   // İşlemler görünümü + Kullanıcı ekle
-  $(`#opAddAsset`)?.addEventListener('click', () => $(`#qrModalOverlay`)?.classList.add('open'));
+  $(`#opAddAsset`)?.addEventListener('click', qrAc);
   $(`#opBulk`)?.addEventListener('click', () => {
     $(`#qrModalOverlay`)?.classList.add('open');
     $(`.modal-tab[data-tab="bulk"]`)?.click();
@@ -5331,6 +5334,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function qrfDurum(ad) {
     const goster = (id, v) => { const e = $(id); if (e) e.style.display = v; };
+    /* TV adım göstergesi akışın GERÇEK durumundan sürülür — uydurma ilerleme
+       çubuğu değil. form=1, bekleme=2, başarı=3. */
+    const adim = ad === 'form' ? 1 : ad === 'bekle' ? 2 : 3;
+    $$('.qrf-nav-s').forEach((e) => {
+      const n = Number(e.dataset.s);
+      e.classList.toggle('aktif', n === adim);
+      e.classList.toggle('tamam', n < adim);
+    });
     goster(`#qrfForm`, ad === 'form' ? '' : 'none');
     goster(`#qrfWait`, ad === 'bekle' ? '' : 'none');
     goster(`#qrfDone`, ad === 'bitti' ? '' : 'none');
@@ -5419,6 +5430,17 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch { /* ağ dalgalanması: bir sonraki turda yeniden dener */ }
   }
+
+  /* TV modunda uzaktan kumandanin OK/Enter tusu birincil eylemi tetikler.
+     Duvar ekraninda fare yok; tasarimdaki "OK tusuna basin" ipucunun
+     karsiligi olmasi icin gercekten baglandi. */
+  $(`#qrModalOverlay`)?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    if (!document.body.classList.contains('tv-mode')) return;
+    if (e.target.closest('button, select, input, textarea, a')) return;
+    const btn = [$(`#generateQr`), $(`#qrfContinue`)].find((b) => b && b.offsetParent !== null);
+    if (btn) { e.preventDefault(); btn.click(); }
+  });
 
   $(`#qrfCancel`)?.addEventListener('click', () => {
     qrfDurdur();

@@ -2637,7 +2637,146 @@ body.tv-mode:not(.tv-full) .assets-rail .sev-count {
   #qrModalOverlay .modal-body { padding: 16px; }
   .qr-prefill { grid-template-columns: 1fr; }
   .qrf-req { grid-template-columns: 1fr; }
+  /* .modal-footer negatif yan bosluk (-22px) ile modal kenarina dayaniyor,
+     ama mobil govde dolgusu 16px — fark her yanda 6px tasma yapiyordu.
+     Negatif bosluk govde dolgusuyla EsITLENIR. */
+  #qrModalOverlay .modal-footer {
+    margin-left: -16px; margin-right: -16px;
+    padding-left: 16px; padding-right: 16px;
+  }
   #qrfFooter { flex-wrap: wrap; }
   #qrfFooter button { flex: 1 1 46%; justify-content: center; }
   .qrf-timer { flex-direction: row; }
 }
+
+/* ── YENİ VARLIK EKLE · TABLET ve ÜSTÜ ──────────────────────────────────────
+   Tasarım tablette iki kolon istiyor: form solda, QR paneli sağda. Telefonda
+   (≤900px) alt alta yığılır — dar ekranda iki kolon 200px'e sıkışırdı. */
+@media (min-width: 901px) {
+  #qrModalOverlay .modal { max-width: 1040px; }
+
+  /* Sekmeler sol kolonun genişliğinde kalır (tasarımda modal boyunca
+     uzamıyor); geniş modalde tam genişlik sekme çubuğu boş görünüyordu. */
+  #qrModalOverlay .modal-tabs { max-width: 52%; }
+
+  #qrfForm { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+  .qrf-left, .qrf-right { min-width: 0; }
+
+  .qrf-right-h { display: flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 700; margin-bottom: 12px; }
+
+  /* Sağ panel: kesikli çerçeve QR alanını VE ön koşul kutularını kapsar */
+  .qrf-right .qr-display {
+    border: 1.5px dashed var(--border-strong); border-radius: 14px;
+    padding: 26px 20px 20px; min-height: 420px;
+    display: flex; flex-direction: column; justify-content: center; gap: 24px;
+  }
+  .qrf-right .qr-placeholder { padding: 0; }
+  .qrf-right .qrf-req { margin-top: auto; }
+
+  /* Bekleme ve başarı ekranları tek kolon; geniş modalde ortalanır ki
+     satırlar okunamayacak kadar uzamasın. */
+  #qrfWait, #qrfDone { max-width: 560px; margin: 0 auto; }
+}
+
+/* Sol kolondaki alanlar dar; etiket/değer yan yana sığmıyor */
+@media (min-width: 901px) and (max-width: 1180px) {
+  .qrf-left .qr-prefill { grid-template-columns: 1fr 1fr; }
+}
+
+/* Telefonda sağ panel GİZLENMEZ — QR yer tutucusu orada da görünmeli;
+   yalnızca başlık gereksiz yer kaplıyor. */
+@media (max-width: 900px) {
+  .qrf-right-h { display: none; }
+  .qrf-right .qr-display { margin-top: 4px; }
+}
+
+/* Adım göstergesi varsayılan olarak GİZLİ — yalnız TV modunda anlamlı.
+   Masaüstünde form zaten tek ekranda, adım çubuğu yer harcardı. */
+.qrf-nav { display: none; }
+
+/* ── MONİTÖR (≥1400px) ──────────────────────────────────────────────────────
+   Tablet düzeninin aynısı, sadece daha geniş: QR alanı büyür, formdaki
+   alanlar iki kolona rahat sığar. */
+@media (min-width: 1400px) {
+  #qrModalOverlay .modal { max-width: 1200px; }
+  #qrfForm { gap: 28px; }
+  .qrf-right .qr-display { min-height: 470px; }
+  .qrf-right .qr-placeholder svg { width: 56px; height: 56px; }
+}
+
+/* ══ TV / DUVAR EKRANI ═══════════════════════════════════════════════════════
+   Duvar ekranında kimse tıklamıyor ve kimse yakın değil: modal tam ekrana
+   açılır, yazılar büyür, her şey TEK BAKIŞTA görünecek şekilde dört kolona
+   yayılır (form · QR · ön koşullar · nasıl çalışır). Adım göstergesi
+   kullanıcının nerede olduğunu uzaktan gösterir. */
+body.tv-mode #qrModalOverlay { padding: 0; background: #060911; backdrop-filter: none; }
+body.tv-mode #qrModalOverlay .modal {
+  max-width: none; width: 100%; height: 100dvh; max-height: 100dvh;
+  border: none; border-radius: 0; background: #060911; box-shadow: none;
+  color: #e8edf7;
+}
+body.tv-mode #qrModalOverlay .modal-header { border-color: rgba(255,255,255,.08); padding: 16px 28px; }
+body.tv-mode #qrModalOverlay .modal-header h3 { font-size: 20px; }
+body.tv-mode #qrModalOverlay .modal-tabs { display: none; }   /* TV'de tek akış */
+body.tv-mode #qrModalOverlay .modal-body { padding: 20px 28px; overflow: auto; }
+
+body.tv-mode .qrf-nav {
+  display: flex; align-items: center; gap: 14px; margin-bottom: 20px; flex-wrap: wrap;
+}
+body.tv-mode .qrf-nav-s { display: flex; align-items: center; gap: 10px; color: #6b7794; font-size: 14px; }
+body.tv-mode .qrf-nav-s + .qrf-nav-s::before {
+  content: ""; width: 40px; height: 1px; background: rgba(255,255,255,.14); margin-right: 14px;
+}
+body.tv-mode .qrf-nav-s i {
+  width: 28px; height: 28px; border-radius: 50%; font-style: normal; font-size: 13px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,.07); color: #93a1bd;
+}
+body.tv-mode .qrf-nav-s.aktif { color: #e8edf7; font-weight: 600; }
+body.tv-mode .qrf-nav-s.aktif i { background: var(--accent); color: #fff; }
+body.tv-mode .qrf-nav-s.tamam i { background: rgba(16,185,129,.18); color: #34d399; }
+
+/* Dört kolon: form · QR · ön koşullar · nasıl çalışır */
+body.tv-mode #qrfForm {
+  display: grid; grid-template-columns: 1.05fr 1.25fr .85fr 1fr; gap: 18px; align-items: start;
+}
+body.tv-mode .qrf-left, body.tv-mode .qrf-right { display: contents; }
+body.tv-mode .qrf-info { grid-column: 1; margin-bottom: 0; }
+body.tv-mode .qrf-left .qr-prefill { grid-column: 1; grid-template-columns: 1fr; }
+body.tv-mode .qrf-help--nasil { grid-column: 4; grid-row: 1 / span 4; margin: 0; }
+body.tv-mode .qrf-right-h { grid-column: 2; }
+/* Tablette kesikli kutu ön koşul kartlarını da SARIYOR. TV'de tasarım onları
+   AYRI bir kolona alıyor — kutu contents olunca çocukları doğrudan ızgaraya
+   girer ve ayrı ayrı yerleştirilebilir. */
+body.tv-mode .qrf-right .qr-display { display: contents; }
+body.tv-mode .qrf-right .qr-placeholder {
+  grid-column: 2; grid-row: 2 / span 3;
+  border: 1px solid rgba(255,255,255,.08); border-radius: 14px;
+  background: #0d1424; padding: 34px 20px; min-height: 300px;
+}
+body.tv-mode .qrf-req { grid-column: 3; grid-row: 1 / span 4; grid-template-columns: 1fr; align-content: start; margin: 0; }
+
+body.tv-mode .qrf-info, body.tv-mode .qrf-help, body.tv-mode .qrf-req > div,
+body.tv-mode .qrf-card, body.tv-mode .qrf-right .qr-display {
+  background: #0d1424; border-color: rgba(255,255,255,.08);
+}
+body.tv-mode .qrf-req > div { border-style: solid; }
+body.tv-mode .qrf-info p, body.tv-mode .qrf-help li, body.tv-mode .qrf-req small { color: #93a1bd; }
+body.tv-mode .field-sm label { color: #93a1bd; }
+body.tv-mode .select-sm { background: #0d1424; border-color: rgba(255,255,255,.12); color: #e8edf7; }
+body.tv-mode .qr-placeholder { color: #7c8cf8; }
+body.tv-mode .qr-placeholder span { color: #e8edf7; font-size: 17px; }
+body.tv-mode .qr-placeholder small { color: #7e8ba6; }
+
+/* Düğmeler duvar ekranından okunacak kadar büyük */
+body.tv-mode #qrModalOverlay .modal-footer {
+  border-color: rgba(255,255,255,.08); padding: 16px 28px; gap: 14px;
+}
+body.tv-mode #qrfFooter button { padding: 14px 26px; font-size: 15px; }
+
+/* Uzaktan kumanda ipucu — Enter tuşu gerçekten bağlı (bkz. app.js) */
+body.tv-mode .qrf-tv-hint {
+  display: flex; align-items: center; gap: 9px; margin-top: 14px;
+  font-size: 12.5px; color: #7e8ba6; grid-column: 1;
+}
+.qrf-tv-hint { display: none; }
