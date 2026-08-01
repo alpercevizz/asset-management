@@ -96,14 +96,20 @@ function animateCount(el, target) {
   const start = 0;
   const duration = 800;
   const startTime = performance.now();
+  const hedef = Number(target) || 0;
   function step(now) {
     const elapsed = now - startTime;
     const progress = Math.min(elapsed / duration, 1);
     const eased = 1 - Math.pow(1 - progress, 3);
-    el.textContent = Math.round(start + (target - start) * eased);
+    el.textContent = Math.round(start + (hedef - start) * eased);
     if (progress < 1) requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
+  /* GÜVENCE: requestAnimationFrame arka plan sekmesinde ÇALIŞMAZ. Panel
+     arka planda açılırsa (veya kullanıcı yüklenirken sekme değiştirirse)
+     animasyon hiç başlamaz ve sayaçlar "—" olarak kalırdı. Süre dolunca
+     nihai değer koşulsuz yazılır — animasyon çalıştıysa zaten aynı değer. */
+  setTimeout(() => { el.textContent = String(hedef); }, duration + 60);
 }
 
 /* ─── API ───────────────────────────────────────────────────────────────── */
@@ -1985,6 +1991,62 @@ function exportAssetsCSV(secilenler) {
 let _lines = [];
 const LINE_STATUS_CLS = { aktif: 'badge--online', pasif: 'badge--unknown', iptal: 'badge--offline' };
 
+/* ═══ HATLAR & SIM KARTLARI ════════════════════════════════════════════════
+   Filtreleme ve sayfalama İSTEMCİDE. Hat sayısı küçük (yüzler mertebesi) —
+   her tuşta sunucuya gitmenin faydası yok, gecikme zararı var. */
+const _lineFiltre = { q: '', op: '', status: '', tariff: '' };
+let _linePage = 1;
+let _linePageSize = 25;
+
+/* MSISDN'i okunur biçime getirir: +905321112233 → +90 532 111 22 33.
+   Ham hâli 13 hanelik tek blok; tabloda gözle taranamıyor. */
+function msisdnBicim(v) {
+  const s = String(v || '').replace(/\s+/g, '');
+  const m = /^\+90(\d{3})(\d{3})(\d{2})(\d{2})$/.exec(s);
+  return m ? `+90 ${m[1]} ${m[2]} ${m[3]} ${m[4]}` : (v || '—');
+}
+
+/* Operatör rozeti. Marka logosu KULLANILMIYOR — logo dosyalarımız yok ve
+   marka varlıklarını gömmek ayrı bir izin konusu. Operatörün baş harfi,
+   ada göre sabit bir renkle gösteriliyor (aynı operatör hep aynı renk). */
+const OP_RENK = ['blue', 'accent', 'green', 'purple', 'orange', 'teal'];
+function opRozet(ad) {
+  const t = String(ad || '').trim();
+  if (!t) return '<span style="color:var(--text-muted)">—</span>';
+  let h = 0;
+  for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) >>> 0;
+  const renk = OP_RENK[h % OP_RENK.length];
+  return `<span class="op-rozet"><i class="kpi-ico--${renk}">${escapeHtml(t.slice(0, 1).toLocaleUpperCase('tr-TR'))}</i>${escapeHtml(t)}</span>`;
+}
+
+function lineFiltrele() {
+  const q = _lineFiltre.q.toLowerCase().replace(/\s+/g, '');
+  return _lines.filter((l) => {
+    if (_lineFiltre.op && l.operator !== _lineFiltre.op) return false;
+    if (_lineFiltre.status && l.status !== _lineFiltre.status) return false;
+    if (_lineFiltre.tariff && l.tariff !== _lineFiltre.tariff) return false;
+    if (!q) return true;
+    // Arama boşlukları yok sayar: kullanıcı "+90 532" yazsa da bulur
+    return [l.msisdn, l.iccid, l.assigned_hostname, l.operator, l.tariff]
+      .some((x) => String(x || '').toLowerCase().replace(/\s+/g, '').includes(q));
+  });
+}
+
+/* Filtre seçenekleri VERİDEN türetilir. Sabit liste yazılsaydı yeni bir
+   operatör/tarife eklenince listede görünmez, kullanıcı da filtreleyemezdi. */
+function lineFiltreSecenekleri() {
+  const doldur = (sel, degerler, mevcut) => {
+    const e = $(sel);
+    if (!e) return;
+    const liste = [...new Set(degerler.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'tr'));
+    e.innerHTML = '<option value="">Tümü</option>' +
+      liste.map((v) => `<option value="${escapeHtml(v)}"${v === mevcut ? ' selected' : ''}>${escapeHtml(v)}</option>`).join('');
+  };
+  doldur(`#lineFilterOp`, _lines.map((l) => l.operator), _lineFiltre.op);
+  doldur(`#lineFilterStatus`, _lines.map((l) => l.status), _lineFiltre.status);
+  doldur(`#lineFilterTariff`, _lines.map((l) => l.tariff), _lineFiltre.tariff);
+}
+
 async function loadLines() {
   const tbody = $(`#linesBody`);
   if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="loading-cell">Yükleniyor...</td></tr>`;
@@ -1995,8 +2057,13 @@ async function loadLines() {
     _lines = data.lines || [];
     const s = data.summary || {};
     const setC = (id, v) => { const el = $(`#${id}`); if (el) animateCount(el, v); };
-    setC('lineTotal', s.total || 0); setC('lineAssigned', s.assigned || 0); setC('lineUnassigned', s.unassigned || 0);
-    const cnt = $(`#lineCount`); if (cnt) cnt.textContent = `${s.total || 0} hat · ${s.assigned || 0} telefona bağlı`;
+    setC('lineTotal', s.total || 0);
+    setC('lineAssigned', s.assigned || 0);
+    setC('lineUnassigned', s.unassigned || 0);
+    /* Operatör kartı SAYI gösterir. Önceki sürümde buraya sabit "Turkcell"
+       yazılıydı — ikinci operatör eklenince yanlış bilgi veriyordu. */
+    setC('lineOperators', new Set(_lines.map((l) => l.operator).filter(Boolean)).size);
+    lineFiltreSecenekleri();
     renderLinesTable();
   } catch (err) {
     if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="loading-cell" style="color:var(--red)">${escapeHtml(err.message)}</td></tr>`;
@@ -2006,35 +2073,120 @@ async function loadLines() {
 function renderLinesTable() {
   const tbody = $(`#linesBody`);
   if (!tbody) return;
-  if (!_lines.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="loading-cell">Kayıtlı hat yok. "Hat Ekle" veya "CSV İçe Aktar" ile başlayın.</td></tr>`;
+
+  const suzulen = lineFiltrele();
+  const toplamSayfa = Math.max(1, Math.ceil(suzulen.length / _linePageSize));
+  if (_linePage > toplamSayfa) _linePage = toplamSayfa;
+  const bas = (_linePage - 1) * _linePageSize;
+  const sayfa = suzulen.slice(bas, bas + _linePageSize);
+
+  // Alt bilgi: kaç kayıt gösteriliyor + sayfalar
+  const aralik = $(`#lineRange`);
+  if (aralik) {
+    aralik.textContent = suzulen.length
+      ? `${bas + 1} – ${bas + sayfa.length} / ${suzulen.length} kayıt gösteriliyor` +
+        (suzulen.length !== _lines.length ? ` (${_lines.length} kayıt içinden)` : '')
+      : 'Kayıt yok';
+  }
+  const sayfalar = $(`#linePages`);
+  if (sayfalar) {
+    sayfalar.innerHTML = Array.from({ length: toplamSayfa }, (_, i) => i + 1)
+      .map((n) => `<button class="lf-page${n === _linePage ? ' aktif' : ''}" data-p="${n}">${n}</button>`).join('');
+    sayfalar.querySelectorAll('.lf-page').forEach((b) =>
+      b.addEventListener('click', () => { _linePage = Number(b.dataset.p); renderLinesTable(); }));
+  }
+  const prev = $(`#linePrev`), next = $(`#lineNext`);
+  if (prev) prev.disabled = _linePage <= 1;
+  if (next) next.disabled = _linePage >= toplamSayfa;
+
+  if (!suzulen.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="loading-cell">${
+      _lines.length ? 'Filtreye uyan hat yok.' : 'Kayıtlı hat yok. "Hat Ekle" veya "CSV İçe Aktar" ile başlayın.'
+    }</td></tr>`;
     return;
   }
+
   const stCls = (st) => LINE_STATUS_CLS[st] || 'badge--unknown';
-  tbody.innerHTML = _lines.map((l) => `
+  tbody.innerHTML = sayfa.map((l) => {
+    /* Bağlı telefon: cihaz adı + ZİMMETLİ KULLANICI. Tasarımda burada ikinci
+       bir telefon numarası vardı; cihaza ait ayrı bir numara sistemde YOK,
+       uydurmak yerine gerçekten bildiğimiz bilgi gösteriliyor. */
+    const cihaz = l.assigned_asset_id
+      ? (state.assets || []).find((a) => String(a.id) === String(l.assigned_asset_id))
+      : null;
+    const kullanici = cihaz && (cihaz.username || '').trim();
+    return `
     <tr>
-      <td class="hostname-cell">${fmt(l.msisdn)}</td>
-      <td class="serial-cell">${fmt(l.iccid)}</td>
-      <td>${fmt(l.operator)}</td>
+      <td>
+        <div class="ln-msisdn">
+          <span class="ln-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M11 18h2"/></svg></span>
+          <b>${escapeHtml(msisdnBicim(l.msisdn))}</b>
+        </div>
+      </td>
+      <td>
+        <span class="ln-iccid"><span class="serial-cell">${fmt(l.iccid)}</span>
+          <button class="btn-icon ln-kopyala" data-v="${escapeHtml(l.iccid || '')}" title="SIM numarasını kopyala">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button></span>
+      </td>
+      <td>${opRozet(l.operator)}</td>
       <td>${fmt(l.tariff)}</td>
       <td><span class="badge ${stCls(l.status)}">${fmt(l.status)}</span></td>
-      <td>${l.assigned_hostname ? `<span class="hostname-cell">${escapeHtml(l.assigned_hostname)}</span>` : '<span style="color:var(--text-muted)">boşta</span>'}</td>
+      <td>${l.assigned_hostname
+        ? `<div class="ln-bagli"><b>${escapeHtml(l.assigned_hostname)}</b>${
+            kullanici ? `<small><i></i>${escapeHtml(kullanici)}</small>` : ''}</div>`
+        : '<div class="ln-bagli"><span class="ln-bos">—</span><small>boşta</small></div>'}</td>
       <td style="text-align:right;white-space:nowrap">
-        <button class="btn-icon line-assign" data-id="${l.id}" title="Telefona ata" style="display:inline-flex">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18"/></svg>
+        <button class="btn-icon line-assign" data-id="${l.id}" title="Telefona ata">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M11 18h2"/></svg>
         </button>
-        ${l.assigned_asset_id ? `<button class="btn-icon line-release" data-id="${l.id}" title="Telefondan çıkar" style="display:inline-flex;margin-left:4px">
+        ${l.assigned_asset_id ? `<button class="btn-icon line-release" data-id="${l.id}" title="Telefondan çıkar">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg>
         </button>` : ''}
-        <button class="btn-icon line-history" data-id="${l.id}" title="Geçmiş" style="display:inline-flex;margin-left:4px">
+        <button class="btn-icon line-history" data-id="${l.id}" title="Geçmiş">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         </button>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 
   tbody.querySelectorAll('.line-assign').forEach(b => b.addEventListener('click', () => assignLinePrompt(Number(b.dataset.id))));
   tbody.querySelectorAll('.line-release').forEach(b => b.addEventListener('click', () => releaseLineAction(Number(b.dataset.id))));
   tbody.querySelectorAll('.line-history').forEach(b => b.addEventListener('click', () => showLineHistory(Number(b.dataset.id))));
+  tbody.querySelectorAll('.ln-kopyala').forEach(b => b.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(b.dataset.v);
+      b.classList.add('kopyalandi');
+      setTimeout(() => b.classList.remove('kopyalandi'), 1200);
+    } catch { /* pano izni yok: kullanıcı elle seçebilir */ }
+  }));
+}
+
+
+/* Hatları CSV'ye aktar. EKRANDA GÖRÜNEN (filtrelenmiş) liste dışa aktarılır —
+   kullanıcı bir filtre kurup dışa aktardığında tüm listeyi almak şaşırtıcı olur. */
+function exportLinesCsv() {
+  const liste = lineFiltrele();
+  if (!liste.length) { alert('Dışa aktarılacak hat yok.'); return; }
+  const cols = [
+    ['msisdn', 'Telefon No'], ['iccid', 'SIM No (ICCID)'], ['operator', 'Operatör'],
+    ['tariff', 'Tarife'], ['status', 'Durum'], ['assigned_hostname', 'Bağlı Telefon'],
+    ['note', 'Not'],
+  ];
+  const esc = (v) => {
+    const t = (v === null || v === undefined) ? '' : String(v);
+    return /[",;\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+  };
+  const csv = '﻿' + [
+    cols.map(([, l]) => esc(l)).join(';'),
+    ...liste.map((l) => cols.map(([k]) => esc(l[k])).join(';')),
+  ].join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `assetman-hatlar-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function openLineModal() {
@@ -5326,6 +5478,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Hat (Turkcell) modalı + CSV import
   const lineOverlay = $(`#lineModalOverlay`);
+  /* Hat filtreleri — hepsi istemcide, her değişiklikte tabloyu yeniden çizer.
+     Sayfa 1'e dönülür: 3. sayfadayken filtre daraltılınca boş ekran kalırdı. */
+  const lineFiltreDegisti = () => { _linePage = 1; renderLinesTable(); };
+  $(`#lineSearch`)?.addEventListener('input', (e) => { _lineFiltre.q = e.target.value; lineFiltreDegisti(); });
+  $(`#lineFilterOp`)?.addEventListener('change', (e) => { _lineFiltre.op = e.target.value; lineFiltreDegisti(); });
+  $(`#lineFilterStatus`)?.addEventListener('change', (e) => { _lineFiltre.status = e.target.value; lineFiltreDegisti(); });
+  $(`#lineFilterTariff`)?.addEventListener('change', (e) => { _lineFiltre.tariff = e.target.value; lineFiltreDegisti(); });
+  $(`#lineFilterClear`)?.addEventListener('click', () => {
+    _lineFiltre.q = ''; _lineFiltre.op = ''; _lineFiltre.status = ''; _lineFiltre.tariff = '';
+    const s1 = $(`#lineSearch`); if (s1) s1.value = '';
+    lineFiltreSecenekleri();
+    lineFiltreDegisti();
+  });
+  $(`#linePrev`)?.addEventListener('click', () => { if (_linePage > 1) { _linePage--; renderLinesTable(); } });
+  $(`#lineNext`)?.addEventListener('click', () => { _linePage++; renderLinesTable(); });
+  $(`#linePageSize`)?.addEventListener('change', (e) => {
+    _linePageSize = Number(e.target.value) || 25; _linePage = 1; renderLinesTable();
+  });
+  $(`#linesMore`)?.addEventListener('click', () => exportLinesCsv());
+
   $(`#openAddLine`)?.addEventListener('click', openLineModal);
   $(`#closeLineModal`)?.addEventListener('click', () => lineOverlay?.classList.remove('open'));
   lineOverlay?.addEventListener('click', (e) => { if (e.target === lineOverlay) lineOverlay.classList.remove('open'); });
