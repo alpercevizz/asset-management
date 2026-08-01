@@ -611,6 +611,51 @@ app.delete('/api/register/tokens/:jti', requireRole('it', 'admin'), async (req, 
 
 // Toplu placeholder kayıt: depodaki kimliği belirsiz cihazlar için
 // IT adet + kategori girer, sistem otomatik ID'li 'depoda' taslakları oluşturur.
+/* Toplu kayıt planı — ÖNEK ve NUMARA ARALIĞI burada hesaplanır.
+   Hem önizleme ucu hem oluşturma ucu BU fonksiyonu kullanır: iki yerde ayrı
+   hesaplanırsa önizleme kullanıcıya yanlış ID aralığı gösterir. Numaralandırma
+   mevcut kayıtlardan DEVAM eder, bu yüzden aralık her zaman 001'den başlamaz. */
+const BULK_PREFIX_MAP = {
+  'Sunucu': 'DEPO-SUNUCU',
+  'Telefon': 'DEPO-TELEFON', 'Tablet': 'DEPO-TABLET', 'El Terminali': 'DEPO-TERMINAL',
+  'Yazıcı': 'DEPO-YAZICI', 'Ağ Aygıtı': 'DEPO-AG', 'Çevre Aygıtı': 'DEPO-CEVRE', 'Diğer': 'DEPO-CIHAZ',
+};
+
+async function bulkPlan({ category = 'Diğer', prefix, quantity }) {
+  const qty = parseInt(quantity, 10);
+  const pfx = (prefix && String(prefix).trim()) || BULK_PREFIX_MAP[category] || 'DEPO-CIHAZ';
+  const all = await getAllAssets({ size: 200 });
+  // Önek kullanıcıdan geliyor; regex'e gömmeden önce özel karakterler kaçırılır
+  const kacis = pfx.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Dize içinde \d yazılırsa JS onu 'd' harfine indirger → regex rakam yerine
+  // harf arar ve numaralandırma her seferinde 001'den başlardı. \\d şart.
+  const re = new RegExp('^' + kacis + '-(\\d+)$');
+  let maxNum = 0, mevcut = 0;
+  for (const a of (all.results || [])) {
+    const m = (a.hostname || '').match(re);
+    if (m) { mevcut++; maxNum = Math.max(maxNum, parseInt(m[1], 10)); }
+  }
+  const no = (n) => pfx + '-' + String(n).padStart(3, '0');
+  return {
+    prefix: pfx, maxNum, mevcut,
+    quantity: Number.isFinite(qty) ? qty : 0,
+    ilk: qty > 0 ? no(maxNum + 1) : null,
+    son: qty > 0 ? no(maxNum + qty) : null,
+  };
+}
+
+/* Önizleme: panelin sağdaki "Oluşturulacak Kayıtlar" kutusu bununla dolar.
+   Oluşturma ile AYNI hesabı kullandığı için gösterilen aralık gerçektir. */
+app.get('/api/register/bulk/preview', requireRole('it', 'admin'), async (req, res) => {
+  try {
+    res.json(await bulkPlan({
+      category: req.query.category, prefix: req.query.prefix, quantity: req.query.quantity,
+    }));
+  } catch (err) {
+    res.status(500).json({ error: 'Önizleme hesaplanamadı', detail: err.message });
+  }
+});
+
 app.post('/api/register/bulk', async (req, res) => {
   try {
     const { category = 'Diğer', location = '', quantity, prefix } = req.body || {};
@@ -619,22 +664,9 @@ app.post('/api/register/bulk', async (req, res) => {
       return res.status(400).json({ error: 'quantity 1-200 arası olmalı' });
     }
 
-    // ID öneki: verilmezse kategoriden türet
-    const PREFIX_MAP = {
-      'Sunucu': 'DEPO-SUNUCU',
-      'Telefon': 'DEPO-TELEFON', 'Tablet': 'DEPO-TABLET', 'El Terminali': 'DEPO-TERMINAL',
-      'Yazıcı': 'DEPO-YAZICI', 'Ağ Aygıtı': 'DEPO-AG', 'Çevre Aygıtı': 'DEPO-CEVRE', 'Diğer': 'DEPO-CIHAZ',
-    };
-    const pfx = (prefix && prefix.trim()) || PREFIX_MAP[category] || 'DEPO-CIHAZ';
-
-    // Mevcut aynı önekli kayıtların en büyük numarasını bul → çakışmayı önle
-    const all = await getAllAssets({ size: 200 });
-    const re = new RegExp(`^${pfx.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-(\\d+)$`);
-    let maxNum = 0;
-    for (const a of (all.results || [])) {
-      const m = (a.hostname || '').match(re);
-      if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
-    }
+    const plan = await bulkPlan({ category, prefix, quantity: qty });
+    const pfx = plan.prefix;
+    const maxNum = plan.maxNum;
 
     const now = new Date().toISOString();
     const created = [];

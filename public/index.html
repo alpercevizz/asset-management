@@ -1841,39 +1841,107 @@
 
       <!-- Toplu Depo Kaydı Tab -->
       <div class="modal-body modal-tabpane" id="tab-bulk" style="display:none;">
-        <p class="modal-desc">Depodaki kimliği belirsiz, kapalı cihazlar için. Adet ve kategori girin; sistem otomatik ID'li (örn. <code>DEPO-TELEFON-001</code>) <strong>"depoda"</strong> durumunda taslak kayıtlar oluşturur. Cihaz açılıp tanımlanınca detaylar doldurulur.</p>
 
-        <div class="qr-prefill">
-          <div class="field-sm">
-            <label>Kategori</label>
-            <select id="bulkCategory" class="select-sm">
-              <option value="Telefon">📱 Telefon</option>
-              <option value="Tablet">📲 Tablet</option>
-              <option value="El Terminali">📟 El Terminali</option>
-              <option value="Yazıcı">🖨️ Yazıcı</option>
-              <option value="Ağ Aygıtı">🌐 Ağ Aygıtı</option>
-              <option value="Çevre Aygıtı">🖱️ Çevre Aygıtı</option>
-              <option value="Diğer">Diğer</option>
-            </select>
+        <div class="blk-banner">
+          <span class="qrf-info-i">i</span>
+          <div class="blk-banner-t">
+            <b>Depodaki kimliği belirsiz, kapalı cihazlar için.</b>
+            <p>Adet ve kategori girin; sistem otomatik ID'leri oluşturur ve "depoda" durumunda taslak kayıtlar oluşturur.</p>
           </div>
-          <div class="field-sm">
-            <label>Adet</label>
-            <input type="number" id="bulkQty" class="select-sm" min="1" max="200" value="10" />
+          <div class="blk-ornek">
+            <span>ID Örneği</span>
+            <div><code id="bulkOrnek">DEPO-TELEFON-001</code>
+              <button class="btn-icon" id="bulkKopyala" title="Kopyala" aria-label="ID örneğini kopyala">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
           </div>
-          <div class="field-sm">
-            <label>Lokasyon</label>
-            <input type="text" id="bulkLocation" class="select-sm" placeholder="Örn: Ana Depo" />
+        </div>
+
+        <div class="blk-grid">
+          <!-- Sol: form -->
+          <div class="blk-card">
+            <div class="blk-f">
+              <label for="bulkCategory">Kategori</label>
+              <small>Cihaz kategorisini seçin</small>
+              <select id="bulkCategory" class="select-sm">
+                <option value="Telefon">📱 Telefon</option>
+                <option value="Tablet">📲 Tablet</option>
+                <option value="El Terminali">📟 El Terminali</option>
+                <option value="Yazıcı">🖨️ Yazıcı</option>
+                <option value="Ağ Aygıtı">🌐 Ağ Aygıtı</option>
+                <option value="Çevre Aygıtı">🖱️ Çevre Aygıtı</option>
+                <option value="Sunucu">🖥️ Sunucu</option>
+                <option value="Diğer">Diğer</option>
+              </select>
+            </div>
+
+            <div class="blk-2">
+              <div class="blk-f">
+                <label for="bulkQty">Adet</label>
+                <small>Eklenecek cihaz adetini girin</small>
+                <input type="number" id="bulkQty" class="select-sm" min="1" max="200" value="10" />
+              </div>
+              <div class="blk-f">
+                <label for="bulkLocation">Lokasyon</label>
+                <small>Cihazların bulunduğu depo/konum</small>
+                <!-- Serbest metin + mevcut lokasyon listesi: select olsaydı YENİ
+                     bir depo adı girilemezdi. Liste app.js'te dolduruluyor. -->
+                <input type="text" id="bulkLocation" class="select-sm" list="bulkLocList" placeholder="Örn: Ana Depo" />
+                <datalist id="bulkLocList"></datalist>
+              </div>
+            </div>
+
+            <div class="blk-f">
+              <label for="bulkPrefix">ID Öneki <span class="blk-ops">(opsiyonel)</span></label>
+              <small>Otomatik oluşturulacak ID'lerin başına eklenecek ifade</small>
+              <div class="blk-say-wrap">
+                <input type="text" id="bulkPrefix" class="select-sm" maxlength="20"
+                       placeholder="Boşsa kategoriden türetilir (örn. TELEFON)" />
+                <span class="blk-say" id="bulkPrefixSay">0 / 20</span>
+              </div>
+            </div>
           </div>
-          <div class="field-sm">
-            <label>ID Öneki <span style="text-transform:none;font-weight:400">(opsiyonel)</span></label>
-            <input type="text" id="bulkPrefix" class="select-sm" placeholder="Boşsa kategoriden türetilir" />
+
+          <!-- Sağ: CANLI önizleme. Aralık sunucudaki bulkPlan ile hesaplanır;
+               numaralandırma mevcut kayıtlardan devam ettiği için her zaman
+               001'den başlamaz — burada gerçek aralık gösterilir. -->
+          <div class="blk-card blk-onizleme">
+            <h4><span class="ad-ico kpi-ico--accent"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 2 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/></svg></span>Oluşturulacak Kayıtlar</h4>
+            <div class="ad-row"><span>Kategori</span><b id="blkOzKat">—</b></div>
+            <div class="ad-row"><span>Adet</span><b id="blkOzAdet">—</b></div>
+            <div class="ad-row"><span>ID Öneki</span><b id="blkOzOnek">—</b></div>
+            <div class="ad-row"><span>Lokasyon</span><b id="blkOzLok">—</b></div>
+
+            <div class="blk-aralik">
+              <h5>Otomatik Oluşacak ID Aralığı</h5>
+              <div class="blk-chips">
+                <code id="blkIlk">—</code>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                <code id="blkSon">—</code>
+              </div>
+              <p class="blk-not" id="blkNot"></p>
+            </div>
+
+            <p class="blk-onay">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg>
+              Kayıtlar <strong>"depoda"</strong> durumunda taslak olarak oluşturulacaktır.
+            </p>
           </div>
         </div>
 
         <div class="bulk-result" id="bulkResult" style="display:none;"></div>
 
-        <div class="modal-footer">
-          <button class="btn-report" id="createBulk">Taslak Kayıtları Oluştur</button>
+        <div class="modal-footer blk-footer">
+          <p class="blk-bilgi">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>
+            <span><b>Bilgilendirme</b>Oluşturulan kayıtlar daha sonra düzenlenebilir ve detay bilgileri eklenebilir.</span>
+          </p>
+          <button class="btn-pdf" id="bulkIptal">İptal</button>
+          <button class="btn-report" id="createBulk">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg>
+            Taslak Kayıtları Oluştur
+          </button>
         </div>
       </div>
     </div>

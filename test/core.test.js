@@ -871,3 +871,35 @@ test('agent-auth: aynı kimlikten farklı seri gelince klon şüphesi işaretlen
 
   await db()('agent_enrollments').where({ device_id: CIHAZ }).del();
 });
+
+// ── Toplu kayıt planı (önizleme = gerçek aralık) ──────────────────────────────
+test('bulkPlan: önek türetme, kaçış ve numaralandırmanın devam etmesi', () => {
+  // Sunucudaki bulkPlan ile AYNI regex kurulumu — önizleme ile oluşturmanın
+  // aynı sonucu vermesi bu mantığa bağlı.
+  const kur = (pfx) => {
+    const kacis = pfx.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp('^' + kacis + '-(\\d+)$');
+  };
+
+  // 1) Rakam sınıfı gerçekten rakam eşlemeli. Dizede '\d' yazılırsa JS onu
+  //    'd' harfine indirger ve numaralandırma her seferinde 001'den başlar.
+  const re = kur('DEPO-TELEFON');
+  assert.ok(re.test('DEPO-TELEFON-007'));
+  assert.equal(re.exec('DEPO-TELEFON-014')[1], '014');
+  assert.equal(re.test('DEPO-TELEFON-abc'), false, 'harf eşleşmemeli');
+  assert.equal(re.test('DEPO-TABLET-001'), false, 'başka önek eşleşmemeli');
+
+  // 2) Önek kullanıcıdan geliyor: regex özel karakterleri kaçırılmalı
+  const ozel = kur('A.B*C');
+  assert.ok(ozel.test('A.B*C-003'));
+  assert.equal(ozel.test('AXBYC-003'), false, '. ve * literal olmalı');
+
+  // 3) Numaralandırma mevcut en büyük numaradan DEVAM eder
+  const mevcut = ['DEPO-TELEFON-001', 'DEPO-TELEFON-003', 'DEPO-TABLET-009', 'RASTGELE'];
+  let maxNum = 0;
+  for (const h of mevcut) { const m = h.match(re); if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10)); }
+  assert.equal(maxNum, 3, 'yalnız aynı önekteki en büyük numara sayılmalı');
+  const no = (n) => 'DEPO-TELEFON-' + String(n).padStart(3, '0');
+  assert.equal(no(maxNum + 1), 'DEPO-TELEFON-004');
+  assert.equal(no(maxNum + 10), 'DEPO-TELEFON-013');
+});

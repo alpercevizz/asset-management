@@ -5006,7 +5006,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Hızlı İşlemler
   /* Modal her açılışta FORM durumuna döner: adım göstergesi 1'e oturur ve
      önceki oturumdan kalan bekleme/başarı ekranı görünmez. */
-  const qrAc = () => { qrfDurdur(); _qrfJeton = null; qrfDurum('form'); $(`#qrModalOverlay`)?.classList.add('open'); };
+  const qrAc = () => {
+    qrfDurdur(); _qrfJeton = null; qrfDurum('form');
+    $(`#qrModalOverlay`)?.classList.add('open');
+    blkLokasyonlar(); blkOnizle();      // toplu sekmesi de hazır gelsin
+  };
   $(`#qaAddAsset`)?.addEventListener('click', qrAc);
   $(`#qaBulk`)?.addEventListener('click', () => {
     $(`#qrModalOverlay`)?.classList.add('open');
@@ -5542,6 +5546,90 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Toplu depo kaydı
+  /* ═══ Toplu Depo Kaydı — canlı önizleme ═══════════════════════════════════
+     Sağdaki kutu, oluşturulacak ID aralığını GERÇEK değerlerle gösterir.
+     Aralık sunucudan alınır (/api/register/bulk/preview) çünkü numaralandırma
+     MEVCUT kayıtlardan devam ediyor: aynı önekten 3 kayıt varsa yeni aralık
+     001'den değil 004'ten başlar. İstemcide ayrı hesaplasaydım önizleme
+     kullanıcıya yanlış ID söylerdi. */
+  let _blkTimer = null;
+
+  function blkAlanlar() {
+    return {
+      category: $(`#bulkCategory`)?.value || 'Diğer',
+      quantity: parseInt($(`#bulkQty`)?.value, 10) || 0,
+      prefix: ($(`#bulkPrefix`)?.value || '').trim(),
+      location: ($(`#bulkLocation`)?.value || '').trim(),
+    };
+  }
+
+  async function blkOnizle() {
+    const a = blkAlanlar();
+    const yaz = (id, v) => { const e = $(id); if (e) e.textContent = v; };
+
+    yaz(`#blkOzKat`, a.category);
+    yaz(`#blkOzAdet`, a.quantity || '—');
+    yaz(`#blkOzLok`, a.location || '—');
+
+    // Önek sayacı
+    const say = $(`#bulkPrefixSay`);
+    if (say) say.textContent = `${a.prefix.length} / 20`;
+
+    if (!a.quantity || a.quantity < 1) {
+      yaz(`#blkOzOnek`, '—'); yaz(`#blkIlk`, '—'); yaz(`#blkSon`, '—');
+      yaz(`#blkNot`, 'Adet girin.');
+      return;
+    }
+    try {
+      const qs = new URLSearchParams({ category: a.category, prefix: a.prefix, quantity: String(a.quantity) });
+      const r = await fetch('/api/register/bulk/preview?' + qs.toString());
+      if (!r.ok) throw new Error('önizleme alınamadı');
+      const p = await r.json();
+      yaz(`#blkOzOnek`, p.prefix);
+      yaz(`#blkIlk`, p.ilk || '—');
+      yaz(`#blkSon`, p.son || '—');
+      yaz(`#bulkOrnek`, p.ilk || p.prefix + '-001');
+      // Mevcut kayıt varsa NEDEN 001'den başlamadığını söyle
+      yaz(`#blkNot`, p.mevcut
+        ? `Bu önekte zaten ${p.mevcut} kayıt var; numaralandırma ${String(p.maxNum).padStart(3, '0')} sonrasından devam eder.`
+        : '');
+    } catch (err) {
+      yaz(`#blkNot`, 'Önizleme alınamadı: ' + err.message);
+    }
+  }
+
+  /* Yazarken her tuşta sunucuya gitmemek için kısa gecikme. */
+  function blkOnizleGecikmeli() {
+    clearTimeout(_blkTimer);
+    _blkTimer = setTimeout(blkOnizle, 250);
+  }
+
+  ['#bulkCategory', '#bulkQty', '#bulkPrefix', '#bulkLocation'].forEach((sel) => {
+    const e = $(sel);
+    if (!e) return;
+    e.addEventListener('input', blkOnizleGecikmeli);
+    e.addEventListener('change', blkOnizleGecikmeli);
+  });
+
+  // Lokasyon önerileri: envanterde geçen lokasyonlar (yeni ad girmek serbest)
+  function blkLokasyonlar() {
+    const dl = $(`#bulkLocList`);
+    if (!dl) return;
+    const set = new Set((state.assets || []).map((a) => (a.location || '').trim()).filter(Boolean));
+    dl.innerHTML = [...set].sort((x, y) => x.localeCompare(y, 'tr')).map((l) => `<option value="${escapeHtml(l)}">`).join('');
+  }
+
+  $(`#bulkKopyala`)?.addEventListener('click', async () => {
+    const t = $(`#bulkOrnek`)?.textContent || '';
+    try {
+      await navigator.clipboard.writeText(t);
+      const b = $(`#bulkKopyala`);
+      if (b) { b.classList.add('kopyalandi'); setTimeout(() => b.classList.remove('kopyalandi'), 1200); }
+    } catch { /* pano izni yok: sessiz geç, kullanıcı elle seçebilir */ }
+  });
+
+  $(`#bulkIptal`)?.addEventListener('click', () => $(`#qrModalOverlay`)?.classList.remove('open'));
+
   $(`#createBulk`)?.addEventListener('click', async () => {
     const btn = $(`#createBulk`);
     const resultEl = $(`#bulkResult`);
