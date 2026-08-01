@@ -636,11 +636,20 @@ async function bulkPlan({ category = 'Diğer', prefix, quantity }) {
     if (m) { mevcut++; maxNum = Math.max(maxNum, parseInt(m[1], 10)); }
   }
   const no = (n) => pfx + '-' + String(n).padStart(3, '0');
+
+  /* Örnek ID listesi — panelin "Önizleme" kolonu bunu gösteriyor. 200 kayıtta
+     hepsini yollamanın anlamı yok: baş ve son birkaçı yeter, arası atlanır. */
+  let ornekler = [];
+  if (qty > 0) {
+    const hepsi = Array.from({ length: qty }, (_, i) => no(maxNum + 1 + i));
+    ornekler = hepsi.length <= 12 ? hepsi : [...hepsi.slice(0, 6), null, ...hepsi.slice(-5)];
+  }
   return {
     prefix: pfx, maxNum, mevcut,
     quantity: Number.isFinite(qty) ? qty : 0,
     ilk: qty > 0 ? no(maxNum + 1) : null,
     son: qty > 0 ? no(maxNum + qty) : null,
+    ornekler,
   };
 }
 

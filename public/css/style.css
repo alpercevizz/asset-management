@@ -2866,3 +2866,101 @@ body.tv-mode .blk-card, body.tv-mode .blk-ornek, body.tv-mode .blk-chips code {
 body.tv-mode .blk-banner { background: rgba(124,140,248,.10); border-color: rgba(255,255,255,.08); }
 body.tv-mode .blk-banner-t p, body.tv-mode .blk-f small, body.tv-mode .blk-bilgi { color: #93a1bd; }
 body.tv-mode .blk-f label, body.tv-mode .blk-onizleme h4, body.tv-mode .blk-chips code { color: #e8edf7; }
+
+/* ══ TOPLU DEPO KAYDI · KADEMELER ════════════════════════════════════════════
+   Mobil: tek kolon, birincil düğme üstte.
+   Tablet: iki kolon (form | özet + nasıl çalışır).
+   Monitör: üç numaralı kolon (Bilgileri Girin · Önizleme · Oluşturulacak).
+   TV: tam ekran koyu kiosk. */
+
+/* Numaralı bölüm başlıkları — yalnız monitör ve TV'de görünür.
+   Dar ekranda kolonlar alt alta olduğu için numara yanıltıcı olurdu. */
+.blk-bolum { display: none; align-items: center; gap: 10px; font-size: 14px; font-weight: 700; margin-bottom: 16px; }
+.blk-bolum i {
+  width: 26px; height: 26px; border-radius: 50%; font-style: normal;
+  font-size: 12.5px; font-weight: 700; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent); color: #fff;
+}
+
+.blk-mini { display: none; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.blk-mini > div { border: 1px solid var(--border); border-radius: 11px; padding: 11px 12px; }
+.blk-mini small { display: block; font-size: 11px; color: var(--text-muted); margin: 7px 0 2px; }
+.blk-mini b { font-size: 14px; }
+
+.blk-nasil { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-top: 16px; }
+.blk-nasil h4 { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 700; margin-bottom: 9px; }
+.blk-nasil ol { margin: 0; padding-left: 20px; }
+.blk-nasil li { font-size: 12.5px; line-height: 1.8; color: var(--text-dim); }
+
+/* ── MOBİL: birincil düğme üstte (tasarım), alanlar tek kolon ── */
+@media (max-width: 900px) {
+  .blk-footer { flex-direction: column-reverse; align-items: stretch; }
+  .blk-footer button { width: 100%; justify-content: center; }
+  .blk-bilgi { order: -1; }
+  /* Dar ekranda "Nasıl Çalışır?" özetten sonra gelir; katlamanın altında
+     kalması sorun değil, form ve özet önce okunmalı. */
+}
+
+/* ── TABLET: iki kolon; "Nasıl Çalışır?" sağ kolona, özetin altına ── */
+@media (min-width: 901px) {
+  .blk-grid { grid-template-areas: "form ozet" "form nasil"; align-items: start; }
+  .blk-grid > .blk-card:first-child { grid-area: form; }
+  .blk-onizleme { grid-area: ozet; }
+  .blk-nasil { grid-area: nasil; margin-top: 0; }
+}
+
+/* ── MONİTÖR: üç numaralı kolon ── */
+@media (min-width: 1400px) {
+  #qrModalOverlay .modal { max-width: 1320px; }
+  .blk-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr) minmax(0, 1fr);
+    grid-template-areas: "form onizleme ozet" "nasil nasil nasil";
+    gap: 18px;
+  }
+  .blk-grid > .blk-card:first-child { grid-area: form; }
+  .blk-onizleme { grid-area: ozet; }
+  .blk-nasil { grid-area: nasil; margin-top: 0; }
+  .blk-bolum { display: flex; }
+  .blk-onizleme .blk-baslik { display: none; }   /* numaralı başlık yerine geçti */
+  .blk-mini { display: grid; }
+  /* Orta kolon: ID aralığı önizlemesi. Özet kartındaki aralık bloğu buraya
+     taşınmıyor — kopyalamak yerine her iki yerde de aynı canlı veriyle
+     dolduruluyor (tek kaynak: /api/register/bulk/preview). */
+  .blk-onizleme .blk-aralik { border-top: none; padding-top: 0; }
+}
+
+/* ── TV / KIOSK ── */
+body.tv-mode #tab-bulk .blk-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas: "form ozet" "nasil nasil";
+  gap: 20px;
+}
+body.tv-mode .blk-bolum { display: flex; }
+body.tv-mode .blk-mini { display: grid; }
+body.tv-mode .blk-onizleme .blk-baslik { display: none; }
+body.tv-mode .blk-nasil { background: #0d1424; border-color: rgba(255,255,255,.08); margin-top: 0; }
+body.tv-mode .blk-nasil li, body.tv-mode .blk-mini small { color: #93a1bd; }
+body.tv-mode .blk-mini > div { border-color: rgba(255,255,255,.08); background: #0d1424; }
+body.tv-mode .blk-mini b, body.tv-mode .blk-nasil h4 { color: #e8edf7; }
+body.tv-mode .blk-bolum { color: #e8edf7; }
+body.tv-mode #tab-bulk .modal-footer button { padding: 14px 26px; font-size: 15px; }
+
+/* Orta kolon: oluşacak ID listesi (yalnız monitör/TV'de görünür) */
+.blk-idler { display: none; }
+.blk-id-liste { display: flex; flex-direction: column; gap: 6px; }
+.blk-id-liste code {
+  font-family: var(--font-mono); font-size: 12.5px; color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px;
+  background: var(--bg-card2);
+}
+.blk-id-ara { text-align: center; font-size: 13px; color: var(--text-muted); padding: 3px 0; }
+@media (min-width: 1400px) { .blk-idler { display: block; grid-area: onizleme; } }
+body.tv-mode .blk-idler { display: block; grid-area: onizleme; }
+body.tv-mode .blk-id-liste code { background: #0d1424; border-color: rgba(255,255,255,.08); color: #e8edf7; }
+
+/* TV'de de üç kolon: form · önizleme · özet */
+body.tv-mode #tab-bulk .blk-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas: "form onizleme ozet" "nasil nasil nasil";
+}

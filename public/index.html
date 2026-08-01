@@ -1861,6 +1861,7 @@
         <div class="blk-grid">
           <!-- Sol: form -->
           <div class="blk-card">
+            <h4 class="blk-bolum"><i>1</i>Bilgileri Girin</h4>
             <div class="blk-f">
               <label for="bulkCategory">Kategori</label>
               <small>Cihaz kategorisini seçin</small>
@@ -1903,11 +1904,27 @@
             </div>
           </div>
 
+          <!-- Orta kolon (yalnız monitör/TV): oluşacak ID'lerin listesi.
+               Tasarımda burada QR vardı; toplu kayıt cihazla etkileşmediği için
+               o QR'ın ne yapacağı belirsiz — uydurma bir kod koymak yerine
+               "Önizleme" başlığının karşılığı olan GERÇEK ID listesi konuldu. -->
+          <div class="blk-card blk-idler">
+            <h4 class="blk-bolum"><i>2</i>Önizleme</h4>
+            <div class="blk-id-liste" id="blkIdListe"></div>
+            <div class="blk-mini">
+              <div><span class="ad-ico kpi-ico--blue"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M11 18h2"/></svg></span>
+                <small>Kategori</small><b id="blkMiniKat">—</b></div>
+              <div><span class="ad-ico kpi-ico--accent"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 2 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5"/></svg></span>
+                <small>Toplam</small><b id="blkMiniAdet">—</b></div>
+            </div>
+          </div>
+
           <!-- Sağ: CANLI önizleme. Aralık sunucudaki bulkPlan ile hesaplanır;
                numaralandırma mevcut kayıtlardan devam ettiği için her zaman
                001'den başlamaz — burada gerçek aralık gösterilir. -->
           <div class="blk-card blk-onizleme">
-            <h4><span class="ad-ico kpi-ico--accent"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 2 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/></svg></span>Oluşturulacak Kayıtlar</h4>
+            <h4 class="blk-bolum blk-bolum--3"><i>3</i>Oluşturulacak Kayıtlar</h4>
+            <h4 class="blk-baslik"><span class="ad-ico kpi-ico--accent"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 2 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/></svg></span>Oluşturulacak Kayıtlar</h4>
             <div class="ad-row"><span>Kategori</span><b id="blkOzKat">—</b></div>
             <div class="ad-row"><span>Adet</span><b id="blkOzAdet">—</b></div>
             <div class="ad-row"><span>ID Öneki</span><b id="blkOzOnek">—</b></div>
@@ -1927,6 +1944,15 @@
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg>
               Kayıtlar <strong>"depoda"</strong> durumunda taslak olarak oluşturulacaktır.
             </p>
+          </div>
+        
+          <div class="blk-nasil">
+            <h4><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>Nasıl Çalışır?</h4>
+            <ol>
+              <li>Adet ve kategori bilgilerini girin.</li>
+              <li>Sistem otomatik ID'leri oluşturur.</li>
+              <li>Kayıtlar "depoda" durumunda taslak olarak oluşturulur.</li>
+            </ol>
           </div>
         </div>
 

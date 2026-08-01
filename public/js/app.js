@@ -5570,6 +5570,9 @@ document.addEventListener('DOMContentLoaded', () => {
     yaz(`#blkOzKat`, a.category);
     yaz(`#blkOzAdet`, a.quantity || '—');
     yaz(`#blkOzLok`, a.location || '—');
+    // Monitör kolonundaki mini kartlar aynı veriden beslenir
+    yaz(`#blkMiniKat`, a.category);
+    yaz(`#blkMiniAdet`, a.quantity ? a.quantity + ' Kayıt' : '—');
 
     // Önek sayacı
     const say = $(`#bulkPrefixSay`);
@@ -5577,6 +5580,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!a.quantity || a.quantity < 1) {
       yaz(`#blkOzOnek`, '—'); yaz(`#blkIlk`, '—'); yaz(`#blkSon`, '—');
+      const l0 = $(`#blkIdListe`);
+      if (l0) l0.innerHTML = '<span class="blk-id-ara">Adet girin</span>';
       yaz(`#blkNot`, 'Adet girin.');
       return;
     }
@@ -5590,6 +5595,13 @@ document.addEventListener('DOMContentLoaded', () => {
       yaz(`#blkSon`, p.son || '—');
       yaz(`#bulkOrnek`, p.ilk || p.prefix + '-001');
       // Mevcut kayıt varsa NEDEN 001'den başlamadığını söyle
+      // Örnek ID listesi (orta kolon). null = "arası atlandı" işareti.
+      const liste = $(`#blkIdListe`);
+      if (liste) {
+        liste.innerHTML = (p.ornekler || []).map((x) =>
+          x === null ? '<span class="blk-id-ara">…</span>' : `<code>${escapeHtml(x)}</code>`).join('')
+          || '<span class="blk-id-ara">Adet girin</span>';
+      }
       yaz(`#blkNot`, p.mevcut
         ? `Bu önekte zaten ${p.mevcut} kayıt var; numaralandırma ${String(p.maxNum).padStart(3, '0')} sonrasından devam eder.`
         : '');
