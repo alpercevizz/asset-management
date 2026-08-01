@@ -3158,13 +3158,97 @@ body.tv-mode .blk-onay-kutu { display: block; }
 }
 .scan-yazi { color: #fff; margin: 16px 0; font-size: 14px; opacity: .9; }
 
+/* Özet paneli yalnız tablet düzeninde kullanılır */
+.hm-ozet { display: none; }
+
+/* ══ TABLET: alanlar 2'li, önizleme solda, sağda Özet Bilgiler ═══════════ */
+/* Alt sınır 1020: 2 form sütunu + 390px özet paneli ancak bu genişlikten
+   sonra sıkışmadan sığıyor (900'de sütunlar 168px'e düşüyordu). Dikey tablet
+   (820px) alttaki tek sütunlu düzeni alır. */
+@media (min-width: 1020px) and (max-width: 1366px) {
+  #lineModalOverlay .hat-modal { max-width: 1180px; width: calc(100% - 36px); }
+  .hm-kapat { display: none; }            /* kapatma sağ paneldeki X'te */
+
+  /* Tek ızgara: 2 form sütunu + 390px özet sütunu.
+     .hm-form ve .hm-ikili display:contents ile şeffaflaşır ki alanlar
+     doğrudan bu ızgaraya yerleşsin (tablette eşleşme laptop'takinden
+     farklı: Telefon|SIM ve Operatör|Durum). */
+  .hm-govde {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 390px;
+    column-gap: 22px; row-gap: 0; padding: 24px 26px 26px; align-items: start;
+  }
+  .hm-form, .hm-ikili { display: contents; }
+
+  .hm-f:has(#lineMsisdn)   { grid-column: 1; }
+  .hm-f:has(#lineIccid)    { grid-column: 2; }
+  .hm-f:has(#lineOperator) { grid-column: 1; }
+  .hm-f:has(#lineStatus)   { grid-column: 2; }
+  .hm-f:has(#lineTariff)   { grid-column: 1 / 3; }
+
+  .hm-alan { min-height: 52px; }
+  .hm-alan-ico { width: 34px; height: 34px; }
+
+  /* Önizleme sol sütunda, tam genişlik: SIM solda / satırlar sağda */
+  .hm-onizleme {
+    grid-column: 1 / 3; order: 90; margin: 6px 0 18px; padding: 18px 20px;
+    border: 1px solid var(--border); border-left: 1px solid var(--border);
+    border-radius: 16px;
+    display: grid; grid-template-columns: 150px minmax(0, 1fr);
+    grid-template-areas: "bas bas" "sim ozet"; gap: 14px 26px; align-items: center;
+  }
+  .hm-onizleme > h4 {
+    grid-area: bas; margin-bottom: 0;
+    font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted);
+  }
+  .hm-sim { grid-area: sim; margin-bottom: 0; }
+  .hm-sim svg { max-width: 150px; }
+  .hm-oz { grid-area: ozet; border-top: 0; }
+  .hm-onizleme-not { display: none; }     /* tasarımda yok */
+
+  .hm-uyari { grid-column: 1 / 3; order: 95; margin: 0 0 14px; }
+  .hm-dugmeler { grid-column: 1 / 3; order: 100; margin-top: 0; }
+  .hm-dugmeler .btn-pdf { flex: 0 0 35%; }
+  .hm-dugmeler .btn-add { flex: 1 1 auto; }
+
+  /* Sağ sütun: dikey özet paneli (etiket üstte, değer altta) */
+  .hm-ozet {
+    /* Tüm satırları kapsar: tek bir satıra yerleşseydi o satır panel boyunca
+       uzar ve soldaki alanların arası açılırdı. row-gap 0 olduğu için
+       kapsanan boş satırlar hiçbir boşluk eklemez. */
+    display: block; grid-column: 3; grid-row: 1 / span 99; align-self: start;
+    border: 1px solid var(--border); border-radius: 18px; padding: 18px 20px 8px;
+  }
+  .hm-ozet-bas { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .hm-ozet-bas h4 { font-size: 17px; font-weight: 700; }
+  .hm-ozet-kapat { width: 38px; height: 38px; border-radius: 11px; flex-shrink: 0; }
+  .hm-ozet-g { border-top: 1px solid var(--border); margin-top: 16px; padding-top: 6px; }
+  .hm-ozet-r { display: flex; align-items: flex-start; gap: 13px; padding: 13px 0; }
+  .hm-ozet-r > div { min-width: 0; }
+  .hm-ozet-r span:first-child { margin-top: 2px; }
+  .hm-ozet-r div > span { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 3px; }
+  .hm-ozet-r b { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+  .hm-ozet-op {
+    width: 22px; height: 22px; border-radius: 7px; margin-top: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+  }
+}
+
 /* ── Dar ekran: tek kolon, önizleme forma taşınır ── */
-@media (max-width: 980px) {
-  .hm-govde { grid-template-columns: 1fr; }
-  .hm-onizleme { border-left: none; border-top: 1px solid var(--border); }
-  .hm-ikili { grid-template-columns: 1fr; }
-  .hm-dugmeler { flex-wrap: wrap; }
+@media (max-width: 1019px) {
+  /* Sıra "alanlar → Önizleme → düğmeler" olsun diye display:contents + order
+     (düğmeler HTML'de .hm-form içinde, önizleme kardeşi). Form'un dolgusu
+     contents ile kaybolduğu için gövdeye taşındı. */
+  .hm-govde { display: flex; flex-direction: column; padding: 24px 26px 26px; }
+  .hm-form { display: contents; }
+  .hm-onizleme {
+    order: 90; border: 1px solid var(--border); border-radius: 16px;
+    padding: 18px 20px; margin-bottom: 18px;
+  }
+  .hm-uyari { order: 95; }
+  .hm-dugmeler { order: 100; flex-wrap: wrap; }
   .hm-dugmeler button { flex: 1 1 45%; }
+  .hm-ikili { grid-template-columns: 1fr; }
 }
 
 /* ── Geri düğmesi ve adım göstergesi: yalnız telefonda ── */

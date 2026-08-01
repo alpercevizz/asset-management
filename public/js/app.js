@@ -2252,13 +2252,25 @@ function lineFormKontrol() {
   set(`#ozOperator`, op || '—');
   set(`#ozTarife`, tf || '—');
   set(`#ozTelefon`, ms ? msisdnBicim(ms) : '—');
+  const durumHtml = `<i class="hm-oz-nokta" style="background:${LINE_DURUM_RENK[dr] || 'var(--text-muted)'}"></i>` +
+    escapeHtml(dr.charAt(0).toLocaleUpperCase('tr-TR') + dr.slice(1));
   const oz = $(`#ozDurum`);
-  if (oz) {
-    oz.innerHTML = `<i class="hm-oz-nokta" style="background:${LINE_DURUM_RENK[dr] || 'var(--text-muted)'}"></i>` +
-      escapeHtml(dr.charAt(0).toLocaleUpperCase('tr-TR') + dr.slice(1));
-  }
+  if (oz) oz.innerHTML = durumHtml;
   const marka = document.getElementById('simMarka');
   if (marka) marka.textContent = op || '';
+
+  // ── Özet Bilgiler paneli (tablet düzeni; aynı veriler, dikey dizilim) ──
+  set(`#ozgTelefon`, ms ? msisdnBicim(ms) : '—');
+  set(`#ozgIccid`, ic || '—');
+  set(`#ozgOperator`, op || '—');
+  set(`#ozgTarife`, tf || '—');
+  const ozgDurum = $(`#ozgDurum`);
+  if (ozgDurum) ozgDurum.innerHTML = durumHtml;
+  const ozgRozet = $(`#ozgOpRozet`);
+  if (ozgRozet) {
+    ozgRozet.textContent = op ? op.slice(0, 1).toLocaleUpperCase('tr-TR') : '?';
+    ozgRozet.className = 'hm-oz-ico hm-ozet-op ' + opRenkSinifi(op);
+  }
 
   // Adım göstergesi (telefon): 2. adım Önizleme'dir, kayıt için gereken
   // telefon + operatör girilince etkinleşir. Çubuk her alanla yarı yarıya dolar.
@@ -5670,7 +5682,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Modal her nasıl kapanırsa kapansın kamera da kapanmalı — açık kalan
   // kamera ışığı ürkütücü. Tek kapatma yolu: kapat / geri / iptal / dışarı.
   const lineKapat = () => { lineScanDurdur(); lineOverlay?.classList.remove('open'); };
-  ['#closeLineModal', '#lineModalGeri', '#cancelLineBtn'].forEach((sel) =>
+  ['#closeLineModal', '#lineModalGeri', '#cancelLineBtn', '#lineOzetKapat'].forEach((sel) =>
     $(sel)?.addEventListener('click', lineKapat));
   lineOverlay?.addEventListener('click', (e) => { if (e.target === lineOverlay) lineKapat(); });
   $(`#saveLineBtn`)?.addEventListener('click', saveLine);
