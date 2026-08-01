@@ -3518,3 +3518,15 @@ body.tv-mode #lineModalOverlay .hm-tv-ipucu {
   .hm-dugmeler .btn-add { flex: 1 1 58%; min-width: 0; }
   .hm-dugmeler .btn-pdf, .hm-dugmeler .btn-add { padding: 15px 12px; font-size: 15.5px; border-radius: 14px; }
 }
+
+/* ══ OPERATÖR LOGOSU ═════════════════════════════════════════════════════════
+   Logo dosyası yüklenebildiyse renkli harf rozetinin yerini alır (bkz.
+   opLogoUygula). Dosya yoksa bu sınıf hiç eklenmez, harf rozeti kalır.
+   Zemin beyaz: markaların kendi renkleri hem açık hem koyu temada okunsun
+   (Turkcell sarısı koyu zeminde, Türk Telekom lacivert logotype'ı açık
+   zeminde kayboluyor). Dosyayı bu kural yeniden renklendirmez. */
+.op-ico--logo {
+  background: #fff; color: transparent; overflow: hidden;
+  padding: 2px; border: 1px solid rgba(0, 0, 0, .06);
+}
+.op-ico--logo img { width: 100%; height: 100%; object-fit: contain; display: block; }

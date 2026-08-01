@@ -2021,10 +2021,64 @@ function opRenkSinifi(ad) {
   return 'kpi-ico--' + OP_RENK[h % OP_RENK.length];
 }
 
+/* ── Operatör logoları ──────────────────────────────────────────────────────
+   Logo dosyası VARSA harf rozetinin yerine geçer. Dosya yoksa/yüklenemezse
+   harf rozeti olduğu gibi kalır — kırık görsel simgesi asla görünmez.
+   Bu yüzden görsel doğrudan HTML'e yazılmaz; önce arka planda denenir. */
+const OP_LOGO_YOL = 'img/operators/';
+const OP_LOGOLAR = {
+  turkcell: 'turkcell.png',
+  turktelekom: 'turk-telekom.png',
+  vodafone: 'vodafone.png',
+};
+const _opLogoDurum = {};   // dosya adı → true (yüklendi) | false (yok)
+
+/* 'Türk Telekom' → 'turktelekom' */
+function opLogoAnahtar(ad) {
+  return String(ad || '').toLocaleLowerCase('tr-TR')
+    .replace(/[çğıöşü]/g, (c) => ({ ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u' })[c])
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function opLogoDosya(ad) {
+  return OP_LOGOLAR[opLogoAnahtar(ad)] || '';
+}
+
+/* Render sonrası çağrılır: data-op-logo taşıyan rozetlere görseli yerleştirir. */
+function opLogoUygula(kok) {
+  (kok || document).querySelectorAll('[data-op-logo]').forEach((el) => {
+    const dosya = el.getAttribute('data-op-logo');
+    if (!dosya || _opLogoDurum[dosya] === false || el.querySelector('img')) return;
+    const koy = () => {
+      el.classList.add('op-ico--logo');
+      el.innerHTML = `<img src="${OP_LOGO_YOL}${encodeURIComponent(dosya)}" alt="">`;
+    };
+    if (_opLogoDurum[dosya] === true) { koy(); return; }
+    const im = new Image();
+    im.onload = () => { _opLogoDurum[dosya] = true; koy(); };
+    im.onerror = () => { _opLogoDurum[dosya] = false; };   // harf rozeti kalır
+    im.src = OP_LOGO_YOL + encodeURIComponent(dosya);
+  });
+}
+
+/* Tek bir rozet elemanını tazeler (modaldaki canlı alanlar için).
+   Logo yoksa harf rozeti; opLogoUygula sonradan görseli koyar. */
+function opRozetYaz(el, ad, temelSinif) {
+  const t = String(ad || '').trim();
+  const logo = opLogoDosya(t);
+  el.classList.remove('op-ico--logo');
+  el.textContent = t ? t.slice(0, 1).toLocaleUpperCase('tr-TR') : '?';
+  el.className = temelSinif + ' ' + opRenkSinifi(t);
+  if (logo) el.setAttribute('data-op-logo', logo);
+  else el.removeAttribute('data-op-logo');
+}
+
 function opRozet(ad) {
   const t = String(ad || '').trim();
   if (!t) return '<span style="color:var(--text-muted)">—</span>';
-  return `<span class="op-rozet"><i class="${opRenkSinifi(t)}">${escapeHtml(t.slice(0, 1).toLocaleUpperCase('tr-TR'))}</i>${escapeHtml(t)}</span>`;
+  const logo = opLogoDosya(t);
+  return `<span class="op-rozet"><i class="${opRenkSinifi(t)}"${logo ? ` data-op-logo="${escapeHtml(logo)}"` : ''}>` +
+    `${escapeHtml(t.slice(0, 1).toLocaleUpperCase('tr-TR'))}</i>${escapeHtml(t)}</span>`;
 }
 
 function lineFiltrele() {
@@ -2168,6 +2222,7 @@ function renderLinesTable() {
       setTimeout(() => b.classList.remove('kopyalandi'), 1200);
     } catch { /* pano izni yok: kullanıcı elle seçebilir */ }
   }));
+  opLogoUygula(tbody);
 }
 
 
@@ -2234,10 +2289,7 @@ function lineFormKontrol() {
 
   // Operatör rozeti: tablodakiyle aynı renk kuralı (aynı ad → aynı renk)
   const rozet = $(`#lineOpRozet`);
-  if (rozet) {
-    rozet.textContent = op ? op.slice(0, 1).toLocaleUpperCase('tr-TR') : '?';
-    rozet.className = 'hm-alan-ico hm-op-rozet ' + opRenkSinifi(op);
-  }
+  if (rozet) opRozetYaz(rozet, op, 'hm-alan-ico hm-op-rozet');
 
   // Durum noktası seçime göre renklenir (native select içine nokta konamıyor)
   const nokta = $(`#lineStatusNokta`);
@@ -2270,10 +2322,8 @@ function lineFormKontrol() {
   const ozgDurum = $(`#ozgDurum`);
   if (ozgDurum) ozgDurum.innerHTML = durumHtml;
   const ozgRozet = $(`#ozgOpRozet`);
-  if (ozgRozet) {
-    ozgRozet.textContent = op ? op.slice(0, 1).toLocaleUpperCase('tr-TR') : '?';
-    ozgRozet.className = 'hm-oz-ico hm-ozet-op ' + opRenkSinifi(op);
-  }
+  if (ozgRozet) opRozetYaz(ozgRozet, op, 'hm-oz-ico hm-ozet-op');
+  opLogoUygula($(`#lineModalOverlay`));
 
   // Adım göstergesi (telefon): 2. adım Önizleme'dir, kayıt için gereken
   // telefon + operatör girilince etkinleşir. Çubuk her alanla yarı yarıya dolar.
