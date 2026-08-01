@@ -2028,7 +2028,7 @@ function opRenkSinifi(ad) {
 const OP_LOGO_YOL = 'img/operators/';
 const OP_LOGOLAR = {
   turkcell: 'turkcell.png',
-  turktelekom: 'turk-telekom.png',
+  turktelekom: 'turk-telekom.jpg',   // JPEG: saydamlığı yok, rozet zemini beyaz
   vodafone: 'vodafone.png',
 };
 const _opLogoDurum = {};   // dosya adı → true (yüklendi) | false (yok)
@@ -2273,7 +2273,7 @@ function lineFormKontrol() {
   const msHam = $(`#lineMsisdn`)?.value || '';
   const ms = normMsisdnIstemci(msHam);
   const ic = String($(`#lineIccid`)?.value || '').replace(/[^0-9]/g, '');
-  const op = ($(`#lineOperator`)?.value || '').trim();
+  const op = lineOperatorDegeri();
   const tf = ($(`#lineTariff`)?.value || '').trim();
   const dr = $(`#lineStatus`)?.value || 'aktif';
 
@@ -2347,13 +2347,55 @@ function lineFormKontrol() {
   }
 }
 
+/* ── Operatör açılır menüsü ─────────────────────────────────────────────────
+   Liste = Türkiye'deki üç şebeke + veritabanında zaten geçen operatörler
+   (MVNO/kurumsal adlar kaybolmasın) + "Diğer…". Sabit üçe kilitlemek, mevcut
+   kayıtları düzenlerken operatörü sessizce değiştirirdi. */
+const OP_SABIT = ['Turkcell', 'Vodafone', 'Türk Telekom'];
+const OP_DIGER = '__diger';
+
+function lineOperatorDoldur(secili) {
+  const sel = $(`#lineOperator`);
+  if (!sel) return;
+  const hepsi = [...new Set([...OP_SABIT, ...(_lines || []).map((l) => (l.operator || '').trim())])]
+    .filter(Boolean).sort((a, b) => a.localeCompare(b, 'tr'));
+  sel.innerHTML = hepsi.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('')
+    + `<option value="${OP_DIGER}">Diğer…</option>`;
+
+  const diger = $(`#lineOperatorDiger`);
+  const s = (secili || '').trim();
+  if (s && !hepsi.includes(s)) {          // listede yoksa "Diğer" olarak aç
+    sel.value = OP_DIGER;
+    if (diger) diger.value = s;
+  } else {
+    sel.value = s || hepsi[0] || OP_DIGER;
+    if (diger) diger.value = '';
+  }
+  lineOperatorDigerGoster();
+}
+
+function lineOperatorDigerGoster() {
+  const sel = $(`#lineOperator`), diger = $(`#lineOperatorDiger`);
+  if (!sel || !diger) return;
+  const acik = sel.value === OP_DIGER;
+  diger.style.display = acik ? 'block' : 'none';
+  if (acik && document.activeElement === sel) setTimeout(() => diger.focus(), 30);
+}
+
+/* Kaydedilecek operatör adı: "Diğer" seçiliyse serbest metin alanından. */
+function lineOperatorDegeri() {
+  const sel = $(`#lineOperator`);
+  if (!sel) return '';
+  return (sel.value === OP_DIGER ? ($(`#lineOperatorDiger`)?.value || '') : sel.value).trim();
+}
+
 function openLineModal() {
   ['lineMsisdn', 'lineIccid', 'lineTariff'].forEach(id => { const el = $(`#${id}`); if (el) el.value = ''; });
-  const op = $(`#lineOperator`); if (op) op.value = 'Turkcell';
   const st = $(`#lineStatus`); if (st) st.value = 'aktif';
+  lineOperatorDoldur('Turkcell');
 
-  // Operatör/tarife önerileri mevcut hatlardan — sabit liste yazılsaydı
-  // kurumun kendi tarifeleri hiç görünmezdi.
+  // Tarife önerileri mevcut hatlardan — sabit liste yazılsaydı kurumun kendi
+  // tarifeleri hiç görünmezdi. (Operatör artık açılır menü, bkz. yukarısı.)
   const doldur = (sel, degerler) => {
     const e = $(sel);
     if (!e) return;
@@ -2361,7 +2403,6 @@ function openLineModal() {
       .sort((a, b) => String(a).localeCompare(String(b), 'tr'))
       .map((v) => `<option value="${escapeHtml(v)}">`).join('');
   };
-  doldur(`#lineOpList`, (_lines || []).map((l) => l.operator));
   doldur(`#lineTariffList`, (_lines || []).map((l) => l.tariff));
 
   lineFormKontrol();
@@ -2454,10 +2495,18 @@ function lineScanDurdur() {
 }
 
 async function saveLine() {
+  /* "Diğer" seçilip ad yazılmadıysa varsayılana düşmek YANLIŞ olur: hat
+     sessizce başka bir operatöre kaydedilir. Kullanıcıya sorulur. */
+  const operator = lineOperatorDegeri();
+  if (!operator) {
+    alert('Operatör seçin; "Diğer" seçtiyseniz operatör adını yazın.');
+    $(`#lineOperatorDiger`)?.focus();
+    return;
+  }
   const body = {
     msisdn: $(`#lineMsisdn`)?.value.trim(),
     iccid: $(`#lineIccid`)?.value.trim(),
-    operator: $(`#lineOperator`)?.value.trim() || 'Turkcell',
+    operator,
     tariff: $(`#lineTariff`)?.value.trim(),
     status: $(`#lineStatus`)?.value || 'aktif',
   };
@@ -5763,9 +5812,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   $(`#openAddLine`)?.addEventListener('click', openLineModal);
   // Form her değişiklikte önizlemeyi tazeler
-  ['#lineMsisdn', '#lineIccid', '#lineOperator', '#lineTariff'].forEach((sel) =>
+  ['#lineMsisdn', '#lineIccid', '#lineOperatorDiger', '#lineTariff'].forEach((sel) =>
     $(sel)?.addEventListener('input', lineFormKontrol));
-  $(`#lineStatus`)?.addEventListener('change', lineFormKontrol);
+  ['#lineStatus', '#lineOperator'].forEach((sel) =>
+    $(sel)?.addEventListener('change', lineFormKontrol));
+  // "Diğer" seçilince serbest metin alanı açılır
+  $(`#lineOperator`)?.addEventListener('change', lineOperatorDigerGoster);
   $(`#lineTariffTemizle`)?.addEventListener('click', () => {
     const e = $(`#lineTariff`); if (e) { e.value = ''; e.focus(); }
     lineFormKontrol();

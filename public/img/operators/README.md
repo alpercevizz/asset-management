@@ -6,12 +6,14 @@ Hatlar tablosundaki ve Hat Ekle modalındaki operatör rozetinde kullanılır.
 
 | Operatör | Dosya adı | Not |
 |---|---|---|
-| Turkcell | `turkcell.png` | Kare/yuvarlak simge (sarı işaret) |
-| Türk Telekom | `turk-telekom.png` | Tercihen **kare simge** (üçgen işaret). Yatay logotype rozette çok küçük kalır. |
-| Vodafone | `vodafone.png` | (opsiyonel) |
+| Turkcell | `turkcell.png` | 920×920 PNG, saydam zemin |
+| Türk Telekom | `turk-telekom.jpg` | 512×512 JPEG. Saydamlığı yok; rozet zemini zaten beyaz olduğu için sorun çıkarmaz. |
+| Vodafone | `vodafone.png` | (henüz yok — dosya eklenirse kendiliğinden çıkar) |
 
-- Format: PNG (saydam zemin) veya SVG. Kısa kenar en az 128 px.
+- Format: PNG (saydam zemin), JPEG veya SVG. **Kare** ve kısa kenarı en az 128 px olmalı;
+  yatay logotype 24 px rozette okunmaz.
 - Rozet 22–30 px kare çizer; görsel `object-fit: contain` ile sığdırılır.
+- Dosya adı değişirse `OP_LOGOLAR` eşlemesi de güncellenmeli (uzantı dahil).
 
 ## Dosya yoksa ne olur?
 
