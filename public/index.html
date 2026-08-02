@@ -1170,78 +1170,74 @@
 
       <!-- Reports View -->
       <div class="view hidden" id="view-reports">
-        <div class="page-header">
-          <h1>Raporlar</h1>
-          <p class="page-subtitle">AI destekli envanter analizi</p>
-        </div>
-        <div class="reports-grid">
-          <div class="report-card" id="rpt-overview">
-            <div class="report-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
-              </svg>
-            </div>
-            <h4>Genel Envanter Raporu</h4>
-            <p>Toplam varlık sayısı, marka ve model dağılımı</p>
-            <button class="btn-report" data-shadow="1" data-prompt="get_stats aracını çağır. Türkçe rapor oluştur. Şu başlıkları kullan, başka başlık ekleme: ## Genel Özet, ## Marka Dağılımı (tablo: Marka|Adet), ## Kategori Dağılımı (tablo: Kategori|Cihaz Sayısı), ## Donanım Ortalamaları. Yalnızca araç verisini kullan.">Rapor Oluştur</button>
-          </div>
-          <div class="report-card" id="rpt-hardware">
-            <div class="report-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/>
-              </svg>
-            </div>
-            <h4>Donanim Analizi</h4>
-            <p>RAM, disk ve CPU kapasitesi kıyaslaması</p>
-            <button class="btn-report" data-prompt="list_assets aracını çağır. Türkçe rapor oluştur. Şu başlıkları kullan: ## En Düşük RAM'li 5 Cihaz (tablo: Hostname|Marka|Model|RAM (GB)|Disk (GB)), ## Donanım Ortalamaları. Yalnızca araç verisini kullan, değer uydurmа.">Rapor Oluştur</button>
-          </div>
-          <div class="report-card" id="rpt-offline">
-            <div class="report-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
-              </svg>
-            </div>
-            <h4>Cevrimdisi Cihazlar</h4>
-            <p>Son 24 saatte görünmeyen cihazlar</p>
-            <button class="btn-report" data-prompt="get_offline_devices aracını çağır. Türkçe rapor oluştur. ## Çevrimdışı Cihazlar başlığı altında tablo yap (Hostname|Marka|Model|Kullanıcı). Sonra ## Uzun Süredir Görünmeyen başlığı altında stale cihazları tablo yap. Sorun yoksa 'Tüm cihazlar çevrimiçi.' yaz. Yalnızca araç verisini kullan.">Rapor Oluştur</button>
-          </div>
-          <div class="report-card" id="rpt-recommendations">
-            <div class="report-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>
-              </svg>
-            </div>
-            <h4>Yükseltme Onerileri</h4>
-            <p>Düşük kapasiteli cihazlar için öneriler</p>
-            <button class="btn-report" data-prompt="get_anomalies aracını çağır. Türkçe rapor oluştur. Şu başlıkları kullan: ## 8 GB Altı RAM Cihazlar (tablo: Hostname|Marka|Model|RAM (GB)), ## 256 GB Altı Disk Cihazlar (tablo: Hostname|Marka|Model|Disk (GB)), ## 30+ Gün Açık Cihazlar (tablo: Hostname|Marka|Model|Uptime (gün)). Yalnızca araç verisini kullan, değer uydurma.">Rapor Oluştur</button>
-          </div>
-        </div>
-        <div class="card" id="reportOutput" style="display:none;">
-          <div class="card-header">
-            <div style="display:flex;align-items:center;gap:10px;">
-              <div class="report-output-icon">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/>
-                </svg>
+        <div class="rp-duzen">
+          <!-- ══ SOL: rapor kataloğu ══ -->
+          <div class="rp-sol">
+            <div class="page-header rp-bas">
+              <div>
+                <h1>Raporlar</h1>
+                <p class="page-subtitle">AI destekli envanter ve analiz raporlarınızı oluşturun</p>
               </div>
-              <h3 id="reportTitle">Rapor Sonucu</h3>
-            </div>
-            <div style="display:flex;gap:8px;align-items:center;">
-              <button class="btn-pdf" id="pdfBtn" style="display:none;" onclick="printReport()">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="6,9 6,2 18,2 18,9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
-                  <rect x="6" y="14" width="12" height="8"/>
-                </svg>
-                PDF İndir
-              </button>
-              <button class="btn-icon" id="closeReport">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                </svg>
+              <button class="btn-pdf rp-gecmis" id="rpGecmis">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l3 2"/></svg>
+                Rapor Geçmişi
               </button>
             </div>
+
+            <div class="rp-sekmeler" id="rpSekmeler"></div>
+            <div class="rp-kartlar" id="rpKartlar"></div>
           </div>
-          <div class="report-content" id="reportContent"></div>
+
+          <!-- ══ SAĞ: belge önizlemesi ══ -->
+          <aside class="rp-onizleme" id="rpOnizleme">
+            <div class="rp-arac">
+              <div class="rp-arac-sol">
+                <button class="btn-icon" id="rpOnceki" aria-label="Önceki sayfa" disabled>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
+                <span class="rp-sayfa-no" id="rpSayfaNo">— / —</span>
+                <button class="btn-icon" id="rpSonraki" aria-label="Sonraki sayfa" disabled>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
+              </div>
+
+              <div class="rp-arac-orta">
+                <button class="btn-icon" id="rpUzaklas" aria-label="Uzaklaştır">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg>
+                </button>
+                <span class="rp-yakinlik" id="rpYakinlik">100%</span>
+                <button class="btn-icon" id="rpYakinlas" aria-label="Yakınlaştır">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                </button>
+              </div>
+
+              <div class="rp-arac-sag">
+                <!-- İndir ve Yazdır aynı tarayıcı diyaloğunu açar; PDF'i
+                     "Hedef: PDF olarak kaydet" ile alırsınız. Sunucu tarafı
+                     PDF üretimi yok, olmayan bir indirmeyi vaat etmiyoruz. -->
+                <button class="btn-pdf rp-indir" id="rpIndir" title="Tarayıcı yazdırma penceresinde 'PDF olarak kaydet' seçin" disabled>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
+                  İndir
+                </button>
+                <button class="btn-icon" id="rpYazdir" title="Yazdır" disabled>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                </button>
+                <button class="btn-icon" id="rpTamEkran" title="Tam ekran" disabled>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="rp-belge-alan" id="rpBelgeAlan">
+              <div class="rp-bos" id="rpBos">
+                <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15h6M9 11h3"/></svg>
+                <b>Henüz rapor oluşturulmadı</b>
+                <span>Soldaki kartlardan birinde <em>Önizleme</em> veya <em>PDF Oluştur</em>'a basın.</span>
+              </div>
+              <div class="rp-tasma-uyari" id="rpTasmaUyari" style="display:none"></div>
+            <div class="rp-belge" id="rpBelge"></div>
+            </div>
+          </aside>
         </div>
       </div>
 
