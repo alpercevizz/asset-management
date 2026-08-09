@@ -987,3 +987,44 @@ test('rapor yorumu: uydurma sayı, yabancı dil ve yer tutucu reddedilir', () =>
   // 7) Model yoksa/başarısızsa yedek metin HER ZAMAN üretilir (rapor yorumsuz kalmaz)
   assert.ok(ai.kuralMetni(bulgular).length > 20);
 });
+
+/* HTML parçalara bölündü (public/parts/**). Bu test bölünmenin bütünlüğünü
+   korur: birleştirilen panel eksiksiz olmalı, çözülmemiş işaret kalmamalı. */
+test('panel HTML parçalardan eksiksiz birleşiyor', () => {
+  const { birlestir, ISARET } = require('../lib/html-include');
+  const path = require('node:path');
+  const html = birlestir(path.join(__dirname, '..', 'public', 'index.html'), { onbellek: false });
+
+  // 1) Çözülmemiş include kalmamalı — kalırsa sayfada ham yorum görünür
+  assert.equal(html.match(ISARET), null, 'çözülmemiş <!--#include --> var');
+
+  // 2) Her görünüm TAM OLARAK bir kez bulunmalı (kopyalanmış parça olmasın)
+  const gorunumler = ['dashboard', 'assets', 'licenses', 'lines', 'alerts', 'lifecycle',
+    'insights', 'reports', 'locations', 'users', 'operations', 'tv', 'settings'];
+  for (const v of gorunumler) {
+    const kac = (html.match(new RegExp(`id="view-${v}"`, 'g')) || []).length;
+    assert.equal(kac, 1, `view-${v} ${kac} kez geçiyor (1 olmalı)`);
+  }
+
+  // 3) Modallar ve sohbet paneli yerinde
+  for (const id of ['qrModalOverlay', 'deviceModalOverlay', 'lineModalOverlay', 'chatPanel']) {
+    assert.ok(html.includes(`id="${id}"`), `${id} birleştirilen HTML'de yok`);
+  }
+
+  // 4) div dengesi — bir parça yarım kesilmişse burada patlar
+  const ac = (html.match(/<div\b/g) || []).length;
+  const kapa = (html.match(/<\/div>/g) || []).length;
+  assert.equal(ac, kapa, `div dengesiz: ${ac} açılış / ${kapa} kapanış`);
+
+  // 5) Kabuk gerçekten küçüldü mü (bölme geri alınırsa fark edelim)
+  const fs = require('node:fs');
+  const kabuk = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.ok(kabuk.split('\n').length < 500, 'kabuk index.html yeniden şişmiş');
+});
+
+test('html-include: kök dizin dışına çıkan parça reddedilir', () => {
+  const { coz } = require('../lib/html-include');
+  const path = require('node:path');
+  const kok = path.join(__dirname, '..', 'public');
+  assert.throws(() => coz(kok, '<!--#include ../../server.js -->'), /dışında/);
+});

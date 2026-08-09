@@ -1,0 +1,117 @@
+      <div class="view hidden" id="view-lifecycle">
+        <div class="page-header">
+          <h1>Cihaz Yaşam Döngüsü & Audit Log</h1>
+          <p class="page-subtitle">Değiştirilemez durum geçmişi · zimmet/depo/kayıp çelişki denetimi</p>
+        </div>
+
+        <!-- Üst satır: özet + zincir bütünlüğü -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon stat-icon--red">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </div>
+            <div class="stat-info">
+              <span class="stat-label">Durum Çelişkisi</span>
+              <span class="stat-value" id="lifeConflictCount">—</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon stat-icon--purple">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+            <div class="stat-info">
+              <span class="stat-label">Kritik (Acil)</span>
+              <span class="stat-value" id="lifeCriticalCount">—</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon stat-icon--yellow">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+            </div>
+            <div class="stat-info">
+              <span class="stat-label">Toplam Log Kaydı</span>
+              <span class="stat-value" id="lifeTotalEvents">—</span>
+            </div>
+          </div>
+          <div class="stat-card" id="chainStatusCard">
+            <div class="stat-icon stat-icon--green" id="chainStatusIcon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+            </div>
+            <div class="stat-info">
+              <span class="stat-label">Zincir Bütünlüğü</span>
+              <span class="stat-value" id="chainStatusText" style="font-size:15px;">—</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Canlı Ağ Keşfi — KRİTİK alarm banner (yalnız bulgu varken görünür) -->
+        <div id="netAlarmBanner" class="net-alarm" style="display:none;"></div>
+
+        <!-- WORM Hardened Yedek Bütünlüğü -->
+        <div class="card" id="backupCard">
+          <div class="card-header">
+            <h3>WORM Hardened Yedek <span class="count-pill" id="backupSyncPill">—</span></h3>
+            <span class="link-small">Değiştirilemez/silinemez off-site replikasyon (AES-256-GCM)</span>
+          </div>
+          <div style="padding:14px 16px;display:flex;flex-wrap:wrap;gap:18px;align-items:center;">
+            <div><div style="font-size:12px;color:var(--text-muted);">Yerel kayıt</div><div id="backupLocalCount" style="font-size:18px;font-weight:600;">—</div></div>
+            <div><div style="font-size:12px;color:var(--text-muted);">WORM yedek</div><div id="backupRemoteCount" style="font-size:18px;font-weight:600;">—</div></div>
+            <div style="flex:1;min-width:220px;"><div id="backupDetail" style="font-size:13px;color:var(--text-muted);">—</div></div>
+            <button class="btn-report" id="backupRestoreBtn" style="display:none;background:var(--red,#ef4444);">Yedekten Geri Yükle</button>
+          </div>
+        </div>
+
+        <!-- Durum değiştir (yeni log kaydı) -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Durum Değiştir / Log Kaydı Oluştur</h3>
+            <span class="link-small">Kayıt değiştirilemez (immutable) — zaman damgası + kullanıcı ile zincire eklenir</span>
+          </div>
+          <div style="padding:16px;display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
+            <div class="field-sm" style="flex:1;min-width:200px;">
+              <label>Cihaz</label>
+              <select id="lifeAssetSelect" class="select-sm"><option value="">Yükleniyor...</option></select>
+            </div>
+            <div class="field-sm" style="flex:1;min-width:180px;">
+              <label>Yeni Durum</label>
+              <select id="lifeStatusSelect" class="select-sm"></select>
+            </div>
+            <div class="field-sm" style="flex:1;min-width:200px;">
+              <label>Onaylayan / Dijital İmza <span id="lifeApproverReq" style="color:var(--red);display:none;">*</span></label>
+              <select id="lifeApprover" class="select-sm"><option value="">— Onaylayan seçin —</option></select>
+            </div>
+            <div class="field-sm" style="flex:2;min-width:200px;">
+              <label>Not (opsiyonel)</label>
+              <input type="text" id="lifeNote" class="select-sm" placeholder="örn: İK üzerinden teslim alındı">
+            </div>
+            <button class="btn-report" id="lifeRecordBtn" style="min-width:140px;">Kaydı Ekle</button>
+          </div>
+          <div id="lifeApproverHint" style="padding:0 16px 6px;font-size:12px;color:var(--text-muted);"></div>
+          <div id="lifeRecordMsg" style="padding:0 16px 14px;font-size:13px;"></div>
+        </div>
+
+        <!-- Çelişki / Zafiyet listesi -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Tespit Edilen Çelişkiler & Zafiyetler <span class="count-pill" id="lifeConflictPill">0</span></h3>
+            <span class="link-small">Audit log ↔ fiili durum tutarsızlıkları</span>
+          </div>
+          <div id="lifeConflictList" style="padding:8px 16px 16px;">
+            <p class="loading-cell">Yükleniyor...</p>
+          </div>
+        </div>
+
+        <!-- Immutable zaman çizelgesi -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Audit Log — Zaman Çizelgesi <span class="count-pill" id="lifeLogPill">0</span></h3>
+            <span class="link-small">En yeni önce · hash zinciri ile mühürlü</span>
+          </div>
+          <div class="table-wrap">
+            <table class="asset-table">
+              <thead><tr><th>#</th><th>Zaman</th><th>Cihaz</th><th>Geçiş</th><th>İşlem Yapan</th><th>Onay</th><th>Not</th><th>Hash</th></tr></thead>
+              <tbody id="lifeLogBody"><tr><td colspan="8" class="loading-cell">Yükleniyor...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>

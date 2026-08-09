@@ -69,6 +69,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
+const htmlInclude = require('./lib/html-include');
 const { getAllAssets, getStats, createAsset, updateAsset, getAssetBySerial } = require('./agent/tools/baserow-tools');
 const { getAllLicenses, bulkUpsertLicenses, getLicenseStats } = require('./agent/tools/license-tools');
 const { detectAnomalies, detectOfflineDevices, detectLicenseCompliance, detectShadowIT, detectEolOs, detectWarranty } = require('./agent/tools/anomaly-tools');
@@ -258,9 +259,22 @@ function requirePage(req, res, next) {
   if (isAuthed(req)) return next();
   return res.redirect('/login');
 }
-app.get(['/', '/index.html'], requirePage, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+/* Panel HTML'i parçalardan birleştirilir (public/parts/**). Tek dosya 2300
+   satıra ulaşmıştı; görünümler ve modallar ayrıldı. Birleştirme sunucuda ve
+   tek noktada yapılır, istemci tarafında hiçbir şey değişmez.
+   Parça okunamazsa 500 döneriz: yarım bir panel göstermek, açılmayan bir
+   panelden daha kötü — eksik görünüm sessizce kaybolurdu. */
+const PANEL_HTML = path.join(__dirname, 'public', 'index.html');
+function panelGonder(res) {
+  try {
+    res.type('html').send(htmlInclude.birlestir(PANEL_HTML));
+  } catch (err) {
+    console.error('[panel] HTML birleştirilemedi:', err.message);
+    res.status(500).send('Panel yüklenemedi. Sunucu günlüğüne bakın.');
+  }
+}
+
+app.get(['/', '/index.html'], requirePage, (req, res) => panelGonder(res));
 
 // API koruması: allowlist dışındaki tüm /api yolları oturum ister.
 // Public: client scriptler ve telefon QR kaydı login olamaz.
@@ -274,6 +288,10 @@ app.use('/api', (req, res, next) => {
   if (isAuthed(req)) return next();
   return res.status(401).json({ error: 'Oturum gerekli', code: 'UNAUTHORIZED' });
 });
+
+/* HTML parçaları TEK BAŞINA servis edilmez: bunlar panelin gövde parçaları,
+   ayrı bir sayfa değil. Doğrudan istenirse 404 döner. */
+app.use('/parts', (req, res) => res.status(404).end());
 
 // Statik dosyalar (css/js/fontlar/register.html/login.html). index:false → '/' otomatik index.html servis etmez.
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
@@ -1688,7 +1706,7 @@ app.get('/api/health', (req, res) => {
 
 app.get('*', (req, res) => {
   if (!isAuthed(req)) return res.redirect('/login');
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  panelGonder(res);
 });
 
 // ─── Secrets sertleştirme: zayıf/varsayılan sırları denetle ──────────────────

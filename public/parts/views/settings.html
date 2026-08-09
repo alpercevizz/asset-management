@@ -1,0 +1,139 @@
+      <div class="view hidden" id="view-settings">
+        <div class="page-header">
+          <h1>Ayarlar</h1>
+          <p class="page-subtitle">Eşikler, görünüm ve sistem durumu — yalnız yöneticiler</p>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h3>Tespit Eşikleri</h3><span class="link-small">Değişiklik anında geçerli olur (restart gerekmez)</span></div>
+          <div class="chart-container">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
+              <div class="field-sm"><label>Düşük RAM eşiği (GB)</label><input type="number" min="0" id="setLowRam" class="select-sm"></div>
+              <div class="field-sm"><label>Düşük Disk eşiği (GB)</label><input type="number" min="0" id="setLowDisk" class="select-sm"></div>
+              <div class="field-sm"><label>Uzun Uptime (gün)</label><input type="number" min="0" id="setUptime" class="select-sm"></div>
+              <div class="field-sm"><label>Çevrimdışı eşiği (saat)</label><input type="number" min="0" id="setOffline" class="select-sm"></div>
+              <div class="field-sm"><label>Kayıp/terk şüphesi (gün)</label><input type="number" min="0" id="setStale" class="select-sm"></div>
+              <div class="field-sm"><label>Lokasyon sapması (gün)</label><input type="number" min="0" id="setLocDrift" class="select-sm"></div>
+            </div>
+            <div style="margin-top:16px;display:flex;gap:10px;align-items:center">
+              <button class="btn-add" id="saveThresholds">Eşikleri Kaydet</button>
+              <span id="thresholdsMsg" style="font-size:12px;color:var(--green)"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>Lokasyon İzleme</h3>
+            <span class="link-small">Cihazın ait olduğu yer vs. görüldüğü yer</span>
+          </div>
+          <div class="chart-container">
+            <div id="locSetupStatus" style="font-size:13px;color:var(--text-dim);line-height:1.9">Yükleniyor...</div>
+            <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <button class="btn-add" id="seedExpectedBtn">Mevcut lokasyonları başlangıç olarak al</button>
+              <span id="seedMsg" style="font-size:12px;color:var(--green)"></span>
+            </div>
+            <p style="margin-top:12px;font-size:12px;color:var(--text-muted);line-height:1.7">
+              Her cihazın envanterdeki mevcut lokasyonunu <strong>beklenen (resmi)</strong> lokasyon olarak kaydeder.
+              Yalnız beklenen lokasyon tablosu <strong>boşken</strong> çalışır — mevcut kayıtları EZMEZ.
+              Bu yapılmadan sapma taraması tüm cihazları kapsam dışı bırakır.
+            </p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>Toplama Ajanları (Collector)</h3>
+            <span class="link-small" id="agentMode">yükleniyor…</span>
+          </div>
+          <div class="chart-container">
+            <p style="font-size:12.5px;color:var(--text-muted);line-height:1.7;margin-bottom:12px">
+              Her cihaz ilk bağlantıda paylaşılan anahtarla kaydolur ve kendine özel bir sır alır.
+              Sonrasında paylaşılan anahtar o cihaz için <strong>kabul edilmez</strong> — anahtarı ele
+              geçiren biri kayıtlı bir cihazı taklit edemez.
+              Cihaz yeniden kurulduğunda sırrı kaybolur; kaydı buradan silin, cihaz temiz bir kayıt açsın.
+              Cihaz sırları burada <strong>gösterilmez</strong> ve sunucudan hiç dışarı verilmez.
+            </p>
+            <div class="table-wrap">
+              <table class="asset-table">
+                <thead><tr><th>Cihaz Kimliği</th><th>Varlık</th><th>Agent</th><th>Kayıt</th><th>Son Görülme</th><th></th></tr></thead>
+                <tbody id="agentBody"><tr><td colspan="6" class="loading-cell">Yükleniyor...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>Cihaz Model Görselleri</h3>
+            <span class="link-small">Görsel modele bağlanır — o modeldeki tüm cihazlarda görünür</span>
+          </div>
+          <div class="chart-container">
+            <p style="font-size:12.5px;color:var(--text-muted);line-height:1.7;margin-bottom:12px">
+              Eşleşme sırası: <strong>tam model → model ailesi → marka+kategori → kategori</strong>.
+              Örneğin <em>Zebra TC57</em> yüklerseniz <em>TC57 Touch Computer</em> de onu kullanır.
+              Görseli olmayan cihazlarda yerleşik kategori çizimi gösterilir — sayfa boş kalmaz.
+              PNG / JPEG / WebP, en fazla 2 MB. Görseller kendi sunucunuzda saklanır, dışarı istek yapılmaz.
+            </p>
+            <div class="table-wrap">
+              <table class="asset-table">
+                <thead><tr><th>Görsel</th><th>Marka / Model</th><th>Kategori</th><th>Cihaz</th><th>Eşleşme</th><th></th></tr></thead>
+                <tbody id="imgBody"><tr><td colspan="6" class="loading-cell">Yükleniyor...</td></tr></tbody>
+              </table>
+            </div>
+            <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <button class="btn-pdf" id="imgCatBtn">Kategori geneli görsel yükle</button>
+              <span id="imgMsg" style="font-size:12px;color:var(--green)"></span>
+            </div>
+            <input type="file" id="imgFile" accept="image/png,image/jpeg,image/webp" hidden>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>Lokasyon Koordinatları</h3>
+            <span class="link-small">Harita için — dış geocoding servisi kullanılmaz</span>
+          </div>
+          <div class="chart-container">
+            <p style="font-size:12.5px;color:var(--text-muted);line-height:1.7;margin-bottom:12px">
+              Haritadaki balonlar bu koordinatlardan çizilir. Adında il geçen lokasyonlar
+              (ör. “İstanbul Merkez”) otomatik tohumlanabilir; “Ana Depo” gibi yer adı
+              olmayanlar elle girilmelidir. Koordinatı olmayan lokasyon haritada
+              <strong>gösterilmez</strong> ve “Haritada yok” olarak sayılır.
+            </p>
+            <div class="table-wrap">
+              <table class="asset-table">
+                <thead><tr><th>Lokasyon</th><th>Enlem</th><th>Boylam</th><th>Kaynak</th><th></th></tr></thead>
+                <tbody id="geoBody"><tr><td colspan="5" class="loading-cell">Yükleniyor...</td></tr></tbody>
+              </table>
+            </div>
+            <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <button class="btn-add" id="geoSeedBtn">İl adı geçenleri otomatik doldur</button>
+              <span id="geoMsg" style="font-size:12px;color:var(--green)"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h3>Görünüm</h3></div>
+          <div class="chart-container">
+            <div class="field-sm" style="max-width:280px"><label>Tema</label>
+              <select id="setTheme" class="select-sm">
+                <option value="auto">Otomatik (sistem)</option>
+                <option value="light">Açık</option>
+                <option value="dark">Koyu</option>
+              </select>
+            </div>
+            <div style="margin-top:14px"><button class="btn-add" id="saveAppearance">Kaydet</button> <span id="appearanceMsg" style="font-size:12px;color:var(--green)"></span></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h3>Sistem Durumu</h3><span class="link-small">Salt-okunur — sırlar gösterilmez</span></div>
+          <div class="table-wrap">
+            <table class="asset-table"><tbody id="systemStatusBody">
+              <tr><td colspan="2" class="loading-cell">Yükleniyor...</td></tr>
+            </tbody></table>
+          </div>
+        </div>
+      </div>

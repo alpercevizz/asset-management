@@ -1,0 +1,50 @@
+      <div class="view hidden" id="view-insights">
+        <div class="page-header">
+          <h1>Risk Skoru & Yenileme Öngörüsü</h1>
+          <p class="page-subtitle">Tüm sinyallerden cihaz risk puanı · 12 aylık yenileme ve bütçe tahmini</p>
+        </div>
+
+        <!-- Risk özet kartları -->
+        <div class="stats-grid">
+          <div class="stat-card"><div class="stat-icon stat-icon--red"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg></div><div class="stat-info"><span class="stat-label">Kritik Risk</span><span class="stat-value" id="riskCritical">—</span></div></div>
+          <div class="stat-card"><div class="stat-icon stat-icon--orange"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div class="stat-info"><span class="stat-label">Yüksek Risk</span><span class="stat-value" id="riskHigh">—</span></div></div>
+          <div class="stat-card"><div class="stat-icon stat-icon--yellow"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg></div><div class="stat-info"><span class="stat-label">Ortalama Skor</span><span class="stat-value" id="riskAvg">—</span></div></div>
+          <div class="stat-card"><div class="stat-icon stat-icon--green"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg></div><div class="stat-info"><span class="stat-label">Toplam Cihaz</span><span class="stat-value" id="riskTotal">—</span></div></div>
+        </div>
+
+        <!-- Risk tablosu -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Cihaz Risk Skorları <span class="count-pill" id="riskAtRiskPill">0</span></h3>
+            <span class="link-small">Riske göre azalan · skora gelince faktörler görünür</span>
+          </div>
+          <div class="table-wrap">
+            <table class="asset-table">
+              <thead><tr><th>Risk</th><th>Seviye</th><th>Hostname</th><th>Kategori</th><th>Kullanıcı</th><th>Başlıca Faktörler</th></tr></thead>
+              <tbody id="riskBody"><tr><td colspan="6" class="loading-cell">Yükleniyor...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Yenileme / maliyet öngörüsü (DÖVİZ ENDEKSLİ) -->
+        <div id="fcFx" style="margin-bottom:12px;padding:10px 14px;background:var(--bg-hover,#1e293b);border-radius:10px;font-size:13px;">—</div>
+        <div class="stats-grid">
+          <div class="stat-card"><div class="stat-icon stat-icon--purple"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><div class="stat-info"><span class="stat-label">12 Aylık Tahmini Bütçe</span><span class="stat-value" id="fcTotalCost" style="font-size:18px;">—</span></div></div>
+          <div class="stat-card"><div class="stat-icon stat-icon--blue"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></div><div class="stat-info"><span class="stat-label">Yenilenecek Cihaz</span><span class="stat-value" id="fcCount">—</span></div></div>
+          <div class="stat-card"><div class="stat-icon stat-icon--red"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div class="stat-info"><span class="stat-label">Gecikmiş / Acil</span><span class="stat-value" id="fcOverdue">—</span></div></div>
+          <div class="stat-card" style="flex-direction:column;align-items:flex-start;gap:6px;"><span class="stat-label">Dönemsel Dağılım</span><div id="fcPeriods" style="font-size:12px;color:var(--text-muted);">—</div></div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>Yenileme Planı <span class="count-pill" id="fcPill">0</span></h3>
+            <span class="link-small">Garanti bitişi / işletim sistemi EOL'e göre · tarihe göre sıralı</span>
+          </div>
+          <div class="table-wrap">
+            <table class="asset-table">
+              <thead><tr><th>Hostname</th><th>Kategori</th><th>Gerekçe</th><th>Tarih</th><th>Kalan</th><th>Tahmini Maliyet</th></tr></thead>
+              <tbody id="fcBody"><tr><td colspan="6" class="loading-cell">Yükleniyor...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>

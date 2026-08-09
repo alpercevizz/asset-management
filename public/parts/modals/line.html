@@ -1,0 +1,238 @@
+  <div class="modal-overlay" id="lineModalOverlay">
+    <div class="modal hat-modal">
+      <div class="modal-header hm-bas">
+        <!-- Geri: yalnız telefonda görünür (tam ekran sayfa gibi davranır) -->
+        <button class="btn-icon hm-geri" id="lineModalGeri" type="button" aria-label="Geri">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        </button>
+        <div class="hm-h">
+          <span class="hm-ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+          <div>
+            <h3 id="lineModalTitle">Hat Ekle</h3>
+            <p class="modal-desc">Yeni bir hat ve SIM kart bilgilerini girin.</p>
+          </div>
+        </div>
+        <!-- TV/duvar ekranı: sistem durumu + saat (yalnız body.tv-mode) -->
+        <div class="hm-tv-bilgi">
+          <span class="hm-tv-durum" id="lineTvDurum"><i></i><b>—</b></span>
+          <span class="hm-tv-saat" id="lineTvSaat"></span>
+        </div>
+        <button class="btn-icon hm-kapat" id="closeLineModal" aria-label="Kapat">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <!-- Adım göstergesi (yalnız telefon). 2. adım "Önizleme" bölümüdür;
+           form kaydedilebilir hale gelince (telefon + operatör) etkinleşir —
+           hiç ilerlemeyen dekoratif bir gösterge kullaniciyi yanıltırdı. -->
+      <div class="hm-adim">
+        <span class="hm-adim-n is-aktif" aria-label="Adım 1: Bilgiler">1</span>
+        <span class="hm-adim-cizgi"><i id="lineAdimBar"></i></span>
+        <span class="hm-adim-n" id="lineAdim2" aria-label="Adım 2: Önizleme">2</span>
+      </div>
+
+      <div class="modal-body hm-govde">
+        <!-- ── SOL: form ── -->
+        <div class="hm-form">
+          <div class="hm-f">
+            <label for="lineMsisdn">Telefon No (MSISDN)
+              <i class="hm-i" title="Başında 0 ile veya 0 olmadan yazabilirsiniz; sistem +90 biçimine çevirir.">i</i></label>
+            <div class="hm-alan">
+              <span class="hm-alan-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.81.36 1.6.7 2.34"/></svg></span>
+              <input id="lineMsisdn" placeholder="0532 123 45 67" autocomplete="off" inputmode="tel" />
+            </div>
+            <p class="hm-ipucu" id="lineMsisdnOnizleme"></p>
+          </div>
+
+          <div class="hm-ikili">
+            <div class="hm-f">
+              <label for="lineIccid">SIM No (ICCID)
+                <i class="hm-i" title="SIM kartın üzerindeki uzun numara. Genellikle 19–20 hanedir.">i</i></label>
+              <div class="hm-alan">
+                <span class="hm-alan-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><rect x="8" y="7" width="8" height="6" rx="1"/></svg></span>
+                <input id="lineIccid" placeholder="8990011122233344455" autocomplete="off" inputmode="numeric" />
+                <!-- Kamera ile barkod okuma. Tarayıcı BarcodeDetector'ı
+                     desteklemiyorsa JS bu düğmeyi GİZLER — çalışmayan bir
+                     düğme göstermek kullanıcıyı yanıltır. -->
+                <button class="hm-alan-btn" id="lineIccidScan" type="button" title="SIM barkodunu kamerayla oku" style="display:none">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>
+                </button>
+              </div>
+              <p class="hm-ipucu" id="lineIccidOnizleme"></p>
+            </div>
+
+            <div class="hm-f">
+              <label for="lineOperator">Operatör
+                <i class="hm-i" title="Listeden seçebilir veya yeni bir operatör adı yazabilirsiniz.">i</i></label>
+              <div class="hm-alan hm-alan--sec">
+                <span class="hm-alan-ico" id="lineOpRozet">T</span>
+                <select id="lineOperator"></select>
+              </div>
+              <!-- "Diğer" seçilince açılır: listede olmayan operatör/MVNO adı.
+                   Serbest metin alanını tamamen kaldırmak, listede olmayan bir
+                   operatörle hat kaydını imkânsız kılardı. -->
+              <input class="hm-diger" id="lineOperatorDiger" placeholder="Operatör adını yazın"
+                     autocomplete="off" style="display:none" />
+            </div>
+          </div>
+
+          <div class="hm-f">
+            <label for="lineStatus">Durum
+              <i class="hm-i" title="Hattın operatördeki kullanım durumu.">i</i></label>
+            <div class="hm-alan hm-alan--sec">
+              <span class="hm-nokta" id="lineStatusNokta"></span>
+              <select id="lineStatus">
+                <option value="aktif">Aktif</option>
+                <option value="pasif">Pasif</option>
+                <option value="iptal">İptal</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="hm-f">
+            <label for="lineTariff">Tarife / Paket
+              <i class="hm-i" title="Mevcut tarifelerden seçin veya yeni bir tarife adı yazın.">i</i></label>
+            <div class="hm-alan hm-alan--sec">
+              <span class="hm-alan-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M8 15h4"/></svg></span>
+              <input id="lineTariff" list="lineTariffList" placeholder="Kurumsal Ses+Data 20GB" autocomplete="off" />
+              <button class="hm-alan-btn" id="lineTariffTemizle" type="button" title="Temizle" style="display:none">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+              <datalist id="lineTariffList"></datalist>
+            </div>
+          </div>
+
+          <p class="hm-uyari" id="lineUyari"></p>
+
+          <div class="hm-dugmeler">
+            <button class="btn-pdf" id="cancelLineBtn">
+              <svg class="hm-tv-ikon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+              İptal
+            </button>
+            <button class="btn-add" id="saveLineBtn">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>
+              Kaydet
+            </button>
+          </div>
+        </div>
+
+        <!-- ── SAĞ: canlı önizleme ── -->
+        <aside class="hm-onizleme">
+          <h4>Önizleme</h4>
+
+          <!-- SIM kart görseli. Üzerindeki yazı formdaki operatör adından
+               gelir — marka logosu gömülmüyor (logo dosyamız yok, marka
+               varlığı ayrı bir izin konusu). -->
+          <div class="hm-sim">
+            <svg viewBox="0 0 200 132" role="img" aria-label="SIM kart görseli">
+              <defs>
+                <linearGradient id="simGrad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#7c8cf8"/><stop offset="1" stop-color="#4f46e5"/>
+                </linearGradient>
+              </defs>
+              <path d="M4 10a8 8 0 0 1 8-8h148l36 34v86a8 8 0 0 1-8 8H12a8 8 0 0 1-8-8z" fill="url(#simGrad)"/>
+              <path d="M160 2l36 34h-30a6 6 0 0 1-6-6z" fill="#ffffff" opacity=".22"/>
+              <rect x="26" y="34" width="62" height="50" rx="7" fill="#f5c451"/>
+              <g stroke="#b08420" stroke-width="2.2" opacity=".85">
+                <path d="M26 50h62M26 68h62M46 34v50M68 34v50"/>
+              </g>
+              <text id="simMarka" x="26" y="108" fill="#ffffff" opacity=".92"
+                    font-size="12" font-family="inherit" font-weight="600">Turkcell</text>
+            </svg>
+          </div>
+
+          <div class="hm-oz">
+            <div class="hm-oz-r">
+              <span class="hm-oz-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.81.36 1.6.7 2.34"/></svg></span>
+              <span>Operatör</span><b id="ozOperator">—</b>
+            </div>
+            <div class="hm-oz-r">
+              <span class="hm-oz-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><rect x="8" y="7" width="8" height="6" rx="1"/></svg></span>
+              <span>Durum</span><b id="ozDurum">—</b>
+            </div>
+            <div class="hm-oz-r">
+              <span class="hm-oz-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg></span>
+              <span>Tarife / Paket</span><b id="ozTarife">—</b>
+            </div>
+            <div class="hm-oz-r">
+              <span class="hm-oz-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.81.36 1.6.7 2.34"/></svg></span>
+              <span>Telefon No</span><b id="ozTelefon">—</b>
+            </div>
+          </div>
+
+          <p class="hm-onizleme-not">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            Kayıt sonrası hatlar listesinde görüntülenecektir.
+          </p>
+        </aside>
+
+        <!-- ── SAĞ (yalnız tablet): Özet Bilgiler ──
+             Tablet düzeninde önizleme kartı sol sütuna iner, sağda dikey
+             özet paneli durur. Kapatma düğmesi tablette buradadır. -->
+        <aside class="hm-ozet">
+          <div class="hm-ozet-bas">
+            <h4>Özet Bilgiler</h4>
+            <button class="btn-icon hm-ozet-kapat" id="lineOzetKapat" type="button" aria-label="Kapat">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <!-- SIM görseli yalnız monitör düzeninde; tablette panel dar. -->
+          <div class="hm-ozet-sim">
+            <svg viewBox="0 0 200 132" role="img" aria-label="SIM kart görseli">
+              <defs>
+                <linearGradient id="simGrad2" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#7c8cf8"/><stop offset="1" stop-color="#4f46e5"/>
+                </linearGradient>
+              </defs>
+              <path d="M4 10a8 8 0 0 1 8-8h148l36 34v86a8 8 0 0 1-8 8H12a8 8 0 0 1-8-8z" fill="url(#simGrad2)"/>
+              <path d="M160 2l36 34h-30a6 6 0 0 1-6-6z" fill="#ffffff" opacity=".22"/>
+              <rect x="26" y="34" width="62" height="50" rx="7" fill="#f5c451"/>
+              <g stroke="#b08420" stroke-width="2.2" opacity=".85">
+                <path d="M26 50h62M26 68h62M46 34v50M68 34v50"/>
+              </g>
+              <text id="simMarka2" x="26" y="108" fill="#ffffff" opacity=".92"
+                    font-size="12" font-family="inherit" font-weight="600">Turkcell</text>
+            </svg>
+          </div>
+
+          <div class="hm-ozet-g">
+            <div class="hm-ozet-r">
+              <span class="hm-oz-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.81.36 1.6.7 2.34"/></svg></span>
+              <div><span>Telefon No</span><b id="ozgTelefon">—</b></div>
+            </div>
+            <div class="hm-ozet-r">
+              <span class="hm-oz-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><rect x="8" y="7" width="8" height="6" rx="1"/></svg></span>
+              <div><span>SIM No (ICCID)</span><b id="ozgIccid">—</b></div>
+            </div>
+            <div class="hm-ozet-r">
+              <span class="hm-oz-ico hm-ozet-op" id="ozgOpRozet">?</span>
+              <div><span>Operatör</span><b id="ozgOperator">—</b></div>
+            </div>
+            <div class="hm-ozet-r">
+              <span class="hm-oz-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg></span>
+              <div><span>Durum</span><b id="ozgDurum">—</b></div>
+            </div>
+            <div class="hm-ozet-r">
+              <span class="hm-oz-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg></span>
+              <div><span>Tarife / Paket</span><b id="ozgTarife">—</b></div>
+            </div>
+          </div>
+
+          <p class="hm-ozet-not">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            Kaydettiğiniz hatlar, Hatlar &amp; SIM Kartları listesinde görüntülenecektir.
+          </p>
+        </aside>
+      </div>
+
+      <!-- Uzaktan kumanda ipucu (yalnız TV modu). Üçü de gerçekten bağlı:
+           yön tuşları tarayıcının odak sırasını kullanır, OK/Enter Kaydet'i,
+           Geri/Escape modalı kapatır. Bağlı olmayan tuş göstermek duvar
+           ekranında kullanıcıyı kilitler. -->
+      <div class="hm-tv-ipucu">
+        <span><i class="hm-tus"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 4v16M4 12h16M12 4l-3 3M12 4l3 3M12 20l-3-3M12 20l3-3M4 12l3-3M4 12l3 3M20 12l-3-3M20 12l-3 3"/></svg></i>Navigasyon</span>
+        <span><i class="hm-tus hm-tus--ok">OK</i>Seç</span>
+        <span><i class="hm-tus"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></i>Geri</span>
+      </div>
+    </div>
+  </div>

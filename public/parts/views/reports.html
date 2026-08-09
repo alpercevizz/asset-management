@@ -1,0 +1,71 @@
+      <div class="view hidden" id="view-reports">
+        <div class="rp-duzen">
+          <!-- ══ SOL: rapor kataloğu ══ -->
+          <div class="rp-sol">
+            <div class="page-header rp-bas">
+              <div>
+                <h1>Raporlar</h1>
+                <p class="page-subtitle">AI destekli envanter ve analiz raporlarınızı oluşturun</p>
+              </div>
+              <button class="btn-pdf rp-gecmis" id="rpGecmis">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l3 2"/></svg>
+                Rapor Geçmişi
+              </button>
+            </div>
+
+            <div class="rp-sekmeler" id="rpSekmeler"></div>
+            <div class="rp-kartlar" id="rpKartlar"></div>
+          </div>
+
+          <!-- ══ SAĞ: belge önizlemesi ══ -->
+          <aside class="rp-onizleme" id="rpOnizleme">
+            <div class="rp-arac">
+              <div class="rp-arac-sol">
+                <button class="btn-icon" id="rpOnceki" aria-label="Önceki sayfa" disabled>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
+                <span class="rp-sayfa-no" id="rpSayfaNo">— / —</span>
+                <button class="btn-icon" id="rpSonraki" aria-label="Sonraki sayfa" disabled>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
+              </div>
+
+              <div class="rp-arac-orta">
+                <button class="btn-icon" id="rpUzaklas" aria-label="Uzaklaştır">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg>
+                </button>
+                <span class="rp-yakinlik" id="rpYakinlik">100%</span>
+                <button class="btn-icon" id="rpYakinlas" aria-label="Yakınlaştır">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                </button>
+              </div>
+
+              <div class="rp-arac-sag">
+                <!-- İndir ve Yazdır aynı tarayıcı diyaloğunu açar; PDF'i
+                     "Hedef: PDF olarak kaydet" ile alırsınız. Sunucu tarafı
+                     PDF üretimi yok, olmayan bir indirmeyi vaat etmiyoruz. -->
+                <button class="btn-pdf rp-indir" id="rpIndir" title="Tarayıcı yazdırma penceresinde 'PDF olarak kaydet' seçin" disabled>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
+                  İndir
+                </button>
+                <button class="btn-icon" id="rpYazdir" title="Yazdır" disabled>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                </button>
+                <button class="btn-icon" id="rpTamEkran" title="Tam ekran" disabled>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="rp-belge-alan" id="rpBelgeAlan">
+              <div class="rp-bos" id="rpBos">
+                <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15h6M9 11h3"/></svg>
+                <b>Henüz rapor oluşturulmadı</b>
+                <span>Soldaki kartlardan birinde <em>Önizleme</em> veya <em>PDF Oluştur</em>'a basın.</span>
+              </div>
+              <div class="rp-tasma-uyari" id="rpTasmaUyari" style="display:none"></div>
+            <div class="rp-belge" id="rpBelge"></div>
+            </div>
+          </aside>
+        </div>
+      </div>
