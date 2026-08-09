@@ -3659,10 +3659,11 @@ body.tv-mode #lineModalOverlay .hm-diger { min-height: 60px; font-size: 20px; pa
 /* ── Belge içi ── */
 .rd-kapak { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 26px; }
 .rd-marka { display: flex; align-items: center; gap: 11px; }
-.rd-logo {
-  width: 34px; height: 34px; border-radius: 10px; background: #4f46e5; color: #fff;
-  display: flex; align-items: center; justify-content: center;
-}
+/* Marka simgesi kabuktakiyle AYNI: DOLGULU üçgen. Önceden mor bir kutunun
+   içinde çizgi üçgen vardı; tarayıcı yazdırırken arka planları attığı için
+   kutu kayboluyor, geriye beyaz üzerine beyaz çizgi kalıyordu. Dolgulu şekil
+   ön plandır, arka plan ayarından etkilenmez. */
+.rd-logo { display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .rd-marka b { display: block; font-size: 16px; font-weight: 800; letter-spacing: -.01em; }
 .rd-marka span { display: block; font-size: 10.5px; color: #64748b; }
 .rd-tarih { text-align: right; }
@@ -3783,6 +3784,12 @@ body.rp-tam-acik { overflow: hidden; }
   body.rp-baskida .rp-belge { display: block; --rp-olcek: 1; width: auto; margin: 0; }
   /* Yükseklik SABİT (297 değil 296mm): tam 297'de kenar yuvarlamaları
      bir piksellik taşma yapıp her sayfadan sonra boş sayfa üretiyordu. */
+  /* Renkleri baskıya ZORLA: "Arka plan grafikleri" kutusu varsayılan olarak
+     kapalı geliyor ve onsuz donut dilimleri, KPI zeminleri, çubuklar ve tablo
+     şeritleri bembeyaz çıkıyor. */
+  body.rp-baskida .rd-sayfa, body.rp-baskida .rd-sayfa * {
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
   body.rp-baskida .rd-sayfa {
     width: 210mm; height: 296mm; min-height: 0; overflow: hidden;
     margin: 0; border-radius: 0; box-shadow: none;

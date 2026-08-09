@@ -6385,7 +6385,14 @@ function rpKapak(rapor) {
   return `
   <div class="rd-kapak">
     <div class="rd-marka">
-      <span class="rd-logo"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M12 3 3 20h18z"/></svg></span>
+      <span class="rd-logo"><svg viewBox="0 0 64 64" width="30" height="30" fill="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="rdLogoG" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#4f46e5"/>
+          </linearGradient>
+        </defs>
+        <path d="M32 7 L57 54 H49.5 L32 21 L14.5 54 H7 Z" fill="url(#rdLogoG)"/>
+      </svg></span>
       <div><b>AssetMan</b><span>IT Asset Intelligence Report</span></div>
     </div>
     <div class="rd-tarih"><span>Oluşturulma Tarihi</span><b>${escapeHtml(tarih)}</b></div>
