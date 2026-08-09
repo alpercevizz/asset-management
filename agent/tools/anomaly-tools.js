@@ -42,6 +42,8 @@ async function detectAnomalies(orgId) {
 
     const base = {
       hostname: a.hostname || '—',
+      // Seri no eşleşme anahtarı: aynı hostname'i taşıyan iki cihaz olabiliyor
+      serial_number: a.serial_number || null,
       brand:    a.brand    || '—',
       model:    a.model    || '—',
       username: a.username || '—',
@@ -86,6 +88,7 @@ async function detectOfflineDevices(orgId) {
 
     const item = {
       hostname:  a.hostname  || '—',
+      serial_number: a.serial_number || null,
       brand:     a.brand     || '—',
       model:     a.model     || '—',
       username:  a.username  || '—',
@@ -318,6 +321,7 @@ async function detectEolOs(orgId) {
 
     const base = {
       hostname: a.hostname || '—',
+      serial_number: a.serial_number || null,
       brand:    a.brand    || '—',
       model:    a.model    || '—',
       os:       a.os       || '—',

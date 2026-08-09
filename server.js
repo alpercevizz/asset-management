@@ -1028,6 +1028,41 @@ app.post('/api/network/snmp-scan', requireRole('it', 'admin'), async (req, res) 
   }
 });
 
+// ─── Rapor yönetici yorumu (LLM) ────────────────────────────────────────────
+// Bulgular SUNUCUDA hesaplanır; istemciden sayı KABUL EDİLMEZ. Aksi hâlde
+// tarayıcıdan uydurma rakam gönderip modele onu yorumlatmak mümkün olurdu.
+const reportAi = require('./agent/report-ai');
+
+app.post('/api/reports/ai-comment', async (req, res) => {
+  try {
+    const [risk, anomali, eol, garanti, stats, envanter] = await Promise.all([
+      computeRiskScores(), detectAnomalies(), detectEolOs(), detectWarranty(),
+      getStats(), getAllAssets({ size: 200 }),
+    ]);
+    const varliklar = envanter.results || [];
+    const bulgular = {
+      toplam: stats.total || 0,
+      aktif: stats.by_status?.online || 0,
+      kritik: risk.distribution?.critical || 0,
+      yuksek: risk.distribution?.high || 0,
+      ortalamaRisk: risk.average_score || 0,
+      garantiDisi: garanti.expired?.count || 0,
+      garantiYakin: garanti.expiring_soon?.count || 0,
+      eol: eol.eol?.count || 0,
+      dusukRam: anomali.low_ram?.count || 0,
+      dusukDisk: anomali.low_disk?.count || 0,
+      uzunUptime: anomali.long_uptime?.count || 0,
+      lokasyonsuz: varliklar.filter((a) => !String(a.location || '').trim()).length,
+      enRiskli: (risk.items || []).slice(0, 3).map((c) => ({ hostname: c.hostname, score: c.score })),
+    };
+    const yorum = await reportAi.raporYorumu(bulgular);
+    res.json({ metin: yorum.metin, kaynak: yorum.kaynak });   // model adı DÖNMEZ
+  } catch (err) {
+    console.error('[POST /api/reports/ai-comment]', err.message);
+    res.status(500).json({ error: 'Yorum üretilemedi', detail: err.message });
+  }
+});
+
 // ─── Risk Skoru & Yenileme/Maliyet Öngörüsü ─────────────────────────────────
 app.get('/api/risk-scores', async (req, res) => {
   try {

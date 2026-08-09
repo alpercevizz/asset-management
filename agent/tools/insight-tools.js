@@ -33,33 +33,42 @@ async function computeRiskScores(orgId) {
   // cihaz → { score, factors[] }
   const map = new Map();
   for (const a of assets) map.set(keyOf(a), { asset: a, score: 0, factors: [] });
+  /* Eşleştirme SIRASI önemli: önce seri no, sonra hostname.
+     Aynı hostname'i taşıyan iki cihaz olabiliyor (yaşandı: iki ayrı makine
+     "ALPER-PC"). Yalnız hostname'e bakıp ilk eşleşmede durunca İKİSİNİN de
+     etkenleri tek cihaza yığılıyor, diğeri 0 puan alıyordu. Seri no varsa
+     kesin eşleşme; yoksa hostname ancak TEK aday varsa kullanılır — birden
+     fazla adayda hangisi olduğunu bilemeyiz, yanlış cihazı cezalandırmaktansa
+     atlamak doğru. */
   const add = (matchHost, matchSerial, points, label) => {
-    // hostname veya serial ile eşleştir
-    for (const [, v] of map) {
-      const a = v.asset;
-      if ((matchSerial && a.serial_number === matchSerial) || (matchHost && a.hostname === matchHost)) {
-        v.score += points; v.factors.push({ points, label }); return;
+    const uygula = (v) => { v.score += points; v.factors.push({ points, label }); };
+    if (matchSerial) {
+      for (const [, v] of map) {
+        if (v.asset.serial_number && v.asset.serial_number === matchSerial) { uygula(v); return; }
       }
     }
+    if (!matchHost) return;
+    const adaylar = [...map.values()].filter((v) => v.asset.hostname === matchHost);
+    if (adaylar.length === 1) uygula(adaylar[0]);
   };
 
   // EOL OS
-  (eol.eol?.items || []).forEach(d => add(d.hostname, null, 30, `İşletim sistemi desteği BİTMİŞ (${d.os_family})`));
-  (eol.approaching?.items || []).forEach(d => add(d.hostname, null, 12, `İşletim sistemi desteği yakında bitecek (${d.os_family})`));
+  (eol.eol?.items || []).forEach(d => add(d.hostname, d.serial_number, 30, `İşletim sistemi desteği BİTMİŞ (${d.os_family})`));
+  (eol.approaching?.items || []).forEach(d => add(d.hostname, d.serial_number, 12, `İşletim sistemi desteği yakında bitecek (${d.os_family})`));
   // Garanti
-  (warranty.expired?.items || []).forEach(d => add(d.hostname, null, 15, 'Garanti süresi dolmuş'));
-  (warranty.expiring_soon?.items || []).forEach(d => add(d.hostname, null, 6, 'Garanti yakında bitecek'));
+  (warranty.expired?.items || []).forEach(d => add(d.hostname, d.serial_number, 15, 'Garanti süresi dolmuş'));
+  (warranty.expiring_soon?.items || []).forEach(d => add(d.hostname, d.serial_number, 6, 'Garanti yakında bitecek'));
   // Çevrimdışı / kayıp izi
-  (offline.offline?.items || []).forEach(d => add(d.hostname, null, 15, 'Cihaz çevrimdışı'));
-  (offline.stale?.items || []).forEach(d => add(d.hostname, null, 20, '7+ gündür ağda görünmüyor'));
+  (offline.offline?.items || []).forEach(d => add(d.hostname, d.serial_number, 15, 'Cihaz çevrimdışı'));
+  (offline.stale?.items || []).forEach(d => add(d.hostname, d.serial_number, 20, '7+ gündür ağda görünmüyor'));
   // Donanım
-  (anomalies.low_ram?.items || []).forEach(d => add(d.hostname, null, 8, `Düşük RAM (${d.ram_gb} GB)`));
-  (anomalies.low_disk?.items || []).forEach(d => add(d.hostname, null, 8, `Düşük disk (${d.storage_gb} GB)`));
-  (anomalies.long_uptime?.items || []).forEach(d => add(d.hostname, null, 5, `${d.uptime_days} gün kesintisiz açık`));
+  (anomalies.low_ram?.items || []).forEach(d => add(d.hostname, d.serial_number, 8, `Düşük RAM (${d.ram_gb} GB)`));
+  (anomalies.low_disk?.items || []).forEach(d => add(d.hostname, d.serial_number, 8, `Düşük disk (${d.storage_gb} GB)`));
+  (anomalies.long_uptime?.items || []).forEach(d => add(d.hostname, d.serial_number, 5, `${d.uptime_days} gün kesintisiz açık`));
   // Lisans (hostname bazlı)
-  (compliance.unlicensed?.items || []).forEach(l => add(l.hostname, null, 10, `Lisanssız yazılım (${l.software_name})`));
-  (compliance.expired?.items || []).forEach(l => add(l.hostname, null, 8, `Süresi dolmuş lisans (${l.software_name})`));
-  (compliance.expiring_soon?.items || []).forEach(l => add(l.hostname, null, 4, `Yakında dolacak lisans (${l.software_name})`));
+  (compliance.unlicensed?.items || []).forEach(l => add(l.hostname, l.serial_number, 10, `Lisanssız yazılım (${l.software_name})`));
+  (compliance.expired?.items || []).forEach(l => add(l.hostname, l.serial_number, 8, `Süresi dolmuş lisans (${l.software_name})`));
+  (compliance.expiring_soon?.items || []).forEach(l => add(l.hostname, l.serial_number, 4, `Yakında dolacak lisans (${l.software_name})`));
   // Yaşam döngüsü / güvenlik (en ağır sinyaller)
   const lcWeight = {
     kritik_kayip: 40, kayip: 30, imzasiz_kritik_islem: 35, onay_zaman_asimi: 30,

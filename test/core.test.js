@@ -953,3 +953,37 @@ test('bulk-token: plan dondurulur, tek kullanımlık, iptal ve süre denetlenir'
   await db()('bulk_tokens').where({ created_by: 'test' }).del();
   delete process.env.REGISTER_SECRET;
 });
+
+/* Rapor yorumu denetimi — model ÇAĞRILMADAN test edilir (ağ yok, deterministik).
+   Kritik olan: imzalı bir belgeye modelin uydurduğu sayı asla girmemeli. */
+test('rapor yorumu: uydurma sayı, yabancı dil ve yer tutucu reddedilir', () => {
+  const ai = require('../agent/report-ai');
+  const bulgular = { toplam: 29, kritik: 4, garantiDisi: 6, eol: 4 };
+
+  // 1) Bulgularda olmayan sayı → RED (en önemli koruma)
+  const uydurma = ai.denetle('Envanterdeki 29 cihazın 12 tanesi kritik seviyede ve ele alınmalı.', bulgular);
+  assert.equal(uydurma.ok, false);
+  assert.match(uydurma.sebep, /olmayan sayı/);
+
+  // 2) İngilizce yanıt → RED (küçük modeller Türkçe yönergeye rağmen kayabiliyor)
+  assert.equal(ai.denetle('There are 29 assets and 4 of them are critical here.', bulgular).ok, false);
+
+  // 3) Yer tutucu → RED
+  assert.equal(ai.denetle('Toplam 29 cihaz var. Kritik sayısı [Tahmin] seviyesinde kalıyor.', bulgular).ok, false);
+
+  // 4) Çok kısa → RED
+  assert.equal(ai.denetle('29 cihaz.', bulgular).ok, false);
+
+  // 5) Geçerli metin → KABUL, sayılar korunur
+  const iyi = ai.denetle('Envanterdeki 29 cihazın 4 tanesi kritik risk seviyesinde. Ayrıca 6 cihazın garantisi bitmiş.', bulgular);
+  assert.equal(iyi.ok, true);
+  assert.match(iyi.metin, /29/);
+
+  // 6) Uzun metin reddedilmez, ilk 4 cümleye KIRPILIR (kırpmak bilgi uydurmaz)
+  const uzun = ai.denetle('Envanterde 29 cihaz bulunuyor. Bir kısmı kritik durumda. Yakından izlenmeli. Bakım planı gerekiyor. Bu beşinci cümledir.', bulgular);
+  assert.equal(uzun.ok, true);
+  assert.equal(uzun.metin.split(/[.!?]/).filter((x) => x.trim()).length, 4);
+
+  // 7) Model yoksa/başarısızsa yedek metin HER ZAMAN üretilir (rapor yorumsuz kalmaz)
+  assert.ok(ai.kuralMetni(bulgular).length > 20);
+});

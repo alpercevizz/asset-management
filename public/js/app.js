@@ -6493,6 +6493,7 @@ function rpAnalizVeOneriler() {
 
   return `
   <h2 class="rd-h2">AI ANALİZİ &amp; ÖNERİLER</h2>
+  ${rpYorumKutusu()}
   <div class="rd-analiz">
     <div class="rd-kutu"><h4>Genel Risk Puanı</h4>${rpGosterge(ortRisk)}</div>
     <div class="rd-kutu"><h4>Tespit Edilen Problemler</h4>
@@ -6506,6 +6507,86 @@ function rpAnalizVeOneriler() {
     : '<p class="rd-bos">Şu an bir işlem önerilmiyor.</p>'}
     </div>
   </div>`;
+}
+
+/* ── Yönetici Yorumu (LLM) ──────────────────────────────────────────────────
+   Belgeye önce "hazırlanıyor" kutusu basılır, yorum sonra doldurulur: model
+   çağrısı saniyeler sürebiliyor ve raporun geri kalanının onu beklemesi için
+   bir sebep yok. Sayılar bu kutuya GİRMEZ; onlar zaten üstteki bölümlerde. */
+function rpYorumKutusu() {
+  return `
+  <div class="rd-yorum" id="rdYorum">
+    <h4>Yönetici Yorumu</h4>
+    <p class="rd-yorum-metin">Yorum hazırlanıyor…</p>
+  </div>`;
+}
+
+async function rpYorumuGetir() {
+  const kutu = document.getElementById('rdYorum');
+  if (!kutu) return;
+  try {
+    const r = await fetch('/api/reports/ai-comment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    kutu.querySelector('.rd-yorum-metin').textContent = j.metin || '';
+    /* Yorumu modelin mi yoksa kural motorunun mu yazdığı SÖYLENİR; okuyan
+       kişinin bunu bilmeye hakkı var. Sağlayıcı/model adı gösterilmez. */
+    if (j.kaynak !== 'model') {
+      const not = document.createElement('span');
+      not.className = 'rd-yorum-not';
+      not.textContent = 'Kural tabanlı özet';
+      kutu.appendChild(not);
+    }
+  } catch {
+    kutu.querySelector('.rd-yorum-metin').textContent =
+      'Yorum üretilemedi. Rapordaki bulgular ve sayılar bu durumdan etkilenmez.';
+  }
+}
+
+/* ── Risk analizi bölümü ────────────────────────────────────────────────────
+   Tek bir ortalama puan "hangi cihaz ve neden" sorusunu yanıtlamıyordu.
+   Dağılım + en riskli cihazlar + puanı yükselten faktörler eklendi; hepsi
+   risk motorunun kendi çıktısı. */
+function rpRiskAnalizi() {
+  const r = _rpVeri.risk;
+  if (!r) return '<h2 class="rd-h2">RİSK ANALİZİ</h2><p class="rd-bos">Risk verisi alınamadı.</p>';
+  const d = r.distribution || {};
+  const seviyeler = [
+    ['Kritik', d.critical || 0, '#ef4444'], ['Yüksek', d.high || 0, '#f97316'],
+    ['Orta', d.medium || 0, '#eab308'], ['Düşük', d.low || 0, '#22c55e'],
+  ];
+  const toplam = seviyeler.reduce((a, [, n]) => a + n, 0) || 1;
+  const enRiskli = (r.items || []).slice(0, 10);
+
+  return `
+  <h2 class="rd-h2">RİSK ANALİZİ</h2>
+  <div class="rd-risk-ust">
+    <div class="rd-kutu">
+      <h4>Risk Dağılımı</h4>
+      <div class="rd-serit">${seviyeler.filter(([, n]) => n).map(([ad, n, renk]) =>
+    `<i style="width:${(n / toplam) * 100}%;background:${renk}" title="${ad}: ${n}"></i>`).join('')}</div>
+      <div class="rd-serit-efsane">${seviyeler.map(([ad, n, renk]) =>
+    `<span><i style="background:${renk}"></i>${ad}<b>${rpSayi(n)}</b></span>`).join('')}</div>
+    </div>
+    <div class="rd-kutu">
+      <h4>Ortalama Risk Puanı</h4>
+      ${rpGosterge(r.average_score)}
+      <p class="rd-not">${rpSayi(r.at_risk_count)} / ${rpSayi(r.total_assets)} cihaz risk taşıyor</p>
+    </div>
+  </div>
+  ${enRiskli.length ? `
+  <h2 class="rd-h2">EN RİSKLİ CİHAZLAR <span class="rd-h2-alt">(ilk ${enRiskli.length})</span></h2>
+  <table class="rd-tablo rd-tablo--risk">
+    <thead><tr><th>Cihaz Adı</th><th>Kategori</th><th>Sorumlu</th><th>Puan</th><th>Seviye</th><th>Puanı yükselten etkenler</th></tr></thead>
+    <tbody>${enRiskli.map((c) => `<tr>
+      <td>${escapeHtml(c.hostname || '—')}</td>
+      <td>${escapeHtml(c.category || '—')}</td>
+      <td>${escapeHtml(c.username || '—')}</td>
+      <td><b>${rpSayi(c.score)}</b></td>
+      <td><span class="rd-seviye rd-seviye--${String(c.level || '').toLocaleLowerCase('tr-TR')}">${escapeHtml(c.level || '—')}</span></td>
+      <td>${(c.factors || []).map((f) => escapeHtml(f.label)).join(' · ') || '—'}</td>
+    </tr>`).join('')}</tbody>
+  </table>` : ''}`;
 }
 
 /* Garanti bitiş çizelgesi — önümüzdeki 12 ay, gerçek warranty_expiry'den. */
@@ -6576,8 +6657,10 @@ function rpUret(rapor) {
   const bloklar = [];
 
   if (rapor.id === 'genel') {
-    bloklar.push(rpKapak(rapor) + rpYoneticiOzeti() + rpVarlikDagilimi()
-      + rpAnalizVeOneriler() + rpGarantiCizelge());
+    /* Yönetici yorumu 1. sayfaya girince çizelge A4'ü aşıyordu; çizelge risk
+       sayfasına alındı. Sayfa 1: özet ve dağılım, sayfa 2: risk ve garanti. */
+    bloklar.push(rpKapak(rapor) + rpYoneticiOzeti() + rpVarlikDagilimi() + rpAnalizVeOneriler());
+    bloklar.push(rpRiskAnalizi() + rpGarantiCizelge());
     bloklar.push(...rpTabloSayfalari('VARLIK LİSTESİ',
       ['Cihaz Adı', 'Kategori', 'Marka', 'Model', 'Lokasyon', 'Durum'],
       varliklar.map((a) => [a.hostname, a.category, a.brand, a.model, a.location, a.status])));
@@ -6623,6 +6706,7 @@ function rpUret(rapor) {
         <div class="rd-kpi"><span class="rd-k-et">Kritik Risk</span><b class="rd-k-deger">${rpSayi(v.risk?.distribution?.critical)}</b></div>
         <div class="rd-kpi"><span class="rd-k-et">Yüksek Risk</span><b class="rd-k-deger">${rpSayi(v.risk?.distribution?.high)}</b></div>
       </div>` + rpAnalizVeOneriler());
+    bloklar.push(rpRiskAnalizi());
     bloklar.push(...rpTabloSayfalari('DESTEĞİ BİTMİŞ İŞLETİM SİSTEMLERİ',
       ['Cihaz Adı', 'İşletim Sistemi', 'Destek Bitişi', 'Kullanıcı'],
       eolListe.map((d) => [d.hostname, d.os, d.eol_date || d.eol, d.username])));
@@ -6752,6 +6836,7 @@ async function rpRaporCalistir(id, yazdir) {
   rpYakinligiSigdir();
   rpTasmaDenetle();
   rpAracGuncelle();
+  rpYorumuGetir();                  // model yanıtı gelince kutuya düşer
   rpKartlariCiz();                  // sayfa sayısı artık gerçek
   if (belge) belge.scrollTop = 0;
   if (yazdir) rpYazdir();
