@@ -120,108 +120,87 @@ function animateCount(el, target) {
 }
 
 /* ─── API ───────────────────────────────────────────────────────────────── */
-async function fetchAssets(params = {}) {
-  const qs = new URLSearchParams(params).toString();
-  const res = await fetch(`/api/assets${qs ? '?' + qs : ''}`);
+
+/* Tek GET yardımcısı. Altındaki 17 fetch* fonksiyonu aynı üç satırı
+   tekrarlıyordu: iste, res.ok denetle, json çöz. İstek biçimi artık tek
+   yerde — hata mesajı, JSON çözümü ve ileride eklenecek zaman aşımı/yeniden
+   deneme buradan yönetilir.
+
+   NOT: 401 yakalama burada DEĞİL; o, dosyanın başındaki fetch sarmalayıcısında
+   (oturum bitince login'e yönlendirme). Bu fonksiyon yalnız HTTP+JSON kabuğu. */
+async function apiGet(yol) {
+  const res = await fetch(yol);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
+async function fetchAssets(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return apiGet(`/api/assets${qs ? '?' + qs : ''}`);
+}
 
 async function fetchStats() {
-  const res = await fetch('/api/stats');
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return apiGet('/api/stats');
 }
 
 async function fetchLicenses(params = {}) {
   const qs = new URLSearchParams(params).toString();
-  const res = await fetch(`/api/licenses${qs ? '?' + qs : ''}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return apiGet(`/api/licenses${qs ? '?' + qs : ''}`);
 }
 
 async function fetchLicenseStats() {
-  const res = await fetch('/api/licenses/stats');
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return apiGet('/api/licenses/stats');
 }
 
 async function fetchAnomalies() {
-  const res = await fetch('/api/anomalies');
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return apiGet('/api/anomalies');
 }
 
 async function fetchOfflineAlerts() {
-  const res = await fetch('/api/alerts/offline');
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return apiGet('/api/alerts/offline');
 }
 
 async function fetchLicenseCompliance() {
-  const res = await fetch('/api/licenses/compliance');
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return apiGet('/api/licenses/compliance');
 }
 
 async function fetchShadowIT() {
-  const res = await fetch('/api/shadow-it');
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return apiGet('/api/shadow-it');
 }
 
 async function fetchEolOs() {
-  const res = await fetch('/api/eol-os');
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return apiGet('/api/eol-os');
 }
 
 async function fetchWarranty() {
-  const res = await fetch('/api/warranty');
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return apiGet('/api/warranty');
 }
 
 async function fetchLifecycleConflicts() {
-  const res = await fetch('/api/lifecycle/conflicts');
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return apiGet('/api/lifecycle/conflicts');
 }
 
 async function fetchLifecycleLog(limit = 100) {
-  const res = await fetch(`/api/lifecycle/log?limit=${limit}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return apiGet(`/api/lifecycle/log?limit=${limit}`);
 }
 
 async function fetchLifecycleVerify() {
-  const res = await fetch('/api/lifecycle/verify');
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return apiGet('/api/lifecycle/verify');
 }
 
 async function fetchRiskScores() {
-  const res = await fetch('/api/risk-scores');
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return apiGet('/api/risk-scores');
 }
 
 async function fetchForecast() {
-  const res = await fetch('/api/forecast');
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return apiGet('/api/forecast');
 }
 
 async function fetchNetworkScan() {
-  const res = await fetch('/api/network/scan');
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return apiGet('/api/network/scan');
 }
 
 async function fetchBackupStatus() {
-  const res = await fetch('/api/backup/status');
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return apiGet('/api/backup/status');
 }
 
 async function postBackupRestore() {
