@@ -271,6 +271,25 @@ test('API: toplu onay kodu üretilir ve iptal edilir (kayıt oluşmaz)', async (
   assert.equal(sonrakiSayi, oncekiSayi, 'jeton üretimi envantere kayıt eklemiş olmamalı');
 });
 
+/* Varlık alt yolları (:id/detail, :id/telemetry, :id/assignment, :id/location)
+   server.js'te DÖRT ayrı bölüme dağılmış durumda ve router'a toplanacak.
+   Bilinmeyen id'de 5xx DÖNMEMELİ: 404 ya da boş gövde beklenir. Sunucu hatası,
+   izlemede gerçek arızayı gürültüye boğar. */
+test('API: varlık alt yolları bilinmeyen id ile 5xx dönmez', async () => {
+  const yollar = [
+    '/api/assets/999999/detail',
+    '/api/assets/999999/telemetry',
+    '/api/assets/999999/assignment',
+    '/api/assets/999999/location',
+  ];
+  const kotu = [];
+  for (const y of yollar) {
+    const r = await istek(y);
+    if (r.durum >= 500) kotu.push(`${y} -> ${r.durum}`);
+  }
+  assert.deepEqual(kotu, [], 'sunucu hatası dönen alt yollar');
+});
+
 /* QR ve toplu onay SAYFALARI kök yoldan servis edilir; router'a taşınsalardı
    URL'leri /api/register olurdu ve cihaz kayıt ucuyla çakışırdı. Bu test o
    ayrımı kilitler — telefon bu sayfalara oturum AÇMADAN gelir. */

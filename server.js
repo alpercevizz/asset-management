@@ -739,66 +739,14 @@ app.get('/api/forecast', rota('Öngörü hesaplama hatası', async (req, res) =>
 // Route'lar routes/lines.js'e taşındı; server.js yalnızca bağlantıyı bilir.
 app.use('/api/lines', require('./routes/lines')({ rota, requireRole, currentUser }));
 
-// ─── Resmi Zimmet (assigned_to) — Devir Koruması ─────────────────────────────
+/* assignmentTools burada DA gerekli: varlık detayı ucu zimmeti aynı yanıtta
+   döndürüyor (cihaz başına ikinci istek N+1 olurdu). Router kendi require'ını
+   yapıyor; Node modülü önbelleğe aldığı için iki import aynı örneği verir. */
 const assignmentTools = require('./agent/tools/assignment-tools');
 
-// Bir cihazın resmi zimmeti (kilitli owner) + telemetri (Baserow username) birlikte
-app.get('/api/assets/:id/assignment', async (req, res) => {
-  try {
-    res.json({ assignment: await assignmentTools.getAssignment(req.params.id) || null });
-  } catch (err) {
-    res.status(500).json({ error: 'Zimmet sorgulanamadı', detail: err.message });
-  }
-});
-
-// Resmi devir — zaten başkasına zimmetliyse force olmadan 409 (sessiz devralma engellenir)
-app.post('/api/assets/:id/assign', requireRole('it', 'admin'), async (req, res) => {
-  try {
-    const by = currentUser(req)?.username || 'system';
-    const { to, hostname, note, force } = req.body || {};
-    const a = await assignmentTools.assign(req.params.id, { to, hostname, note, force: !!force, by });
-    res.json({ success: true, assignment: a });
-  } catch (err) {
-    if (err.code === 'ALREADY_ASSIGNED') {
-      return res.status(409).json({ error: err.message, code: 'ALREADY_ASSIGNED', current: err.current });
-    }
-    console.error('[POST /api/assets/:id/assign]', err.message);
-    res.status(400).json({ error: 'Zimmet atanamadı', detail: err.message });
-  }
-});
-
-app.post('/api/assets/:id/release', requireRole('it', 'admin'), async (req, res) => {
-  try {
-    const by = currentUser(req)?.username || 'system';
-    const a = await assignmentTools.release(req.params.id, { by, note: (req.body || {}).note });
-    res.json({ success: true, assignment: a });
-  } catch (err) {
-    res.status(400).json({ error: 'İade edilemedi', detail: err.message });
-  }
-});
-
-// Tüm resmi zimmetler — Varlıklar tablosundaki "Sorumlu Kişi" sütunu için.
-// Cihaz başına istek atmak N+1 olurdu; tek sorguda döner.
-app.get('/api/assignments', async (req, res) => {
-  try {
-    const rows = await assignmentTools.getAll();
-    const map = {};
-    rows.forEach(r => { if (r.assigned_to) map[r.asset_id] = r.assigned_to; });
-    res.json({ assignments: map });
-  } catch (err) {
-    res.status(500).json({ error: 'Zimmetler alınamadı', detail: err.message });
-  }
-});
-
-// Telemetri ≠ resmi zimmet uyuşmazlıkları (izinsiz kullanım şüphesi)
-app.get('/api/assignments/mismatches', async (req, res) => {
-  try {
-    const data = await getAllAssets({ size: 200 });
-    res.json({ mismatches: await assignmentTools.listMismatches(data.results || []) });
-  } catch (err) {
-    res.status(500).json({ error: 'Uyuşmazlık taranamadı', detail: err.message });
-  }
-});
+// ─── Resmi Zimmet (assigned_to) — Devir Koruması ─────────────────────────────
+// Route'lar routes/assignments.js'e taşındı.
+app.use('/api', require('./routes/assignments')({ requireRole, currentUser, getAllAssets }));
 
 // ─── Lokasyon İzleme ─────────────────────────────────────────────────────────
 // Beklenen (resmi) lokasyon KİLİTLİ: yalnız buradan değişir, PUBLIC webhook dokunmaz.
