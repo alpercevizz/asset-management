@@ -254,6 +254,52 @@ app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
+/* --- Route sarmalayici ------------------------------------------------------
+   88 route'un buyuk kismi ayni uc satiri tekrarliyordu: try/catch,
+   console.error, res.status(500).json({error, detail}). Hata cevirisi
+   route'un isi degil (SRP): route is mantigini calistirir, hatayi bu
+   sarmalayici cevirir.
+
+   Davranis AYNEN korunur - mesaj metni her route'a ozel kalir, gunluk satiri
+   ayni bicimde basilir. Yalnizca tekrar kalkar.
+
+   Yanit zaten gonderilmisse ikinci kez yazilmaz: aksi halde "headers already
+   sent" hatasi asil hatayi gizlerdi. */
+function rota(mesaj, isleyici) {
+  return async (req, res, next) => {
+    try {
+      await isleyici(req, res, next);
+    } catch (err) {
+      console.error(`[${req.method} ${req.baseUrl || ''}${req.path}]`, err.message);
+      if (res.headersSent) return;
+      res.status(500).json({ error: mesaj, detail: err.message });
+    }
+  };
+}
+
+/* --- Route sarmalayici ------------------------------------------------------
+   88 route'un buyuk kismi ayni uc satiri tekrarliyordu: try/catch,
+   console.error, res.status(500).json({error, detail}). Hata cevirisi
+   route'un isi degil (SRP): route is mantigini calistirir, hatayi bu
+   sarmalayici cevirir.
+
+   Davranis AYNEN korunur - mesaj metni her route'a ozel kalir, gunluk satiri
+   ayni bicimde basilir. Yalnizca tekrar kalkar.
+
+   Yanit zaten gonderilmisse ikinci kez yazilmaz: aksi halde "headers already
+   sent" hatasi asil hatayi gizlerdi. */
+function rota(mesaj, isleyici) {
+  return async (req, res, next) => {
+    try {
+      await isleyici(req, res, next);
+    } catch (err) {
+      console.error(`[${req.method} ${req.baseUrl || ''}${req.path}]`, err.message);
+      if (res.headersSent) return;
+      res.status(500).json({ error: mesaj, detail: err.message });
+    }
+  };
+}
+
 // Panel giriş noktalarını koru
 function requirePage(req, res, next) {
   if (isAuthed(req)) return next();
@@ -298,144 +344,129 @@ app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 
 // ─── Assets ──────────────────────────────────────────────────────────────────
 
-app.get('/api/assets', async (req, res) => {
-  try {
-    const { filter_field, filter_value, page = 1, size = 200 } = req.query;
-    const data = await getAllAssets({ page: Number(page), size: Number(size), filterField: filter_field, filterValue: filter_value });
-    res.json(data);
-  } catch (err) {
-    console.error('[GET /api/assets]', err.message);
-    res.status(500).json({ error: 'Baserow veri çekme hatası', detail: err.message });
-  }
-});
+app.get('/api/assets', rota('Baserow veri çekme hatası', async (req, res) => {
+  const { filter_field, filter_value, page = 1, size = 200 } = req.query;
+  const data = await getAllAssets({ page: Number(page), size: Number(size), filterField: filter_field, filterValue: filter_value });
+  res.json(data);
+}));
 
-app.get('/api/stats', async (req, res) => {
-  try {
-    const stats = await getStats();
-    res.json(stats);
-  } catch (err) {
-    console.error('[GET /api/stats]', err.message);
-    res.status(500).json({ error: 'İstatistik hesaplama hatası', detail: err.message });
-  }
-});
+app.get('/api/stats', rota('İstatistik hesaplama hatası', async (req, res) => {
+  const stats = await getStats();
+  res.json(stats);
+}));
 
 // ─── Webhook (n8n veya direkt client script) ─────────────────────────────────
 
-app.post('/api/webhook', async (req, res) => {
-  try {
-    /* KİMLİK DOĞRULAMA — envanteri yazan tek public uç burası. İmzasız istek
-       kabul edilirse adresi bilen herkes sahte cihaz açar veya mevcut cihazın
-       verisini ezer; üzerine kurulu tüm tespitler (shadow IT, zimmet
-       uyuşmazlığı, EOL) yanılır. Bkz. agent/tools/agent-auth.js */
-    const agentAuth = require('./agent/tools/agent-auth');
-    const kimlik = await agentAuth.verifyRequest(req);
-    if (!kimlik.ok) {
-      console.warn(`[WEBHOOK REDDEDİLDİ] ${kimlik.code} — ${kimlik.reason}` +
-        (kimlik.deviceId ? ` (cihaz: ${kimlik.deviceId})` : '') +
-        ` ip=${(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim()}`);
-      return res.status(401).json({ error: kimlik.reason, code: kimlik.code });
-    }
-    if (kimlik.imzasiz) {
-      console.warn('[WEBHOOK] İmzasız istek kabul edildi (WEBHOOK_AUTH=' + agentAuth.mode() + '). ' +
-        'Üretimde "required" olmalı.');
-    }
-
-    const payload = req.body;
-
-    if (!payload.serial_number && !payload.hostname) {
-      return res.status(400).json({ error: 'serial_number veya hostname zorunludur' });
-    }
-
-    // GÜVENLİK: lokasyon token ile doğrulanır. Token yapılandırılmışsa payload'daki
-    // location metnine GÜVENİLMEZ — token'ın eşlendiği ad kullanılır (bkz location-tools).
-    const locTools = require('./agent/tools/location-tools');
-    const loc = locTools.resolveLocation({
-      token: req.get('X-Location-Token'),
-      payloadLocation: payload.location,
-    });
-    if (loc.error) return res.status(401).json({ error: loc.error, code: loc.code });
-
-    const enriched = {
-      ...payload,
-      last_seen: new Date().toISOString(),
-      status: 'online',
-    };
-    if (loc.location) enriched.location = loc.location;
-    else delete enriched.location;
-
-    let existing = null;
-    if (payload.serial_number) {
-      existing = await getAssetBySerial({ serialNumber: payload.serial_number });
-    }
-
-    let result;
-    if (existing) {
-      // GÜVENLİK: webhook yalnız TELEMETRİ günceller (username = son gören kullanıcı).
-      // Resmi zimmet (assigned_to) AYRI tabloda ve KİLİTLİ — buradan DEĞİŞMEZ.
-      // Telemetri kullanıcı, resmi zimmetten farklıysa izinsiz-kullanım sinyali ver.
-      if (payload.username) {
-        try {
-          const mm = await require('./agent/tools/assignment-tools').checkMismatch(existing.id, payload.username);
-          if (mm) console.warn(`[ZİMMET UYARISI] ${enriched.hostname || existing.id}: resmi zimmet "${mm.assigned_to}" iken telemetri "${mm.seen_user}" gördü (izinsiz kullanım şüphesi).`);
-        } catch (_) { /* sinyal opsiyonel */ }
-      }
-      result = await updateAsset(existing.id, enriched);
-      console.log(`[WEBHOOK] Updated: ${payload.hostname || payload.serial_number}`);
-    } else {
-      result = await createAsset(enriched);
-      console.log(`[WEBHOOK] Created: ${payload.hostname || payload.serial_number}`);
-    }
-
-    const locationChanged = await trackLocation(result.id, enriched, loc.location, loc.source);
-
-    /* Canlı ölçümler ve güvenlik durumu envanter satırına DEĞİL ayrı tablolara
-       yazılır (grafik için geçmiş gerekiyor, envanterde cihaz başına tek satır
-       var). Collector göndermiyorsa sessizce atlanır — eski sürüm collector'lar
-       çalışmaya devam etsin. */
-    const tele = require('./agent/tools/telemetry-tools');
-    if (payload.telemetry) {
-      try { await tele.recordTelemetry(result.id, payload.telemetry); }
-      catch (e) { console.warn('[TELEMETRİ] kaydedilemedi:', e.message); }
-    }
-    if (payload.security) {
-      try { await tele.recordSecurity(result.id, payload.security); }
-      catch (e) { console.warn('[GÜVENLİK] kaydedilemedi:', e.message); }
-    }
-
-    // Kayıtlı cihazı envanter satırıyla eşle (teşhis ve iptal için gerekiyor)
-    if (kimlik.deviceId) {
-      try {
-        await agentAuth.touch(kimlik.deviceId, {
-          asset_id: result.id,
-          serial_number: enriched.serial_number || payload.serial_number,
-        });
-      } catch (e) {
-        // Kayıt izi ve klon tespiti kritik yol değil — webhook'u düşürmüyoruz.
-        // Ama SESSİZ yutmak da yanlış: migration geride kalmışsa klon tespiti
-        // hiç çalışmaz ve kimse fark etmez.
-        console.warn('[AGENT] Kayıt izi güncellenemedi:', e.message);
-      }
-    }
-
-    res.json({
-      success: true, action: existing ? 'updated' : 'created', id: result.id,
-      ...(locationChanged ? { location_changed: { from: locationChanged.from, to: locationChanged.to } } : {}),
-      /* Cihaza özel sır YALNIZ ilk kayıtta, YALNIZ bir kez döner. Collector
-         bunu diske yazar; bundan sonra paylaşılan anahtar bu cihaz için
-         çalışmaz. Sunucu sırrı tekrar göndermez — kaybedilirse kayıt sıfırlanır. */
-      ...(kimlik.yeniKayit ? {
-        enrollment: {
-          device_id: kimlik.deviceId,
-          secret: kimlik.enrollment.secret,
-          note: 'Bu sırrı sakla. Bir daha gönderilmeyecek.',
-        },
-      } : {}),
-    });
-  } catch (err) {
-    console.error('[POST /api/webhook]', err.message);
-    res.status(500).json({ error: 'Webhook işleme hatası', detail: err.message });
+app.post('/api/webhook', rota('Webhook işleme hatası', async (req, res) => {
+  /* KİMLİK DOĞRULAMA — envanteri yazan tek public uç burası. İmzasız istek
+     kabul edilirse adresi bilen herkes sahte cihaz açar veya mevcut cihazın
+     verisini ezer; üzerine kurulu tüm tespitler (shadow IT, zimmet
+     uyuşmazlığı, EOL) yanılır. Bkz. agent/tools/agent-auth.js */
+  const agentAuth = require('./agent/tools/agent-auth');
+  const kimlik = await agentAuth.verifyRequest(req);
+  if (!kimlik.ok) {
+    console.warn(`[WEBHOOK REDDEDİLDİ] ${kimlik.code} — ${kimlik.reason}` +
+      (kimlik.deviceId ? ` (cihaz: ${kimlik.deviceId})` : '') +
+      ` ip=${(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim()}`);
+    return res.status(401).json({ error: kimlik.reason, code: kimlik.code });
   }
-});
+  if (kimlik.imzasiz) {
+    console.warn('[WEBHOOK] İmzasız istek kabul edildi (WEBHOOK_AUTH=' + agentAuth.mode() + '). ' +
+      'Üretimde "required" olmalı.');
+  }
+
+  const payload = req.body;
+
+  if (!payload.serial_number && !payload.hostname) {
+    return res.status(400).json({ error: 'serial_number veya hostname zorunludur' });
+  }
+
+  // GÜVENLİK: lokasyon token ile doğrulanır. Token yapılandırılmışsa payload'daki
+  // location metnine GÜVENİLMEZ — token'ın eşlendiği ad kullanılır (bkz location-tools).
+  const locTools = require('./agent/tools/location-tools');
+  const loc = locTools.resolveLocation({
+    token: req.get('X-Location-Token'),
+    payloadLocation: payload.location,
+  });
+  if (loc.error) return res.status(401).json({ error: loc.error, code: loc.code });
+
+  const enriched = {
+    ...payload,
+    last_seen: new Date().toISOString(),
+    status: 'online',
+  };
+  if (loc.location) enriched.location = loc.location;
+  else delete enriched.location;
+
+  let existing = null;
+  if (payload.serial_number) {
+    existing = await getAssetBySerial({ serialNumber: payload.serial_number });
+  }
+
+  let result;
+  if (existing) {
+    // GÜVENLİK: webhook yalnız TELEMETRİ günceller (username = son gören kullanıcı).
+    // Resmi zimmet (assigned_to) AYRI tabloda ve KİLİTLİ — buradan DEĞİŞMEZ.
+    // Telemetri kullanıcı, resmi zimmetten farklıysa izinsiz-kullanım sinyali ver.
+    if (payload.username) {
+      try {
+        const mm = await require('./agent/tools/assignment-tools').checkMismatch(existing.id, payload.username);
+        if (mm) console.warn(`[ZİMMET UYARISI] ${enriched.hostname || existing.id}: resmi zimmet "${mm.assigned_to}" iken telemetri "${mm.seen_user}" gördü (izinsiz kullanım şüphesi).`);
+      } catch (_) { /* sinyal opsiyonel */ }
+    }
+    result = await updateAsset(existing.id, enriched);
+    console.log(`[WEBHOOK] Updated: ${payload.hostname || payload.serial_number}`);
+  } else {
+    result = await createAsset(enriched);
+    console.log(`[WEBHOOK] Created: ${payload.hostname || payload.serial_number}`);
+  }
+
+  const locationChanged = await trackLocation(result.id, enriched, loc.location, loc.source);
+
+  /* Canlı ölçümler ve güvenlik durumu envanter satırına DEĞİL ayrı tablolara
+     yazılır (grafik için geçmiş gerekiyor, envanterde cihaz başına tek satır
+     var). Collector göndermiyorsa sessizce atlanır — eski sürüm collector'lar
+     çalışmaya devam etsin. */
+  const tele = require('./agent/tools/telemetry-tools');
+  if (payload.telemetry) {
+    try { await tele.recordTelemetry(result.id, payload.telemetry); }
+    catch (e) { console.warn('[TELEMETRİ] kaydedilemedi:', e.message); }
+  }
+  if (payload.security) {
+    try { await tele.recordSecurity(result.id, payload.security); }
+    catch (e) { console.warn('[GÜVENLİK] kaydedilemedi:', e.message); }
+  }
+
+  // Kayıtlı cihazı envanter satırıyla eşle (teşhis ve iptal için gerekiyor)
+  if (kimlik.deviceId) {
+    try {
+      await agentAuth.touch(kimlik.deviceId, {
+        asset_id: result.id,
+        serial_number: enriched.serial_number || payload.serial_number,
+      });
+    } catch (e) {
+      // Kayıt izi ve klon tespiti kritik yol değil — webhook'u düşürmüyoruz.
+      // Ama SESSİZ yutmak da yanlış: migration geride kalmışsa klon tespiti
+      // hiç çalışmaz ve kimse fark etmez.
+      console.warn('[AGENT] Kayıt izi güncellenemedi:', e.message);
+    }
+  }
+
+  res.json({
+    success: true, action: existing ? 'updated' : 'created', id: result.id,
+    ...(locationChanged ? { location_changed: { from: locationChanged.from, to: locationChanged.to } } : {}),
+    /* Cihaza özel sır YALNIZ ilk kayıtta, YALNIZ bir kez döner. Collector
+       bunu diske yazar; bundan sonra paylaşılan anahtar bu cihaz için
+       çalışmaz. Sunucu sırrı tekrar göndermez — kaybedilirse kayıt sıfırlanır. */
+    ...(kimlik.yeniKayit ? {
+      enrollment: {
+        device_id: kimlik.deviceId,
+        secret: kimlik.enrollment.secret,
+        note: 'Bu sırrı sakla. Bir daha gönderilmeyecek.',
+      },
+    } : {}),
+  });
+}));
 
 /* ─── Collector cihaz kayıtları (admin) ─────────────────────────────────────
    Cihaz yeniden kurulduğunda sırrı kaybolur ve paylaşılan anahtarla yeniden
@@ -462,22 +493,17 @@ app.delete('/api/agents/:deviceId', requireRole('admin'), async (req, res) => {
 // ─── QR ile Cihaz Kaydı ───────────────────────────────────────────────────────
 
 // QR kod üret (lokal, dışarı istek yok) — SVG döner
-app.get('/api/qr', async (req, res) => {
-  try {
-    const data = req.query.data;
-    if (!data) return res.status(400).json({ error: 'data parametresi zorunlu' });
-    const svg = await QRCode.toString(String(data), {
-      type: 'svg',
-      errorCorrectionLevel: 'M',
-      margin: 1,
-      color: { dark: '#1e293b', light: '#ffffff' },
-    });
-    res.type('image/svg+xml').send(svg);
-  } catch (err) {
-    console.error('[GET /api/qr]', err.message);
-    res.status(500).json({ error: 'QR üretim hatası', detail: err.message });
-  }
-});
+app.get('/api/qr', rota('QR üretim hatası', async (req, res) => {
+  const data = req.query.data;
+  if (!data) return res.status(400).json({ error: 'data parametresi zorunlu' });
+  const svg = await QRCode.toString(String(data), {
+    type: 'svg',
+    errorCorrectionLevel: 'M',
+    margin: 1,
+    color: { dark: '#1e293b', light: '#ffffff' },
+  });
+  res.type('image/svg+xml').send(svg);
+}));
 
 /* Lokasyon konaklama kaydı — TÜM kaynaklar için ortak.
    Kaynak (webhook/qr/snmp) kaydın güven seviyesini taşır; yer değiştiyse denetim
@@ -510,68 +536,63 @@ async function trackLocation(assetId, asset, location, source) {
 }
 
 // Mobil formdan gelen cihaz kaydı (telefon, tablet, el terminali vb.)
-app.post('/api/register', async (req, res) => {
-  try {
-    /* QR JETONU ZORUNLU. Bu uc telefondan cagriliyor, oturum yok — jeton
-       oturumun yerini tutuyor: imzali (uydurulamaz), sureli ve kullanim
-       hakki sinirli. Panelden uretilmemis bir QR ile kayit yapilamaz. */
-    const regToken = require('./agent/tools/register-token');
-    const jeton = await regToken.verifyAndConsume(
-      req.get('X-Register-Token') || (req.body && req.body.reg_token));
-    if (!jeton.ok) {
-      console.warn(`[REGISTER REDDEDİLDİ] ${jeton.code} — ${jeton.reason} ` +
-        `ip=${(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim()}`);
-      return res.status(401).json({ error: jeton.reason, code: jeton.code });
-    }
-
-    const p = req.body || {};
-    const hostname = (p.hostname || '').trim();
-    if (!hostname && !p.serial_number) {
-      return res.status(400).json({ error: 'Cihaz adı (hostname) veya seri no zorunludur' });
-    }
-
-    const enriched = {
-      hostname,
-      serial_number: (p.serial_number || hostname).trim(),
-      category:    p.category    || 'Diğer',
-      brand:       p.brand       || '',
-      model:       p.model       || '',
-      os:          p.os          || '',
-      username:    p.username    || '',
-      location:    p.location    || '',
-      ip_address:  p.ip_address  || '',
-      last_seen:   new Date().toISOString(),
-      status:      'online',
-      collector_ver: 'qr-1.0.0',
-    };
-    // Boş alanları gönderme
-    Object.keys(enriched).forEach(k => { if (enriched[k] === '') delete enriched[k]; });
-
-    let existing = null;
-    if (enriched.serial_number) {
-      existing = await getAssetBySerial({ serialNumber: enriched.serial_number });
-    }
-
-    let result, action;
-    if (existing) {
-      result = await updateAsset(existing.id, enriched);
-      action = 'updated';
-    } else {
-      result = await createAsset(enriched);
-      action = 'created';
-    }
-    console.log(`[REGISTER] ${action}: ${hostname} (${enriched.category})`);
-    // QR kaydında lokasyon formdan BEYAN edilir → kaynak 'qr' olarak izlenir (token'lı
-    // ajan kadar güvenilir değil ama geçmiş tutulmazsa süre eşiği hiç çalışmaz).
-    await trackLocation(result.id, enriched, enriched.location, 'qr');
-    // Panel bu jetonu yokluyor: hangi cihazin bagland~igini buradan ogreniyor
-    await regToken.recordAsset(jeton.jti, result.id);
-    res.json({ success: true, action, id: result.id, kalan_hak: jeton.kalan });
-  } catch (err) {
-    console.error('[POST /api/register]', err.message);
-    res.status(500).json({ error: 'Cihaz kaydı hatası', detail: err.message });
+app.post('/api/register', rota('Cihaz kaydı hatası', async (req, res) => {
+  /* QR JETONU ZORUNLU. Bu uc telefondan cagriliyor, oturum yok — jeton
+     oturumun yerini tutuyor: imzali (uydurulamaz), sureli ve kullanim
+     hakki sinirli. Panelden uretilmemis bir QR ile kayit yapilamaz. */
+  const regToken = require('./agent/tools/register-token');
+  const jeton = await regToken.verifyAndConsume(
+    req.get('X-Register-Token') || (req.body && req.body.reg_token));
+  if (!jeton.ok) {
+    console.warn(`[REGISTER REDDEDİLDİ] ${jeton.code} — ${jeton.reason} ` +
+      `ip=${(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim()}`);
+    return res.status(401).json({ error: jeton.reason, code: jeton.code });
   }
-});
+
+  const p = req.body || {};
+  const hostname = (p.hostname || '').trim();
+  if (!hostname && !p.serial_number) {
+    return res.status(400).json({ error: 'Cihaz adı (hostname) veya seri no zorunludur' });
+  }
+
+  const enriched = {
+    hostname,
+    serial_number: (p.serial_number || hostname).trim(),
+    category:    p.category    || 'Diğer',
+    brand:       p.brand       || '',
+    model:       p.model       || '',
+    os:          p.os          || '',
+    username:    p.username    || '',
+    location:    p.location    || '',
+    ip_address:  p.ip_address  || '',
+    last_seen:   new Date().toISOString(),
+    status:      'online',
+    collector_ver: 'qr-1.0.0',
+  };
+  // Boş alanları gönderme
+  Object.keys(enriched).forEach(k => { if (enriched[k] === '') delete enriched[k]; });
+
+  let existing = null;
+  if (enriched.serial_number) {
+    existing = await getAssetBySerial({ serialNumber: enriched.serial_number });
+  }
+
+  let result, action;
+  if (existing) {
+    result = await updateAsset(existing.id, enriched);
+    action = 'updated';
+  } else {
+    result = await createAsset(enriched);
+    action = 'created';
+  }
+  console.log(`[REGISTER] ${action}: ${hostname} (${enriched.category})`);
+  // QR kaydında lokasyon formdan BEYAN edilir → kaynak 'qr' olarak izlenir (token'lı
+  // ajan kadar güvenilir değil ama geçmiş tutulmazsa süre eşiği hiç çalışmaz).
+  await trackLocation(result.id, enriched, enriched.location, 'qr');
+  // Panel bu jetonu yokluyor: hangi cihazin bagland~igini buradan ogreniyor
+  await regToken.recordAsset(jeton.jti, result.id);
+  res.json({ success: true, action, id: result.id, kalan_hak: jeton.kalan });
+}));
 
 /* ─── QR kayıt jetonları (it/admin) ────────────────────────────────────────*/
 app.post('/api/register/token', requireRole('it', 'admin'), async (req, res) => {
@@ -783,30 +804,25 @@ app.get('/api/register/bulk/confirm', async (req, res) => {
 /* ONAY — kayıtları oluşturur. PUBLIC ama jeton zorunlu ve TEK KULLANIMLIK.
    Gövdeden kategori/adet OKUNMAZ: ne oluşacağı jetondaki dondurulmuş plandan
    gelir, telefon değiştiremez. */
-app.post('/api/register/bulk/confirm', async (req, res) => {
-  try {
-    const bt = require('./agent/tools/bulk-token');
-    const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
-    const c = await bt.consume((req.body && req.body.t) || req.query.t, ip);
-    if (!c.ok) {
-      console.warn(`[BULK ONAY REDDEDİLDİ] ${c.code} — ${c.reason} ip=${ip}`);
-      return res.status(401).json({ error: c.reason, code: c.code });
-    }
-    const r = await bulkOlustur({
-      category: c.plan.category, location: c.plan.location,
-      quantity: c.plan.quantity, prefix: c.plan.prefix, kaynak: 'telefon-onay',
-    });
-    await bt.sonucYaz(c.jti, {
-      count: r.count,
-      first: r.items[0] && r.items[0].hostname,
-      last: r.items[r.items.length - 1] && r.items[r.items.length - 1].hostname,
-    });
-    res.json({ success: true, ...r });
-  } catch (err) {
-    console.error('[POST /api/register/bulk/confirm]', err.message);
-    res.status(500).json({ error: 'Onay işlenemedi', detail: err.message });
+app.post('/api/register/bulk/confirm', rota('Onay işlenemedi', async (req, res) => {
+  const bt = require('./agent/tools/bulk-token');
+  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  const c = await bt.consume((req.body && req.body.t) || req.query.t, ip);
+  if (!c.ok) {
+    console.warn(`[BULK ONAY REDDEDİLDİ] ${c.code} — ${c.reason} ip=${ip}`);
+    return res.status(401).json({ error: c.reason, code: c.code });
   }
-});
+  const r = await bulkOlustur({
+    category: c.plan.category, location: c.plan.location,
+    quantity: c.plan.quantity, prefix: c.plan.prefix, kaynak: 'telefon-onay',
+  });
+  await bt.sonucYaz(c.jti, {
+    count: r.count,
+    first: r.items[0] && r.items[0].hostname,
+    last: r.items[r.items.length - 1] && r.items[r.items.length - 1].hostname,
+  });
+  res.json({ success: true, ...r });
+}));
 
 // Mobil kayıt sayfası (QR ile açılır)
 app.get('/register', (req, res) => {
@@ -821,119 +837,74 @@ app.get('/bulk-confirm', (req, res) => {
 
 // ─── Lisanslar ────────────────────────────────────────────────────────────────
 
-app.get('/api/licenses', async (req, res) => {
-  try {
-    const { filter_field, filter_value, page = 1, size = 200 } = req.query;
-    const data = await getAllLicenses({ page: Number(page), size: Number(size), filterField: filter_field, filterValue: filter_value });
-    res.json(data);
-  } catch (err) {
-    console.error('[GET /api/licenses]', err.message);
-    res.status(500).json({ error: 'Lisans verisi çekme hatası', detail: err.message });
-  }
-});
+app.get('/api/licenses', rota('Lisans verisi çekme hatası', async (req, res) => {
+  const { filter_field, filter_value, page = 1, size = 200 } = req.query;
+  const data = await getAllLicenses({ page: Number(page), size: Number(size), filterField: filter_field, filterValue: filter_value });
+  res.json(data);
+}));
 
-app.get('/api/licenses/stats', async (req, res) => {
-  try {
-    const stats = await getLicenseStats();
-    res.json(stats);
-  } catch (err) {
-    console.error('[GET /api/licenses/stats]', err.message);
-    res.status(500).json({ error: 'Lisans istatistik hatası', detail: err.message });
-  }
-});
+app.get('/api/licenses/stats', rota('Lisans istatistik hatası', async (req, res) => {
+  const stats = await getLicenseStats();
+  res.json(stats);
+}));
 
 // Bir bilgisayardan gelen tüm yazılım listesini upsert eder
-app.post('/api/licenses/sync', async (req, res) => {
-  try {
-    // Webhook ile AYNI koruma: bu uç da kimlik doğrulamasız yazma noktasıydı.
-    // Yalnız webhook'u kapatmak yarım çözüm olurdu — saldırgan lisans/yazılım
-    // envanterini kirletip uyum raporlarını yanıltabilirdi.
-    const agentAuth = require('./agent/tools/agent-auth');
-    const kimlik = await agentAuth.verifyRequest(req);
-    if (!kimlik.ok) {
-      console.warn(`[LİSANS REDDEDİLDİ] ${kimlik.code} — ${kimlik.reason}` +
-        (kimlik.deviceId ? ` (cihaz: ${kimlik.deviceId})` : ''));
-      return res.status(401).json({ error: kimlik.reason, code: kimlik.code });
-    }
-
-    const { hostname, serial_number, username, location, software } = req.body;
-    if (!hostname || !Array.isArray(software)) {
-      return res.status(400).json({ error: 'hostname ve software[] zorunludur' });
-    }
-
-    const results = await bulkUpsertLicenses({ hostname, serial_number, username, location, software });
-
-    const created = results.filter(r => r.action === 'created').length;
-    const updated = results.filter(r => r.action === 'updated').length;
-    console.log(`[LICENSES] ${hostname}: ${created} eklendi, ${updated} güncellendi`);
-    res.json({ success: true, created, updated, total: results.length });
-  } catch (err) {
-    console.error('[POST /api/licenses/sync]', err.message);
-    res.status(500).json({ error: 'Lisans sync hatası', detail: err.message });
+app.post('/api/licenses/sync', rota('Lisans sync hatası', async (req, res) => {
+  // Webhook ile AYNI koruma: bu uç da kimlik doğrulamasız yazma noktasıydı.
+  // Yalnız webhook'u kapatmak yarım çözüm olurdu — saldırgan lisans/yazılım
+  // envanterini kirletip uyum raporlarını yanıltabilirdi.
+  const agentAuth = require('./agent/tools/agent-auth');
+  const kimlik = await agentAuth.verifyRequest(req);
+  if (!kimlik.ok) {
+    console.warn(`[LİSANS REDDEDİLDİ] ${kimlik.code} — ${kimlik.reason}` +
+      (kimlik.deviceId ? ` (cihaz: ${kimlik.deviceId})` : ''));
+    return res.status(401).json({ error: kimlik.reason, code: kimlik.code });
   }
-});
+
+  const { hostname, serial_number, username, location, software } = req.body;
+  if (!hostname || !Array.isArray(software)) {
+    return res.status(400).json({ error: 'hostname ve software[] zorunludur' });
+  }
+
+  const results = await bulkUpsertLicenses({ hostname, serial_number, username, location, software });
+
+  const created = results.filter(r => r.action === 'created').length;
+  const updated = results.filter(r => r.action === 'updated').length;
+  console.log(`[LICENSES] ${hostname}: ${created} eklendi, ${updated} güncellendi`);
+  res.json({ success: true, created, updated, total: results.length });
+}));
 
 // ─── Anomali & Uyarı Sistemi (deterministik, LLM'siz) ───────────────────────
 
-app.get('/api/anomalies', async (req, res) => {
-  try {
-    const result = await detectAnomalies();
-    res.json(result);
-  } catch (err) {
-    console.error('[GET /api/anomalies]', err.message);
-    res.status(500).json({ error: 'Anomali tespiti hatası', detail: err.message });
-  }
-});
+app.get('/api/anomalies', rota('Anomali tespiti hatası', async (req, res) => {
+  const result = await detectAnomalies();
+  res.json(result);
+}));
 
-app.get('/api/alerts/offline', async (req, res) => {
-  try {
-    const result = await detectOfflineDevices();
-    res.json(result);
-  } catch (err) {
-    console.error('[GET /api/alerts/offline]', err.message);
-    res.status(500).json({ error: 'Çevrimdışı tespiti hatası', detail: err.message });
-  }
-});
+app.get('/api/alerts/offline', rota('Çevrimdışı tespiti hatası', async (req, res) => {
+  const result = await detectOfflineDevices();
+  res.json(result);
+}));
 
-app.get('/api/licenses/compliance', async (req, res) => {
-  try {
-    const result = await detectLicenseCompliance();
-    res.json(result);
-  } catch (err) {
-    console.error('[GET /api/licenses/compliance]', err.message);
-    res.status(500).json({ error: 'Lisans uyum raporu hatası', detail: err.message });
-  }
-});
+app.get('/api/licenses/compliance', rota('Lisans uyum raporu hatası', async (req, res) => {
+  const result = await detectLicenseCompliance();
+  res.json(result);
+}));
 
-app.get('/api/shadow-it', async (req, res) => {
-  try {
-    const result = await detectShadowIT();
-    res.json(result);
-  } catch (err) {
-    console.error('[GET /api/shadow-it]', err.message);
-    res.status(500).json({ error: 'Shadow IT tespiti hatası', detail: err.message });
-  }
-});
+app.get('/api/shadow-it', rota('Shadow IT tespiti hatası', async (req, res) => {
+  const result = await detectShadowIT();
+  res.json(result);
+}));
 
-app.get('/api/eol-os', async (req, res) => {
-  try {
-    const result = await detectEolOs();
-    res.json(result);
-  } catch (err) {
-    console.error('[GET /api/eol-os]', err.message);
-    res.status(500).json({ error: 'EOL işletim sistemi tespiti hatası', detail: err.message });
-  }
-});
+app.get('/api/eol-os', rota('EOL işletim sistemi tespiti hatası', async (req, res) => {
+  const result = await detectEolOs();
+  res.json(result);
+}));
 
-app.get('/api/warranty', async (req, res) => {
-  try {
-    const result = await detectWarranty();
-    res.json(result);
-  } catch (err) {
-    console.error('[GET /api/warranty]', err.message);
-    res.status(500).json({ error: 'Garanti takibi hatası', detail: err.message });
-  }
-});
+app.get('/api/warranty', rota('Garanti takibi hatası', async (req, res) => {
+  const result = await detectWarranty();
+  res.json(result);
+}));
 
 // ─── Cihaz Yaşam Döngüsü & Audit Log ────────────────────────────────────────
 
@@ -1023,14 +994,9 @@ app.post('/api/lifecycle/renew', requireRole('it', 'admin'), async (req, res) =>
 });
 
 // ─── Network Discovery (canlı ağ tarama) ────────────────────────────────────
-app.get('/api/network/scan', async (req, res) => {
-  try {
-    res.json(await scanNetwork());
-  } catch (err) {
-    console.error('[GET /api/network/scan]', err.message);
-    res.status(500).json({ error: 'Ağ tarama hatası', detail: err.message });
-  }
-});
+app.get('/api/network/scan', rota('Ağ tarama hatası', async (req, res) => {
+  res.json(await scanNetwork());
+}));
 
 // SNMP ağ keşfi — switch/firewall/AP/yazıcıları SNMP'yle bulup envantere yazar (it/admin)
 const snmpDiscovery = require('./agent/tools/snmp-discovery');
@@ -1051,66 +1017,46 @@ app.post('/api/network/snmp-scan', requireRole('it', 'admin'), async (req, res) 
 // tarayıcıdan uydurma rakam gönderip modele onu yorumlatmak mümkün olurdu.
 const reportAi = require('./agent/report-ai');
 
-app.post('/api/reports/ai-comment', async (req, res) => {
-  try {
-    const [risk, anomali, eol, garanti, stats, envanter] = await Promise.all([
-      computeRiskScores(), detectAnomalies(), detectEolOs(), detectWarranty(),
-      getStats(), getAllAssets({ size: 200 }),
-    ]);
-    const varliklar = envanter.results || [];
-    const bulgular = {
-      toplam: stats.total || 0,
-      aktif: stats.by_status?.online || 0,
-      kritik: risk.distribution?.critical || 0,
-      yuksek: risk.distribution?.high || 0,
-      ortalamaRisk: risk.average_score || 0,
-      garantiDisi: garanti.expired?.count || 0,
-      garantiYakin: garanti.expiring_soon?.count || 0,
-      eol: eol.eol?.count || 0,
-      dusukRam: anomali.low_ram?.count || 0,
-      dusukDisk: anomali.low_disk?.count || 0,
-      uzunUptime: anomali.long_uptime?.count || 0,
-      lokasyonsuz: varliklar.filter((a) => !String(a.location || '').trim()).length,
-      enRiskli: (risk.items || []).slice(0, 3).map((c) => ({ hostname: c.hostname, score: c.score })),
-    };
-    const yorum = await reportAi.raporYorumu(bulgular);
-    res.json({ metin: yorum.metin, kaynak: yorum.kaynak });   // model adı DÖNMEZ
-  } catch (err) {
-    console.error('[POST /api/reports/ai-comment]', err.message);
-    res.status(500).json({ error: 'Yorum üretilemedi', detail: err.message });
-  }
-});
+app.post('/api/reports/ai-comment', rota('Yorum üretilemedi', async (req, res) => {
+  const [risk, anomali, eol, garanti, stats, envanter] = await Promise.all([
+    computeRiskScores(), detectAnomalies(), detectEolOs(), detectWarranty(),
+    getStats(), getAllAssets({ size: 200 }),
+  ]);
+  const varliklar = envanter.results || [];
+  const bulgular = {
+    toplam: stats.total || 0,
+    aktif: stats.by_status?.online || 0,
+    kritik: risk.distribution?.critical || 0,
+    yuksek: risk.distribution?.high || 0,
+    ortalamaRisk: risk.average_score || 0,
+    garantiDisi: garanti.expired?.count || 0,
+    garantiYakin: garanti.expiring_soon?.count || 0,
+    eol: eol.eol?.count || 0,
+    dusukRam: anomali.low_ram?.count || 0,
+    dusukDisk: anomali.low_disk?.count || 0,
+    uzunUptime: anomali.long_uptime?.count || 0,
+    lokasyonsuz: varliklar.filter((a) => !String(a.location || '').trim()).length,
+    enRiskli: (risk.items || []).slice(0, 3).map((c) => ({ hostname: c.hostname, score: c.score })),
+  };
+  const yorum = await reportAi.raporYorumu(bulgular);
+  res.json({ metin: yorum.metin, kaynak: yorum.kaynak });   // model adı DÖNMEZ
+}));
 
 // ─── Risk Skoru & Yenileme/Maliyet Öngörüsü ─────────────────────────────────
-app.get('/api/risk-scores', async (req, res) => {
-  try {
-    res.json(await computeRiskScores());
-  } catch (err) {
-    console.error('[GET /api/risk-scores]', err.message);
-    res.status(500).json({ error: 'Risk skoru hesaplama hatası', detail: err.message });
-  }
-});
+app.get('/api/risk-scores', rota('Risk skoru hesaplama hatası', async (req, res) => {
+  res.json(await computeRiskScores());
+}));
 
-app.get('/api/forecast', async (req, res) => {
-  try {
-    res.json(await computeRenewalForecast());
-  } catch (err) {
-    console.error('[GET /api/forecast]', err.message);
-    res.status(500).json({ error: 'Öngörü hesaplama hatası', detail: err.message });
-  }
-});
+app.get('/api/forecast', rota('Öngörü hesaplama hatası', async (req, res) => {
+  res.json(await computeRenewalForecast());
+}));
 
 // ─── Turkcell Hat / SIM Envanteri ────────────────────────────────────────────
 // Hat = ayrı varlık (telefon değiştirebilir). "Hangi hat hangi telefonda" + geçmiş.
-app.get('/api/lines', async (req, res) => {
-  try {
-    const [lines, summary] = await Promise.all([lineTools.listLines(), lineTools.summary()]);
-    res.json({ summary, lines });
-  } catch (err) {
-    console.error('[GET /api/lines]', err.message);
-    res.status(500).json({ error: 'Hatlar alınamadı', detail: err.message });
-  }
-});
+app.get('/api/lines', rota('Hatlar alınamadı', async (req, res) => {
+  const [lines, summary] = await Promise.all([lineTools.listLines(), lineTools.summary()]);
+  res.json({ summary, lines });
+}));
 
 app.get('/api/lines/:id/history', async (req, res) => {
   try {
@@ -1613,14 +1559,9 @@ app.get('/api/lifecycle/log', (req, res) => {
 });
 
 // Yaşam döngüsü çelişki/zafiyet tespiti
-app.get('/api/lifecycle/conflicts', async (req, res) => {
-  try {
-    res.json(await detectLifecycleConflicts());
-  } catch (err) {
-    console.error('[GET /api/lifecycle/conflicts]', err.message);
-    res.status(500).json({ error: 'Çelişki tespiti hatası', detail: err.message });
-  }
-});
+app.get('/api/lifecycle/conflicts', rota('Çelişki tespiti hatası', async (req, res) => {
+  res.json(await detectLifecycleConflicts());
+}));
 
 // Zincir bütünlüğü doğrula (tamper tespiti) + geçerli durum listesi
 app.get('/api/lifecycle/verify', (req, res) => {
@@ -1636,27 +1577,17 @@ app.get('/api/lifecycle/verify', (req, res) => {
 // ─── Bildirim (n8n webhook → mail/Telegram) ─────────────────────────────────
 
 // Mevcut uyarı özetini önizle (gönderim yapmaz)
-app.get('/api/notify/preview', async (req, res) => {
-  try {
-    const digest = await buildAlertDigest();
-    res.json(digest);
-  } catch (err) {
-    console.error('[GET /api/notify/preview]', err.message);
-    res.status(500).json({ error: 'Özet oluşturma hatası', detail: err.message });
-  }
-});
+app.get('/api/notify/preview', rota('Özet oluşturma hatası', async (req, res) => {
+  const digest = await buildAlertDigest();
+  res.json(digest);
+}));
 
 // Bildirimi şimdi gönder (zamanlayıcının da kullandığı fonksiyon). force=true → dedup atla
-app.post('/api/notify/run', async (req, res) => {
-  try {
-    const force = !!(req.body && req.body.force);
-    const result = await sendDigest({ force });
-    res.json(result);
-  } catch (err) {
-    console.error('[POST /api/notify/run]', err.message);
-    res.status(500).json({ error: 'Bildirim gönderim hatası', detail: err.message });
-  }
-});
+app.post('/api/notify/run', rota('Bildirim gönderim hatası', async (req, res) => {
+  const force = !!(req.body && req.body.force);
+  const result = await sendDigest({ force });
+  res.json(result);
+}));
 
 // ─── AI Chat ─────────────────────────────────────────────────────────────────
 
