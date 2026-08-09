@@ -77,7 +77,6 @@ const { sendDigest, buildAlertDigest, startNotifyScheduler } = require('./agent/
 const { getLog, getDeviceLog, verifyChain, detectLifecycleConflicts, LIFECYCLE_STATES, ALERT_ON_RECORD, REQUIRES_APPROVAL, APPROVERS, submitChange, approveByToken, renewRequest, expirePendingRequests, auditBackupStatus, restoreAuditFromBackup } = require('./agent/tools/lifecycle-tools');
 const { scanNetwork, startDiscoveryScheduler } = require('./agent/tools/network-discovery');
 const { computeRiskScores, computeRenewalForecast } = require('./agent/tools/insight-tools');
-const lineTools = require('./agent/tools/line-tools');
 const QRCode = require('qrcode');
 const { chat } = require('./agent/claude-agent');
 
@@ -1052,72 +1051,8 @@ app.get('/api/forecast', rota('Öngörü hesaplama hatası', async (req, res) =>
 }));
 
 // ─── Turkcell Hat / SIM Envanteri ────────────────────────────────────────────
-// Hat = ayrı varlık (telefon değiştirebilir). "Hangi hat hangi telefonda" + geçmiş.
-app.get('/api/lines', rota('Hatlar alınamadı', async (req, res) => {
-  const [lines, summary] = await Promise.all([lineTools.listLines(), lineTools.summary()]);
-  res.json({ summary, lines });
-}));
-
-app.get('/api/lines/:id/history', async (req, res) => {
-  try {
-    res.json({ history: await lineTools.getLineHistory(Number(req.params.id)) });
-  } catch (err) {
-    res.status(500).json({ error: 'Hat geçmişi alınamadı', detail: err.message });
-  }
-});
-
-app.get('/api/lines/for-asset/:assetId', async (req, res) => {
-  try {
-    res.json({ line: await lineTools.getLineForAsset(Number(req.params.assetId)) });
-  } catch (err) {
-    res.status(500).json({ error: 'Hat sorgulanamadı', detail: err.message });
-  }
-});
-
-app.post('/api/lines', requireRole('it', 'admin'), async (req, res) => {
-  try {
-    const actor = currentUser(req)?.username || 'system';
-    const r = await lineTools.upsertLine({ ...(req.body || {}), actor });
-    res.json({ success: true, ...r });
-  } catch (err) {
-    console.error('[POST /api/lines]', err.message);
-    res.status(400).json({ error: 'Hat kaydedilemedi', detail: err.message });
-  }
-});
-
-app.post('/api/lines/import', requireRole('it', 'admin'), async (req, res) => {
-  try {
-    const actor = currentUser(req)?.username || 'system';
-    const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
-    if (!rows.length) return res.status(400).json({ error: 'İçe aktarılacak satır yok' });
-    res.json({ success: true, ...(await lineTools.importLines(rows, actor)) });
-  } catch (err) {
-    console.error('[POST /api/lines/import]', err.message);
-    res.status(400).json({ error: 'İçe aktarma hatası', detail: err.message });
-  }
-});
-
-app.post('/api/lines/:id/assign', requireRole('it', 'admin'), async (req, res) => {
-  try {
-    const actor = currentUser(req)?.username || 'system';
-    const line = await lineTools.assignLine(Number(req.params.id), { ...(req.body || {}), actor });
-    res.json({ success: true, line });
-  } catch (err) {
-    console.error('[POST /api/lines/:id/assign]', err.message);
-    res.status(400).json({ error: 'Hat atanamadı', detail: err.message });
-  }
-});
-
-app.post('/api/lines/:id/release', requireRole('it', 'admin'), async (req, res) => {
-  try {
-    const actor = currentUser(req)?.username || 'system';
-    const line = await lineTools.releaseLine(Number(req.params.id), { ...(req.body || {}), actor });
-    res.json({ success: true, line });
-  } catch (err) {
-    console.error('[POST /api/lines/:id/release]', err.message);
-    res.status(400).json({ error: 'Hat iade edilemedi', detail: err.message });
-  }
-});
+// Route'lar routes/lines.js'e taşındı; server.js yalnızca bağlantıyı bilir.
+app.use('/api/lines', require('./routes/lines')({ rota, requireRole, currentUser }));
 
 // ─── Resmi Zimmet (assigned_to) — Devir Koruması ─────────────────────────────
 const assignmentTools = require('./agent/tools/assignment-tools');
