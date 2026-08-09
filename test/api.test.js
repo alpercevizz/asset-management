@@ -142,6 +142,7 @@ const OKUMA_UCLARI = [
   '/api/eol-os', '/api/warranty', '/api/risk-scores', '/api/forecast', '/api/lines',
   '/api/assignments', '/api/assignments/mismatches', '/api/location-drift', '/api/location-summary',
   '/api/trends?days=30', '/api/backup/status', '/api/lifecycle/log', '/api/lifecycle/conflicts',
+  '/api/locations/geo',
   '/api/lifecycle/verify', '/api/settings', '/api/users', '/api/register/tokens',
 ];
 

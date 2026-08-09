@@ -1308,46 +1308,8 @@ app.delete('/api/device-images/:id', requireRole('it', 'admin'), async (req, res
   }
 });
 
-// Lokasyon koordinatları — harita için. Dış geocoding YOK.
-app.get('/api/locations/geo', async (req, res) => {
-  try {
-    const [geo, inv] = await Promise.all([
-      locationTools.getAllGeo(),
-      getAllAssets({ size: 200 }),
-    ]);
-    const adlar = [...new Set((inv.results || []).map(a => (a.location || '').trim()).filter(Boolean))];
-    res.json({ geo, locations: adlar, missing: adlar.filter(a => !geo[a]) });
-  } catch (err) {
-    res.status(500).json({ error: 'Koordinatlar alınamadı', detail: err.message });
-  }
-});
-
-app.put('/api/locations/geo', requireRole('it', 'admin'), async (req, res) => {
-  try {
-    const { location, lat, lon, label } = req.body || {};
-    const me = currentUser(req);
-    const row = await locationTools.setGeo(location, { lat, lon, label, by: me ? me.username : 'system' });
-    res.json({ success: true, geo: row });
-  } catch (err) {
-    res.status(400).json({ error: 'Koordinat kaydedilemedi', detail: err.message });
-  }
-});
-
-app.delete('/api/locations/geo/:location', requireRole('it', 'admin'), async (req, res) => {
-  try { await locationTools.deleteGeo(req.params.location); res.json({ success: true }); }
-  catch (err) { res.status(400).json({ error: 'Silinemedi', detail: err.message }); }
-});
-
-// İl adı geçen lokasyonları otomatik tohumla (elle girilenler EZİLMEZ)
-app.post('/api/locations/geo/seed', requireRole('it', 'admin'), async (req, res) => {
-  try {
-    const inv = await getAllAssets({ size: 200 });
-    const adlar = [...new Set((inv.results || []).map(a => (a.location || '').trim()).filter(Boolean))];
-    res.json(await locationTools.seedGeoFromNames(adlar));
-  } catch (err) {
-    res.status(500).json({ error: 'Tohumlama başarısız', detail: err.message });
-  }
-});
+// Lokasyon koordinatları — routes/locations-geo.js'e taşındı.
+app.use('/api/locations', require('./routes/locations-geo')({ requireRole, currentUser, getAllAssets }));
 
 // Dashboard lokasyon özeti (kova sayıları + şiddet dağılımı + lokasyon başına adet)
 app.get('/api/location-summary', async (req, res) => {
@@ -1370,56 +1332,8 @@ app.post('/api/location-drift/seed', requireRole('admin'), async (req, res) => {
 });
 
 // ─── Kullanıcı Yönetimi (admin) ──────────────────────────────────────────────
-// Yerel hesapların CRUD'u. Son-admin ve kendi-hesabını-silme korumaları uygulanır.
-// LDAP modunda hesaplar dizinden senkronlanır — buradaki rol değişikliği, o kullanıcının
-// bir sonraki AD girişinde grup üyeliğine göre yeniden yazılır (uyarı olarak döner).
-app.get('/api/users', requireRole('admin'), (req, res) => {
-  try {
-    res.json({
-      provider: usersModule.AUTH_PROVIDER(),
-      roles: usersModule.ROLES,
-      users: usersModule.listUsers(),
-    });
-  } catch (err) {
-    res.status(500).json({ error: 'Kullanıcılar alınamadı', detail: err.message });
-  }
-});
-
-app.post('/api/users', requireRole('admin'), async (req, res) => {
-  try {
-    const u = await usersModule.createUser(req.body || {});
-    console.log(`[users] Oluşturuldu: ${u.username} (${u.role}) — ${currentUser(req)?.username}`);
-    res.json({ success: true, user: u, warning: usersModule.AUTH_PROVIDER() === 'ldap'
-      ? 'LDAP modundasınız: bu yerel hesap AD dışıdır, dizinden gelmez.' : undefined });
-  } catch (err) {
-    res.status(400).json({ error: 'Kullanıcı oluşturulamadı', detail: err.message });
-  }
-});
-
-app.put('/api/users/:username', requireRole('admin'), async (req, res) => {
-  try {
-    const u = await usersModule.updateUser(req.params.username, req.body || {});
-    console.log(`[users] Güncellendi: ${u.username} (${u.role}) — ${currentUser(req)?.username}`);
-    res.json({ success: true, user: u, warning: (usersModule.AUTH_PROVIDER() === 'ldap' && req.body && req.body.role)
-      ? 'LDAP modunda rol, kullanıcının bir sonraki girişinde AD grubuna göre yeniden yazılır.' : undefined });
-  } catch (err) {
-    res.status(400).json({ error: 'Kullanıcı güncellenemedi', detail: err.message });
-  }
-});
-
-app.delete('/api/users/:username', requireRole('admin'), async (req, res) => {
-  try {
-    const me = currentUser(req);
-    if (me && String(me.username).toLowerCase() === String(req.params.username).toLowerCase()) {
-      return res.status(400).json({ error: 'Kendi hesabınızı silemezsiniz', code: 'SELF_DELETE' });
-    }
-    const r = await usersModule.deleteUser(req.params.username);
-    console.log(`[users] Silindi: ${r.deleted} — ${me?.username}`);
-    res.json({ success: true, ...r });
-  } catch (err) {
-    res.status(400).json({ error: 'Kullanıcı silinemedi', detail: err.message });
-  }
-});
+// Route'lar routes/users.js'e taşındı.
+app.use('/api/users', require('./routes/users')({ requireRole, currentUser }));
 
 // ─── Ayarlar (runtime config store — admin) ──────────────────────────────────
 const settingsTools = require('./agent/tools/settings-tools');
