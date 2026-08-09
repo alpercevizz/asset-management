@@ -819,8 +819,11 @@ body.sidebar-collapsed .sidebar-footer { padding: 14px 0 0; }
 .crit-chip:hover { border-color: var(--red); transform: translateY(-1px); }
 .crit-chip .sev-ico { width: 30px; height: 30px; border-radius: 8px; }
 .crit-chip div { min-width: 0; }
-.crit-chip strong { display: block; font-size: 12.5px; font-weight: 600; color: var(--text); line-height: 1.35; }
-.crit-chip span { display: block; font-size: 11.5px; color: var(--text-muted); }
+/* `div` ile kapsanmalı: ikon kutusu da bir <span> (.sev-ico) ve kapsamsız
+   `.crit-chip span` kuralı onun display:flex'ini block'a çeviriyordu —
+   bu yüzden SVG 30x30 kutunun ortasında değil sol üstünde duruyordu. */
+.crit-chip div strong { display: block; font-size: 12.5px; font-weight: 600; color: var(--text); line-height: 1.35; }
+.crit-chip div span { display: block; font-size: 11.5px; color: var(--text-muted); }
 
 /* Öneri kartı */
 .card--insight { background: var(--accent-glow); border-color: rgba(79,70,229,.25); }
@@ -1666,6 +1669,22 @@ body.sidebar-collapsed .sidebar-footer { padding: 14px 0 0; }
   display: block;
 }
 .mini-stats .ms-card:hover { box-shadow: var(--shadow); transform: translateY(-2px); }
+
+/* Kart kimliği: her KPI kendi rengini taşır; kenarlık ve köşedeki yumuşak
+   parlama o renkten türer. currentColor kullanıldığı için tek yerden değişir. */
+.mini-stats .ms-card { position: relative; overflow: hidden; }
+.mini-stats .ms-card::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: radial-gradient(120% 80% at 0% 0%, currentColor, transparent 62%); opacity: .09;
+}
+.mini-stats .ms-card:nth-child(1) { color: var(--accent); }
+.mini-stats .ms-card:nth-child(2) { color: var(--green); }
+.mini-stats .ms-card:nth-child(3) { color: var(--orange); }
+.mini-stats .ms-card:nth-child(4) { color: var(--red); }
+.mini-stats .ms-card:nth-child(5) { color: var(--accent); }
+.mini-stats .ms-card { border-color: color-mix(in srgb, currentColor 34%, var(--border)); }
+.mini-stats .kpi-label { text-transform: uppercase; letter-spacing: .05em; font-size: 12px; color: var(--text-muted); }
+.mini-stats .kpi-ico { border-radius: 50%; }
 .mini-stats .kpi-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .mini-stats .ms-value { display: block; font-family: var(--font-display); font-size: 30px;
   font-weight: 800; line-height: 1; letter-spacing: -.035em; margin-bottom: 10px; }
@@ -1867,21 +1886,12 @@ body.tv-mode:not(.tv-full) .fb-sel { font-size: 14.5px; }
 body.tv-mode:not(.tv-full) .pager button { min-width: 40px; height: 40px; font-size: 14px; }
 body.tv-mode:not(.tv-full) .rows-per { font-size: 14px; }
 
-/* Neon KPI kartları (tasarımdaki parlayan kenarlık) */
-body.tv-mode .mini-stats .ms-card { position: relative; overflow: hidden; }
-body.tv-mode .mini-stats .ms-card::after {
-  content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
-  background: radial-gradient(120% 80% at 0% 0%, currentColor, transparent 62%); opacity: .09;
-}
-body.tv-mode .mini-stats .ms-card:nth-child(1) { color: var(--accent); }
-body.tv-mode .mini-stats .ms-card:nth-child(2) { color: var(--green); }
-body.tv-mode .mini-stats .ms-card:nth-child(3) { color: var(--orange); }
-body.tv-mode .mini-stats .ms-card:nth-child(4) { color: var(--red); }
-body.tv-mode .mini-stats .ms-card:nth-child(5) { color: var(--accent); }
-body.tv-mode .mini-stats .ms-card { border-color: color-mix(in srgb, currentColor 34%, var(--border)); }
+/* TV'de yalnız ÖLÇÜ büyür. Kartın görünümü (renk, parlama, yuvarlak ikon)
+   artık tabanda — TV'ye özel bırakıldığında aynı sayfa iki ayrı kimlik
+   taşıyordu; kullanıcı TV'deki hâli tüm görünümlerde istedi. */
 body.tv-mode .mini-stats .ms-value { font-size: 38px; }
-body.tv-mode .mini-stats .kpi-label { font-size: 13px; letter-spacing: .05em; text-transform: uppercase; }
-body.tv-mode .mini-stats .kpi-ico { width: 46px; height: 46px; border-radius: 50%; }
+body.tv-mode .mini-stats .kpi-label { font-size: 13px; }
+body.tv-mode .mini-stats .kpi-ico { width: 46px; height: 46px; }
 body.tv-mode .mini-stats .kpi-ico svg { width: 22px; height: 22px; }
 body.tv-mode .mini-stats .kpi-trend { font-size: 13px; }
 body.tv-mode .mini-stats .kpi-spark svg { width: 92px; height: 34px; }
@@ -2762,8 +2772,13 @@ body.tv-mode .qrf-card, body.tv-mode .qrf-right .qr-display {
 }
 body.tv-mode .qrf-req > div { border-style: solid; }
 body.tv-mode .qrf-info p, body.tv-mode .qrf-help li, body.tv-mode .qrf-req small { color: #93a1bd; }
-body.tv-mode .field-sm label { color: #93a1bd; }
-body.tv-mode .select-sm { background: #0d1424; border-color: rgba(255,255,255,.12); color: #e8edf7; }
+/* DİKKAT: bu iki kural #qrModalOverlay'e KAPSANMALI. Kapsanmadığı sürece
+   TV modunda uygulamanın HER yerindeki .select-sm (33 kullanım: Varlıklar
+   filtreleri, Lisanslar arama, Hatlar filtreleri, Yaşam Döngüsü formu,
+   Ayarlar eşikleri…) koyu zemine dönüyordu — açık temada bile. QR modalı
+   TV'de kendi koyu panelini kullanıyor, kural oraya aitti. */
+body.tv-mode #qrModalOverlay .field-sm label { color: #93a1bd; }
+body.tv-mode #qrModalOverlay .select-sm { background: #0d1424; border-color: rgba(255,255,255,.12); color: #e8edf7; }
 body.tv-mode .qr-placeholder { color: #7c8cf8; }
 body.tv-mode .qr-placeholder span { color: #e8edf7; font-size: 17px; }
 body.tv-mode .qr-placeholder small { color: #7e8ba6; }
