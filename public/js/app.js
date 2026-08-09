@@ -4122,10 +4122,7 @@ function paintAssetsTable() {
 
   if (!slice.length) {
     tbody.innerHTML = `<tr><td colspan="8" class="loading-cell">Filtreye uyan kayıt yok</td></tr>`;
-    renderPager(0, per);
-    updateBulkBar();
-    paintAssetCards(list, per);
-    renderMiniStats();
+    tabloKuyrugu(list, per);
     return;
   }
 
@@ -4179,6 +4176,15 @@ function paintAssetsTable() {
     });
   });
 
+  tabloKuyrugu(list, per);
+}
+
+/* Tablodan SONRA her durumda çalışması gerekenler. Boş ve dolu yollar ayrı
+   ayrı yazıldığı için sürüklenmişti: boş yolda renderAssetsRail() çağrısı
+   YOKTU ve envanteri boş bir kurulumda sağ raydaki "Son Aktiviteler" sonsuza
+   kadar "Yükleniyor..." kalıyordu (yeni müşterinin gördüğü ilk ekran).
+   Tek yer = tek davranış. */
+function tabloKuyrugu(list, per) {
   renderPager(list.length, per);
   updateBulkBar();
   paintAssetCards(list, per);
