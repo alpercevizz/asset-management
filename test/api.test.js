@@ -191,3 +191,105 @@ test('API: rapor yorumu model olmadan da metin döndürür', async () => {
   assert.ok(!('model' in r.json) && !('provider' in r.json),
     'yanıt sağlayıcı/model adı sızdırmamalı — müşteriye altyapı gösterilmiyor');
 });
+
+/* ── QR / Toplu Kayıt uçları ─────────────────────────────────────────────────
+   Bu blok, register route'ları routes/ altına taşınmadan ÖNCE yazıldı: en
+   güvenlik-hassas uçları (jeton üretimi, tek kullanım, iptal) taşımadan önce
+   HTTP seviyesinde kilitlemek gerekiyordu.
+
+   Hiçbir test CİHAZ KAYDI OLUŞTURMAZ — yalnız jeton yaşam döngüsü ve plan
+   önizlemesi denenir. Kayıt oluşturan uçlar (bulk/confirm) tek kullanımlık
+   jeton tükettiği için testte tetiklenmez. */
+
+test('API: QR jetonu üretilir, listelenir, durumu okunur ve iptal edilir', async () => {
+  const uret = await istek('/api/register/token', { method: 'POST', body: { hours: 1, uses: 1 } });
+  assert.equal(uret.durum, 200);
+  const jti = uret.json?.jti;
+  assert.ok(jti, 'jeton kimliği (jti) dönmedi');
+  assert.ok(uret.json.token, 'imzalı jeton dönmedi');
+  assert.equal(uret.json.max_uses, 1);
+
+  const liste = await istek('/api/register/tokens');
+  assert.equal(liste.durum, 200);
+  assert.ok((liste.json?.results || []).some((t) => t.jti === jti), 'üretilen jeton listede yok');
+
+  const durum = await istek(`/api/register/tokens/${jti}`);
+  assert.equal(durum.durum, 200);
+  assert.equal(durum.json?.jti, jti);
+  assert.equal(durum.json?.asset, null, 'henüz kayıt olmadığı için asset null olmalı');
+
+  const iptal = await istek(`/api/register/tokens/${jti}`, { method: 'DELETE' });
+  assert.equal(iptal.durum, 200);
+  assert.equal(iptal.json?.success, true);
+
+  // İptalden sonra jeton ya kaybolur ya "iptal" işaretlenir; ikisi de kabul
+  const sonra = await istek('/api/register/tokens');
+  const kalan = (sonra.json?.results || []).find((t) => t.jti === jti);
+  assert.ok(!kalan || kalan.revoked || kalan.status === 'iptal', 'iptal edilen jeton hâlâ etkin görünüyor');
+});
+
+test('API: olmayan jetonun durumu 404 döner', async () => {
+  const r = await istek('/api/register/tokens/olmayan-jeton-123');
+  assert.equal(r.durum, 404);
+});
+
+test('API: toplu depo önizlemesi kayıt OLUŞTURMADAN plan döndürür', async () => {
+  const oncesi = await istek('/api/assets');
+  const oncekiSayi = oncesi.json?.count ?? (oncesi.json?.results || []).length;
+
+  const on = await istek('/api/register/bulk/preview?category=Tablet&quantity=3');
+  assert.equal(on.durum, 200);
+  assert.ok(Array.isArray(on.json?.hostnames) || Array.isArray(on.json?.names) || on.json?.quantity,
+    'plan içeriği beklenen biçimde değil: ' + JSON.stringify(on.json).slice(0, 120));
+
+  const sonrasi = await istek('/api/assets');
+  const sonrakiSayi = sonrasi.json?.count ?? (sonrasi.json?.results || []).length;
+  assert.equal(sonrakiSayi, oncekiSayi, 'önizleme envanteri değiştirmiş — sadece okumalı');
+});
+
+test('API: toplu onay kodu üretilir ve iptal edilir (kayıt oluşmaz)', async () => {
+  const oncesi = await istek('/api/assets');
+  const oncekiSayi = oncesi.json?.count ?? (oncesi.json?.results || []).length;
+
+  const uret = await istek('/api/register/bulk/token', {
+    method: 'POST', body: { category: 'Tablet', quantity: 2, minutes: 10 },
+  });
+  assert.equal(uret.durum, 200);
+  const jti = uret.json?.jti;
+  assert.ok(jti, 'toplu jeton kimliği dönmedi');
+  assert.ok(uret.json?.plan, 'jetonla birlikte plan dönmeli (telefon ekranında gösteriliyor)');
+
+  // Peek: planı okur ama jetonu TÜKETMEZ
+  const bak = await istek(`/api/register/bulk/token/${jti}`);
+  assert.equal(bak.durum, 200);
+
+  const iptal = await istek(`/api/register/bulk/token/${jti}`, { method: 'DELETE' });
+  assert.equal(iptal.durum, 200);
+
+  const sonrasi = await istek('/api/assets');
+  const sonrakiSayi = sonrasi.json?.count ?? (sonrasi.json?.results || []).length;
+  assert.equal(sonrakiSayi, oncekiSayi, 'jeton üretimi envantere kayıt eklemiş olmamalı');
+});
+
+/* QR ve toplu onay SAYFALARI kök yoldan servis edilir; router'a taşınsalardı
+   URL'leri /api/register olurdu ve cihaz kayıt ucuyla çakışırdı. Bu test o
+   ayrımı kilitler — telefon bu sayfalara oturum AÇMADAN gelir. */
+test('API: QR ve toplu onay sayfaları kök yoldan, oturumsuz açılır', async () => {
+  const kayit = await istek('/register', { cookie: '' });
+  assert.equal(kayit.durum, 200, 'QR kayıt sayfası açılmıyor');
+  assert.ok(/<html/i.test(kayit.govde), 'HTML dönmedi');
+
+  const onay = await istek('/bulk-confirm', { cookie: '' });
+  assert.equal(onay.durum, 200, 'toplu onay sayfası açılmıyor');
+  assert.ok(/<html/i.test(onay.govde), 'HTML dönmedi');
+
+  // QR üretimi de public (telefon oturum açamaz)
+  const qr = await istek('/api/qr?data=test', { cookie: '' });
+  assert.equal(qr.durum, 200);
+  assert.ok(/<svg/i.test(qr.govde), 'QR SVG dönmedi');
+});
+
+test('API: QR jeton uçları yetkisiz kullanıcıya kapalı', async () => {
+  const r = await istek('/api/register/token', { method: 'POST', body: { hours: 1 }, cookie: '' });
+  assert.equal(r.durum, 401, 'oturumsuz jeton üretilebiliyor');
+});

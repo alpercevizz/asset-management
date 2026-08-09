@@ -873,35 +873,42 @@ test('agent-auth: aynı kimlikten farklı seri gelince klon şüphesi işaretlen
 });
 
 // ── Toplu kayıt planı (önizleme = gerçek aralık) ──────────────────────────────
-test('bulkPlan: önek türetme, kaçış ve numaralandırmanın devam etmesi', () => {
-  // Sunucudaki bulkPlan ile AYNI regex kurulumu — önizleme ile oluşturmanın
-  // aynı sonucu vermesi bu mantığa bağlı.
-  const kur = (pfx) => {
-    const kacis = pfx.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return new RegExp('^' + kacis + '-(\\d+)$');
-  };
+test('bulkPlan: önek türetme, kaçış ve numaralandırmanın devam etmesi', async () => {
+  /* Artık GERÇEK fonksiyon test ediliyor. Önceden bu test mantığın KOPYASINI
+     kuruyordu; kopya sürüklenseydi test hiçbir şey yakalamazdı. */
+  const { bulkPlan } = require('../agent/tools/bulk-plan');
+  const sahteEnvanter = (hostnames) => async () => ({ results: hostnames.map((h) => ({ hostname: h })) });
 
-  // 1) Rakam sınıfı gerçekten rakam eşlemeli. Dizede '\d' yazılırsa JS onu
-  //    'd' harfine indirger ve numaralandırma her seferinde 001'den başlar.
-  const re = kur('DEPO-TELEFON');
-  assert.ok(re.test('DEPO-TELEFON-007'));
-  assert.equal(re.exec('DEPO-TELEFON-014')[1], '014');
-  assert.equal(re.test('DEPO-TELEFON-abc'), false, 'harf eşleşmemeli');
-  assert.equal(re.test('DEPO-TABLET-001'), false, 'başka önek eşleşmemeli');
+  // 1) Kategoriden önek türetilir, numaralandırma mevcut en büyükten DEVAM eder
+  const p1 = await bulkPlan({ category: 'Telefon', quantity: 2 },
+    sahteEnvanter(['DEPO-TELEFON-001', 'DEPO-TELEFON-003', 'DEPO-TABLET-009', 'RASTGELE']));
+  assert.equal(p1.prefix, 'DEPO-TELEFON');
+  assert.equal(p1.maxNum, 3, 'yalnız aynı önekteki en büyük numara sayılmalı');
+  assert.equal(p1.mevcut, 2);
+  assert.equal(p1.ilk, 'DEPO-TELEFON-004');
+  assert.equal(p1.son, 'DEPO-TELEFON-005');
 
-  // 2) Önek kullanıcıdan geliyor: regex özel karakterleri kaçırılmalı
-  const ozel = kur('A.B*C');
-  assert.ok(ozel.test('A.B*C-003'));
-  assert.equal(ozel.test('AXBYC-003'), false, '. ve * literal olmalı');
+  // 2) Rakam sınıfı gerçekten rakam eşlemeli. Dizede '\d' yazılırsa JS onu
+  //    'd' harfine indirger ve numaralandırma her seferinde 001'den başlardı.
+  const p2 = await bulkPlan({ category: 'Telefon', quantity: 1 },
+    sahteEnvanter(['DEPO-TELEFON-abc', 'DEPO-TELEFON-014']));
+  assert.equal(p2.maxNum, 14, 'harf içeren ad sayılmamalı, 014 sayılmalı');
+  assert.equal(p2.ilk, 'DEPO-TELEFON-015');
 
-  // 3) Numaralandırma mevcut en büyük numaradan DEVAM eder
-  const mevcut = ['DEPO-TELEFON-001', 'DEPO-TELEFON-003', 'DEPO-TABLET-009', 'RASTGELE'];
-  let maxNum = 0;
-  for (const h of mevcut) { const m = h.match(re); if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10)); }
-  assert.equal(maxNum, 3, 'yalnız aynı önekteki en büyük numara sayılmalı');
-  const no = (n) => 'DEPO-TELEFON-' + String(n).padStart(3, '0');
-  assert.equal(no(maxNum + 1), 'DEPO-TELEFON-004');
-  assert.equal(no(maxNum + 10), 'DEPO-TELEFON-013');
+  // 3) Önek kullanıcıdan geliyor: regex özel karakterleri kaçırılmalı
+  const p3 = await bulkPlan({ prefix: 'A.B*C', quantity: 1 }, sahteEnvanter(['A.B*C-003', 'AXBYC-009']));
+  assert.equal(p3.maxNum, 3, '. ve * literal olmalı; AXBYC eşleşmemeli');
+  assert.equal(p3.ilk, 'A.B*C-004');
+
+  // 4) Boş envanterde 001'den başlar
+  const p4 = await bulkPlan({ category: 'Tablet', quantity: 3 }, sahteEnvanter([]));
+  assert.equal(p4.ilk, 'DEPO-TABLET-001');
+  assert.equal(p4.son, 'DEPO-TABLET-003');
+
+  // 5) Uzun listede örnekler kısaltılır (panel 200 satır göstermez)
+  const p5 = await bulkPlan({ category: 'Tablet', quantity: 40 }, sahteEnvanter([]));
+  assert.ok(p5.ornekler.length < 40, 'örnek listesi kısaltılmalı');
+  assert.ok(p5.ornekler.includes(null), 'atlama işareti (null) bulunmalı');
 });
 
 // ── Toplu kayıt onay jetonu (TV/kiosk telefonla onay) ────────────────────────
