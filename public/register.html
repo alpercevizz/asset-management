@@ -6,30 +6,36 @@
   <title>Cihaz Kaydı — AssetMan</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
+    /* Panel ve login ile AYNI tasarım dili: indigo + Plus Jakarta Sans.
+       Token ADLARI korundu, yalnız DEĞERLERİ değişti — aşağıdaki kuralların
+       hiçbirine dokunmadan tema döndü (panelde de bu yol izlenmişti).
+       Tek yazı ailesi var; --font-display ve --font-body aynı aileyi
+       gösteriyor ki mevcut kurallar kırılmasın. */
     :root {
-      --font-display: "Fraunces", Georgia, serif;
-      --font-body: "Hanken Grotesk", -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      --bg: #faf7f2; --card: #ffffff; --field: #faf7f2;
-      --border: rgba(24,20,15,0.10); --border-strong: rgba(24,20,15,0.16);
-      --text: #1a1815; --text-dim: #5a544c; --text-muted: #8a8378;
-      --accent: #6b5cff; --green: #0f9866; --red: #c94a3f;
+      --font-display: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-body: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --bg: #f5f6fa; --card: #ffffff; --field: #fcfcfe;
+      --border: #e6e8f0; --border-strong: #dfe2ee;
+      --text: #14162e; --text-dim: #4b5168; --text-muted: #8b90a6;
+      --accent: #4f46e5; --accent-soft: rgba(79,70,229,0.10); --green: #0f9866; --red: #d64545;
     }
+    /* Telefonda açılıyor: tema tercihi cihazdan gelir, sayfada anahtar yok. */
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #1a1613; --card: #221e1a; --field: #1a1613;
-        --border: rgba(255,248,238,0.09); --border-strong: rgba(255,248,238,0.16);
-        --text: #f2ede4; --text-dim: #b3ab9f; --text-muted: #7a7469;
-        --accent: #a99bff; --green: #4ade80; --red: #f87171;
+        --bg: #0e1022; --card: #171a33; --field: #1e2240;
+        --border: rgba(255,255,255,0.09); --border-strong: rgba(255,255,255,0.14);
+        --text: #eef0fb; --text-dim: #b9bed6; --text-muted: #8b90a6;
+        --accent: #6366f1; --accent-soft: rgba(99,102,241,0.16); --green: #4ade80; --red: #f87171;
       }
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: var(--font-body);
       background:
-        radial-gradient(700px 400px at 0% -10%, rgba(107,92,255,0.10), transparent 55%),
-        radial-gradient(700px 400px at 100% 0%, rgba(244,182,120,0.12), transparent 50%),
+        radial-gradient(760px 420px at 0% -10%, rgba(79,70,229,0.10), transparent 55%),
+        radial-gradient(700px 400px at 100% 0%, rgba(99,102,241,0.08), transparent 50%),
         var(--bg);
       color: var(--text); min-height: 100vh; font-size: 15px; line-height: 1.55;
       letter-spacing: -0.006em; -webkit-font-smoothing: antialiased;
@@ -38,11 +44,13 @@
 
     .hdr { padding: 34px 24px 22px; border-bottom: 1px solid var(--border); }
     .hdr-brand { display: flex; align-items: center; gap: 11px; }
-    .hdr-icon { width: 34px; height: 34px; background: linear-gradient(135deg, var(--accent), #8a7dff); border-radius: 9px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(107,92,255,0.28); }
-    .hdr-icon svg { width: 19px; height: 19px; stroke: #fff; fill: none; stroke-width: 1.8; }
-    .hdr-name { font-family: var(--font-display); font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--text); }
+    /* Marka simgesi panel ve login ile AYNI: dolgulu üçgen "A". Dolgu ön
+       plandır — kutu zemini olmadığı için baskıda/koyu temada kaybolmaz. */
+    .hdr-icon { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; }
+    .hdr-icon svg { width: 32px; height: 32px; }
+    .hdr-name { font-family: var(--font-display); font-size: 20px; font-weight: 800; letter-spacing: -0.01em; color: var(--text); }
     .hdr-sub { font-size: 11px; color: var(--text-muted); }
-    .hdr-title { font-family: var(--font-display); font-size: 26px; font-weight: 600; margin-top: 20px; letter-spacing: -0.01em; color: var(--text); }
+    .hdr-title { font-family: var(--font-display); font-size: 26px; font-weight: 800; margin-top: 20px; letter-spacing: -0.01em; color: var(--text); }
     .hdr-desc { font-size: 13px; color: var(--text-muted); margin-top: 5px; }
 
     form { padding: 22px 24px 34px; display: flex; flex-direction: column; gap: 15px; flex: 1; }
@@ -54,13 +62,14 @@
       border-radius: 11px; padding: 13px 14px; font-size: 16px; outline: none; transition: border-color 0.15s, box-shadow 0.15s;
       -webkit-appearance: none; appearance: none; font-family: inherit;
     }
-    input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(107,92,255,0.12); }
-    select { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238a8378' stroke-width='2'><polyline points='6 9 12 15 18 9'/></svg>"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 38px; }
+    input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    select { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238b90a6' stroke-width='2'><polyline points='6 9 12 15 18 9'/></svg>"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 38px; }
     .hint { font-size: 11px; color: var(--text-muted); }
-    .auto-tag { display: inline-block; background: rgba(107,92,255,0.12); color: var(--accent); font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 6px; margin-left: 6px; }
+    .auto-tag { display: inline-block; background: var(--accent-soft); color: var(--accent); font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 6px; margin-left: 6px; }
 
     .btn {
-      background: var(--text); color: var(--bg); border: none;
+      background: var(--accent); color: #fff; border: none;
+      box-shadow: 0 10px 24px -10px rgba(79,70,229,0.6);
       border-radius: 11px; padding: 15px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 6px;
       font-family: inherit; letter-spacing: -0.01em; transition: opacity 0.15s;
     }
@@ -70,11 +79,11 @@
     .ok-screen { display: none; flex-direction: column; align-items: center; justify-content: center; flex: 1; padding: 40px 24px; text-align: center; gap: 16px; }
     .ok-circle { width: 76px; height: 76px; border-radius: 50%; background: rgba(15,152,102,0.12); display: flex; align-items: center; justify-content: center; }
     .ok-circle svg { width: 38px; height: 38px; stroke: var(--green); fill: none; stroke-width: 2.5; }
-    .ok-title { font-family: var(--font-display); font-size: 24px; font-weight: 600; color: var(--text); }
+    .ok-title { font-family: var(--font-display); font-size: 24px; font-weight: 800; color: var(--text); }
     .ok-desc { font-size: 14px; color: var(--text-muted); }
     .ok-add { background: var(--card); border: 1px solid var(--border-strong); color: var(--text-dim); padding: 11px 20px; border-radius: 11px; font-size: 14px; cursor: pointer; font-family: inherit; }
 
-    .err-box { display: none; background: rgba(201,74,63,0.10); border: 1px solid rgba(201,74,63,0.25); color: var(--red); padding: 11px 14px; border-radius: 11px; font-size: 13px; }
+    .err-box { display: none; background: rgba(214,69,69,0.10); border: 1px solid rgba(214,69,69,0.25); color: var(--red); padding: 11px 14px; border-radius: 11px; font-size: 13px; }
 
     /* Seri barkod tarama */
     .serial-row { display: flex; gap: 8px; }
@@ -87,7 +96,7 @@
     .scan-box video { width: 100%; border-radius: 14px; background: #000; display: block; }
     .scan-frame { position: absolute; top: 34%; left: 8%; right: 8%; height: 24%; border: 3px solid var(--accent); border-radius: 12px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.35); pointer-events: none; }
     .scan-hint { color: #fff; text-align: center; margin-top: 16px; font-size: 14px; opacity: 0.9; }
-    .scan-close { display: block; margin: 18px auto 0; background: #fff; color: #1a1815; border: none; border-radius: 11px; padding: 12px 30px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; }
+    .scan-close { display: block; margin: 18px auto 0; background: #fff; color: #14162e; border: none; border-radius: 11px; padding: 12px 30px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; }
   </style>
 </head>
 <body>
@@ -95,7 +104,14 @@
     <div class="hdr">
       <div class="hdr-brand">
         <div class="hdr-icon">
-          <svg viewBox="0 0 24 24" stroke-linejoin="round"><path d="M12 2l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>
+          <svg viewBox="0 0 64 64" fill="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="regMark" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#4f46e5"/>
+              </linearGradient>
+            </defs>
+            <path d="M32 7 L57 54 H49.5 L32 21 L14.5 54 H7 Z" fill="url(#regMark)"/>
+          </svg>
         </div>
         <div>
           <div class="hdr-name">AssetMan</div>
