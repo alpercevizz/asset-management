@@ -57,7 +57,7 @@
             <div><div style="font-size:12px;color:var(--text-muted);">Yerel kayıt</div><div id="backupLocalCount" style="font-size:18px;font-weight:600;">—</div></div>
             <div><div style="font-size:12px;color:var(--text-muted);">WORM yedek</div><div id="backupRemoteCount" style="font-size:18px;font-weight:600;">—</div></div>
             <div style="flex:1;min-width:220px;"><div id="backupDetail" style="font-size:13px;color:var(--text-muted);">—</div></div>
-            <button class="btn-report" id="backupRestoreBtn" style="display:none;background:var(--red,#ef4444);">Yedekten Geri Yükle</button>
+            <button class="btn-report" id="backupRestoreBtn" data-rol="admin" style="display:none;background:var(--red,#ef4444);">Yedekten Geri Yükle</button>
           </div>
         </div>
 
@@ -84,7 +84,7 @@
               <label>Not (opsiyonel)</label>
               <input type="text" id="lifeNote" class="select-sm" placeholder="örn: İK üzerinden teslim alındı">
             </div>
-            <button class="btn-report" id="lifeRecordBtn" style="min-width:140px;">Kaydı Ekle</button>
+            <button class="btn-report" id="lifeRecordBtn" data-rol="it,admin" style="min-width:140px;">Kaydı Ekle</button>
           </div>
           <div id="lifeApproverHint" style="padding:0 16px 6px;font-size:12px;color:var(--text-muted);"></div>
           <div id="lifeRecordMsg" style="padding:0 16px 14px;font-size:13px;"></div>

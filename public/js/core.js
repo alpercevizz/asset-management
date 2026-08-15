@@ -373,12 +373,35 @@ async function loadCurrentUser() {
       setTxt('menuUserRole', roleLabel);
     }
     state.role = data.role;
-    // Ayarlar nav'ı yalnız admin'e görünür
-    if (data.role === 'admin') {
-      const n = $(`#navSettings`); if (n) n.style.display = '';
-      const u = $(`#navUsers`);    if (u) u.style.display = '';
-    }
+    rolUygula(data.role);
   } catch (_) { /* sessizce geç */ }
+}
+
+/* ─── Rol bazlı arayüz ──────────────────────────────────────────────────────
+   BU BİR GÜVENLİK KATMANI DEĞİLDİR. Gerçek yetki denetimi sunucuda
+   requireRole() ile yapılır ve orada kalır; buradaki tek amaç, kullanıcıya
+   basınca 403 alacağı düğmeyi hiç göstermemek. Tarayıcıdan gizlenen bir
+   düğme, isteği elle atmayı engellemez.
+
+   Bildirimsel: kural öğenin YANINDA durur (data-rol="it,admin"). Dağınık
+   if'lerle yapılsaydı yeni bir düğme eklendiğinde kuralı eklemeyi unutmak
+   kaçınılmazdı; burada attribute yoksa öğe herkese görünür — güvenli varsayılan
+   "göster", çünkü gizleme yalnızca konfor.
+
+   'admin' her yeri görür: ayrıca yazmaya gerek kalmasın diye örtük eklenir. */
+function rolUygula(rol) {
+  const benim = String(rol || '').trim();
+  document.querySelectorAll('[data-rol]').forEach((el) => {
+    const izinli = el.getAttribute('data-rol').split(',').map((x) => x.trim()).filter(Boolean);
+    const gorunur = izinli.includes(benim) || benim === 'admin';
+    /* SINIF ile gizleniyor, satır içi style ile DEĞİL: bazı öğelerin görünürlüğünü
+       uygulamanın kendi mantığı yönetiyor (örn. yedekten geri yükle düğmesi
+       yalnız yedek varsa çıkar). style.display'e yazsaydık o mantıkla kavga
+       eder, kısa süreliğine yanlış düğme gösterirdik. */
+    el.classList.toggle('rol-yok', !gorunur);
+    if (gorunur) el.removeAttribute('aria-hidden');
+    else el.setAttribute('aria-hidden', 'true');
+  });
 }
 
 /* ─── Views ─────────────────────────────────────────────────────────────── */

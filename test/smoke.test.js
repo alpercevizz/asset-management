@@ -97,6 +97,8 @@ before(async () => {
       CHAIN_SECRET: 'smoke-test-chain-secret-en-az-otuziki-karakt!',
       WORM_SECRET: 'smoke-test-worm-secret-en-az-otuziki-karakterr!',
       APP_PASSWORD: SIFRE, SUPPRESS_PASSWORD_LOG: '1', DISABLE_LOGIN_RATE_LIMIT: 'true',
+      // Rol testi için: farklı rollerdeki tohum hesaplarının parolaları
+      USER_PW_MEHMET_YILMAZ: 'Mehmet.2024!', USER_PW_AHMET_SAHIN: 'Ahmet.2024!',
       NOTIFY_ENABLED: 'false', SNMP_ENABLED: 'false',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -215,4 +217,62 @@ test('duman: konsol ve ağ temiz', async (t) => {
   assert.deepEqual(sayfaHatalari, [], 'yakalanmamış JS hatası');
   assert.deepEqual(konsolHatalari, [], 'konsolda hata');
   assert.deepEqual(kotuIstekler, [], '4xx/5xx dönen istek');
+});
+
+/* ── Rol bazlı arayüz ────────────────────────────────────────────────────────
+   Sunucudaki requireRole ile arayüzdeki data-rol AYNI kuralı söylemeli. Bu
+   test ikisinin ayrışmasını yakalar: yeni bir yazma düğmesi eklenip data-rol
+   unutulursa approver o düğmeyi görür, basar ve 403 alır.
+
+   NOT: gizleme GÜVENLİK DEĞİL. Gerçek denetim sunucuda; burada test edilen
+   şey kullanıcıya çalışmayan düğme gösterilmemesi. */
+const ROL_HEDEFLERI = ['navSettings', 'navUsers', 'openAddModal', 'openAddLine',
+  'importLinesBtn', 'lifeRecordBtn'];
+
+async function rolGorunurluk(kullanici, sifre) {
+  const ctx = await tarayici.createBrowserContext();
+  const p = await ctx.newPage();
+  await p.setViewport({ width: 1600, height: 1000 });
+  await p.goto(`http://127.0.0.1:${PORT}/login`, { waitUntil: 'networkidle2' });
+  await p.type('#username', kullanici);
+  await p.type('#password', sifre);
+  await Promise.all([p.waitForNavigation({ waitUntil: 'networkidle2' }), p.click('button[type=submit]')]);
+  await new Promise((r) => setTimeout(r, 2500));
+  // Düğmelerin bulunduğu görünümler ziyaret edilmeli ki DOM'da ölçülebilsinler
+  await p.evaluate(() => showView('lines'));
+  await new Promise((r) => setTimeout(r, 700));
+  await p.evaluate(() => showView('lifecycle'));
+  await new Promise((r) => setTimeout(r, 700));
+  const sonuc = await p.evaluate((ids) => {
+    const o = { _rol: typeof state !== 'undefined' ? state.role : null };
+    ids.forEach((id) => {
+      const e = document.getElementById(id);
+      o[id] = e ? getComputedStyle(e).display !== 'none' : null;
+    });
+    return o;
+  }, ROL_HEDEFLERI);
+  await ctx.close();
+  return sonuc;
+}
+
+test('duman: rol bazlı arayüz — approver yazma düğmelerini görmez', async (t) => {
+  if (!CALISABILIR) return t.skip(ATLA_SEBEP);
+
+  const admin = await rolGorunurluk('admin', SIFRE);
+  assert.equal(admin._rol, 'admin');
+  assert.ok(admin.navSettings && admin.navUsers, 'admin yönetim menülerini görmeli');
+  assert.ok(admin.openAddLine && admin.lifeRecordBtn, 'admin yazma düğmelerini görmeli');
+
+  const bt = await rolGorunurluk('mehmet.yilmaz', 'Mehmet.2024!');
+  assert.equal(bt._rol, 'it');
+  assert.equal(bt.navSettings, false, 'BT ekibi Ayarlar menüsünü görmemeli (admin uçları)');
+  assert.equal(bt.navUsers, false, 'BT ekibi Kullanıcılar menüsünü görmemeli');
+  assert.ok(bt.openAddLine && bt.importLinesBtn && bt.lifeRecordBtn && bt.openAddModal,
+    'BT ekibi yazma düğmelerini görmeli — sunucu requireRole(it, admin) izin veriyor');
+
+  const onaylayan = await rolGorunurluk('ahmet.sahin', 'Ahmet.2024!');
+  assert.equal(onaylayan._rol, 'approver');
+  const gorunenler = ROL_HEDEFLERI.filter((id) => onaylayan[id] === true);
+  assert.deepEqual(gorunenler, [],
+    'onaylayıcı hiçbir yazma/yönetim öğesini görmemeli — hepsi 403 dönerdi');
 });

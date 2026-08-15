@@ -3866,3 +3866,10 @@ body.rp-tam-acik { overflow: hidden; }
 .rd-seviye--yüksek { background: #ffedd5; color: #c2410c; }
 .rd-seviye--orta   { background: #fef9c3; color: #a16207; }
 .rd-seviye--düşük  { background: #dcfce7; color: #15803d; }
+
+/* Rol bazlı gizleme — bkz. rolUygula() (core.js).
+   GÜVENLİK DEĞİLDİR: gerçek denetim sunucuda requireRole() ile yapılır.
+   Buradaki tek amaç, basınca 403 alınacak düğmeyi hiç göstermemek.
+   !important: gizlemenin, öğenin kendi display kuralını her durumda yenmesi
+   gerekiyor (nav öğeleri flex, düğmeler inline-flex). */
+.rol-yok { display: none !important; }
