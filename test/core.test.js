@@ -1035,3 +1035,39 @@ test('html-include: kök dizin dışına çıkan parça reddedilir', () => {
   const kok = path.join(__dirname, '..', 'public');
   assert.throws(() => coz(kok, '<!--#include ../../server.js -->'), /dışında/);
 });
+
+/* .env ÖNCELİĞİ — regresyon kilidi.
+   dotenv `override: true` ile çağrılırsa .env, gerçek ortam değişkenlerini
+   ezer. Bu canlıda şuna yol açmıştı: docker compose `NODE_ENV: production`
+   veriyordu ama imajdaki .env'de NODE_ENV=development yazdığı için sunucu
+   development modunda çalışıyordu — zayıf sır denetimi devre dışı, demo tohum
+   verisine izin veriliyordu. Bu test o davranışın geri gelmesini engeller. */
+test('.env gerçek ortam değişkenlerini EZMEZ (dotenv override kapalı)', () => {
+  const { execFileSync } = require('node:child_process');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'assetman-env-'));
+  fs.writeFileSync(path.join(tmp, '.env'), 'DENEY_DEGISKEN=dosyadan\nSADECE_DOSYADA=dosyadan\n');
+  fs.writeFileSync(path.join(tmp, 'dene.js'),
+    "require('dotenv').config();\n"
+    + "console.log(JSON.stringify({ a: process.env.DENEY_DEGISKEN, b: process.env.SADECE_DOSYADA }));\n");
+
+  const cikti = execFileSync(process.execPath, [path.join(tmp, 'dene.js')], {
+    cwd: tmp,
+    env: { ...process.env, DENEY_DEGISKEN: 'ortamdan', NODE_PATH: path.join(__dirname, '..', 'node_modules') },
+    encoding: 'utf8',
+  });
+  const sonuc = JSON.parse(cikti.trim().split('\n').pop());
+
+  assert.equal(sonuc.a, 'ortamdan', 'gerçek ortam değişkeni .env tarafından EZİLDİ — override açık kalmış');
+  assert.equal(sonuc.b, 'dosyadan', '.env tanımsız değişkeni yine de doldurmalı');
+});
+
+/* Kaynak denetimi: override'ın hiçbir giriş noktasına geri sızmaması. */
+test('hiçbir dosyada dotenv override:true kalmadı', () => {
+  const dosyalar = ['server.js', 'agent/claude-agent.js', 'agent/report-ai.js',
+    'scripts/migrate-inventory-to-sql.js'];
+  const suclu = dosyalar.filter((f) => {
+    const p = path.join(__dirname, '..', f);
+    return fs.existsSync(p) && /dotenv'\)\.config\(\{[^)]*override:\s*true/.test(fs.readFileSync(p, 'utf8'));
+  });
+  assert.deepEqual(suclu, [], 'override:true geri gelmiş');
+});

@@ -12,7 +12,8 @@
    kendi kişiliği ve serbest biçimi var. Burada tek seferlik, araçsız ve
    dar kapsamlı bir tamamlama gerekiyor. */
 
-require('dotenv').config({ override: true });
+// override YOK: gerçek ortam değişkenleri .env'i ezer (bkz. server.js)
+require('dotenv').config();
 const axios = require('axios');
 
 const AI_PROVIDER = process.env.AI_PROVIDER || 'anthropic';

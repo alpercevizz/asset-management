@@ -1,4 +1,5 @@
-require('dotenv').config({ override: true });
+// override YOK: gerçek ortam değişkenleri .env'i ezer (bkz. server.js)
+require('dotenv').config();
 const axios = require('axios');
 const { getAllAssets, searchAssets, getStats, getAssetBySerial } = require('./tools/baserow-tools');
 const { detectAnomalies, detectOfflineDevices, detectLicenseCompliance, detectShadowIT, detectEolOs, detectWarranty } = require('./tools/anomaly-tools');

@@ -3,7 +3,8 @@
 // id'ler KORUNUR → os_agents/asset_assignments/phone_lines/lifecycle asset_id bağları bozulmaz.
 // Kullanım:  node scripts/migrate-inventory-to-sql.js
 // Öncesinde .env: BASEROW_* (kaynak) + DATABASE_URL (hedef). INVENTORY_PROVIDER önemsiz.
-require('dotenv').config({ override: true });
+// override YOK: gerçek ortam değişkenleri .env'i ezer (bkz. server.js)
+require('dotenv').config();
 require('../auth/setup').bootstrapSecrets();
 const { db, migrate, driver } = require('../db');
 const baserowAssets = require('../agent/tools/inventory-baserow');

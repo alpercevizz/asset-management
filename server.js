@@ -1,4 +1,12 @@
-require('dotenv').config({ override: true });
+/* dotenv: override YOK (bilinçli). .env yalnızca TANIMSIZ değişkenleri
+   doldurur; gerçek ortam değişkenleri (docker compose `environment`, CI, shell)
+   .env'i EZER — 12-factor sırası budur.
+
+   Önceden override:true idi ve .env gerçek ortamı eziyordu. Sonucu: compose
+   `NODE_ENV: production` veriyordu ama imajdaki .env'de NODE_ENV=development
+   yazdığı için CANLI SUNUCU development modunda çalışıyordu — zayıf sır
+   denetimi devre dışıydı ve demo tohum verisine izin veriliyordu. */
+require('dotenv').config();
 // Setup wizard: env boşsa data/secrets.json'a KALICI güçlü sırlar üretir/yükler.
 // Modüller require edilmeden ÖNCE çalışmalı ki lifecycle-tools/worm doğru CHAIN/WORM_SECRET'ı görsün.
 require('./auth/setup').bootstrapSecrets();
