@@ -118,6 +118,41 @@ test('API: oturumsuz istek 401 döner, public uçlar açık kalır', async () =>
 
   const acik = await istek('/api/health', { cookie: '' });
   assert.ok(acik.durum < 400, '/health public kalmalı — izleme buna bakıyor');
+  // /health PUBLIC: altyapı SIZDIRMAMALI (müşteriye AI sağlayıcı/model gösterilmez)
+  const alanlar = Object.keys(acik.json || {});
+  const sizan = ['ai_provider', 'ai_model', 'ai_url', 'provider', 'model'].filter((k) => k in (acik.json || {}));
+  assert.deepEqual(sizan, [], 'health AI altyapısını sızdırıyor: ' + sizan.join(', '));
+  assert.deepEqual(alanlar.sort(), ['status', 'timestamp'], 'health yalnız status+timestamp döndürmeli');
+});
+
+/* Güvenlik başlıkları — canlıda pentest sırasında eksik/yanlış bulunanlar.
+   Bu test onların geri gitmesini engeller. */
+test('API: güvenlik başlıkları ve çerez bayrakları doğru', async () => {
+  const r = await istek('/', { cookie: '' });   // 302 ama başlıklar yine gelir
+  const h = r.basliklar;
+  assert.ok(/frame-ancestors 'self'/.test(h['content-security-policy'] || ''), 'CSP frame-ancestors eksik');
+  assert.ok(/object-src 'none'/.test(h['content-security-policy'] || ''), 'CSP object-src none eksik');
+  assert.equal(h['x-content-type-options'], 'nosniff');
+  assert.equal(h['x-frame-options'], 'SAMEORIGIN');
+  // Wildcard CORS DÖNMEMELİ (eskiden Access-Control-Allow-Origin: * idi)
+  assert.notEqual(h['access-control-allow-origin'], '*', 'wildcard CORS geri gelmiş');
+
+  // Giriş çerezi: HTTP (test) → HttpOnly + SameSite, ama Secure YOK (yoksa dev'de giriş bozulur)
+  const giris = await istek('/api/login', { method: 'POST', body: { username: 'admin', password: SIFRE }, cookie: '' });
+  const ck = String(giris.basliklar['set-cookie'] || '');
+  assert.ok(/HttpOnly/i.test(ck), 'çerez HttpOnly olmalı');
+  assert.ok(/SameSite=Lax/i.test(ck), 'çerez SameSite olmalı');
+  assert.ok(!/Secure/i.test(ck), 'HTTP isteğinde Secure OLMAMALI (tarayıcı çerezi atardı, giriş bozulurdu)');
+});
+
+/* Ters yön: x-forwarded-proto=https gelince çerez Secure olmalı (canlı proxy). */
+test('API: HTTPS proxy arkasında çerez Secure işaretlenir', async () => {
+  const giris = await istek('/api/login', {
+    method: 'POST', body: { username: 'admin', password: SIFRE }, cookie: '',
+    headers: { 'X-Forwarded-Proto': 'https' },
+  });
+  const ck = String(giris.basliklar['set-cookie'] || '');
+  assert.ok(/Secure/i.test(ck), 'HTTPS proxy arkasında çerez Secure olmalı');
 });
 
 test('API: hatalı parola reddedilir, doğru parola oturum açar', async () => {

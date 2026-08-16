@@ -91,7 +91,16 @@ const { chat } = require('./agent/claude-agent');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+/* CORS: eskiden `cors()` idi → Access-Control-Allow-Origin: * (her origin).
+   Panel same-origin çalışıyor; collector/n8n ise TARAYICI DEĞİL (PowerShell/
+   sunucu-sunucu POST), CORS onları etkilemez. Wildcard ACAO gereksizdi ve
+   API yanıtlarını her siteye okutuyordu. Varsayılan (CORS başlığı YOK) =
+   yalnız same-origin — en güvenlisi. İleride harici bir origin gerekirse
+   CORS_ORIGIN ile açıkça izin verilir, asla wildcard'a dönülmez. */
+const izinliOrigin = (process.env.CORS_ORIGIN || '').trim();
+if (izinliOrigin) {
+  app.use(cors({ origin: izinliOrigin, credentials: true }));
+}
 // Model görselleri base64 data URL olarak gelir (2 MB dosya ≈ 2.7 MB gövde).
 // Dış dosya yükleme servisi/multipart bağımlılığı eklemek yerine bu yol seçildi.
 // verify: ham gövde saklanır — collector imzası gövde ÖZETİNİ kapsıyor,
@@ -109,6 +118,25 @@ app.use((req, res, next) => {
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   res.removeHeader('X-Powered-By');
+  /* İçerik Güvenlik Politikası (CSP) — XSS ve enjeksiyon yüzeyini daraltır.
+     Panel'de satır içi script YOK (tüm JS /js/*.js); login/register'da birer
+     satır içi script var, bu yüzden script-src'de 'unsafe-inline' tutuluyor.
+     Yine de dış script enjeksiyonu (script-src 'self'), iframe kuşatması
+     (frame-ancestors 'self'), taban-URL kaçırma (base-uri 'self') ve form
+     kaçırma (form-action 'self') engellenir; object-src tamamen kapalı.
+     Google Fonts açıkça izinli; cihaz görselleri base64 (data:). */
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data:",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "frame-ancestors 'self'",
+    "form-action 'self'",
+  ].join('; '));
   if (req.secure || req.headers['x-forwarded-proto'] === 'https') {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   }
@@ -146,6 +174,18 @@ const { authenticate, authenticateAsync, findUser, publicUser, hasRole } = requi
 const SESSION_MS  = 8 * 60 * 60 * 1000;       // 8 saat (varsayılan oturum)
 const REMEMBER_MS = 30 * 24 * 60 * 60 * 1000; // 30 gün ("Beni hatırla" işaretliyse)
 const COOKIE_NAME = 'am_session';
+
+/* Oturum çerezi bayrakları. `Secure` yalnız istek HTTPS ise eklenir:
+   - Canlıda site HTTPS-only (HSTS açık) → çerez asla düz HTTP'de gitmesin,
+     araya girip çalınması engellensin.
+   - Localhost/dev HTTP'de Secure eklenirse tarayıcı çerezi hiç saklamaz ve
+     giriş bozulur; bu yüzden koşullu.
+   Reverse proxy (Traefik/Caddy) arkasında req.secure false olabilir, TLS'i
+   x-forwarded-proto söyler — güvenlik başlıkları da aynı ölçütü kullanıyor. */
+function cerezBayraklari(req) {
+  const https = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  return `HttpOnly; Path=/; SameSite=Lax${https ? '; Secure' : ''}`;
+}
 
 // SESSION_SECRET zorunlu/güçlü olmalı — sertleştirme app.listen'de doğrulanır.
 const AUTH_SECRET = process.env.SESSION_SECRET || 'assetman-demo-secret-degistir';
@@ -209,7 +249,7 @@ app.post('/api/login', async (req, res) => {
       // "Beni hatırla": token exp'i ve cookie ömrü birlikte uzar (yalnız biri yetmez).
       const ttl = (req.body && req.body.remember) ? REMEMBER_MS : SESSION_MS;
       res.setHeader('Set-Cookie',
-        `${COOKIE_NAME}=${makeToken(user, ttl)}; HttpOnly; Path=/; Max-Age=${ttl / 1000}; SameSite=Lax`);
+        `${COOKIE_NAME}=${makeToken(user, ttl)}; Max-Age=${ttl / 1000}; ${cerezBayraklari(req)}`);
       // Form gönderimi (JS yok/bozuk) → yönlendir; XHR/fetch → JSON döndür.
       if (wantsHtml(req)) return res.redirect(safeNext(req.body && req.body.next));
       return res.json({ success: true, user: { username: user.username, display: user.display, role: user.role } });
@@ -225,7 +265,7 @@ app.post('/api/login', async (req, res) => {
 });
 
 app.post('/api/logout', (req, res) => {
-  res.setHeader('Set-Cookie', `${COOKIE_NAME}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax`);
+  res.setHeader('Set-Cookie', `${COOKIE_NAME}=; Max-Age=0; ${cerezBayraklari(req)}`);
   res.json({ success: true });
 });
 
@@ -1107,20 +1147,15 @@ app.delete('/api/chat/:sessionId', (req, res) => {
 
 // ─── Health ───────────────────────────────────────────────────────────────────
 
+/* PUBLIC uç (oturumsuz erişilebilir) — bu yüzden ALTYAPI SIZDIRMAZ.
+   Önceki hâli ai_provider/ai_model/ai_url döndürüyordu: kimlik doğrulamasız
+   herkes "Ollama + qwen2.5:3b + iç port" bilgisini okuyabiliyordu. Bu, ürünün
+   "müşteriye altyapı gösterilmez / kapalı devre AI" vaadini deliyordu ve
+   saldırgana hedef seçtiriyordu. İzleme (Docker healthcheck, uptime) yalnız
+   200 durumuna bakar — model/sağlayıcı bilgisine ihtiyacı yok. Frontend de
+   yalnız res.ok kullanıyor (bkz. core.js). */
 app.get('/api/health', (req, res) => {
-  const provider = process.env.AI_PROVIDER || 'anthropic';
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    baserow_configured: !!(process.env.BASEROW_API_TOKEN && process.env.BASEROW_TABLE_ID),
-    ai_provider: provider,
-    ai_model: provider === 'ollama'
-      ? (process.env.OLLAMA_MODEL || 'llama3.1:8b')
-      : (process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'),
-    ai_url: provider === 'ollama'
-      ? (process.env.OLLAMA_URL || 'http://localhost:11434')
-      : 'https://api.anthropic.com',
-  });
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // ─── SPA fallback ────────────────────────────────────────────────────────────
