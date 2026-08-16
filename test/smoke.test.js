@@ -276,3 +276,37 @@ test('duman: rol bazlı arayüz — approver yazma düğmelerini görmez', async
   assert.deepEqual(gorunenler, [],
     'onaylayıcı hiçbir yazma/yönetim öğesini görmemeli — hepsi 403 dönerdi');
 });
+
+/* ── Stored XSS: kullanıcı verisi işlenerek yazdırılmamalı ────────────────────
+   Bir alana script yükü koyup kaydediyoruz; liste render edildiğinde yük
+   ÇALIŞMAMALI (escapeHtml ile kaçırılmalı). Tarayıcı gerektirir. */
+test('duman: alan verisindeki XSS yükü çalıştırılmaz (escape)', async (t) => {
+  if (!CALISABILIR) return t.skip(ATLA_SEBEP);
+
+  const YUK = '<img src=x onerror="window.__xss_calisti=1">XSSPROBE';
+  // Admin oturumuyla same-origin fetch: bir hat kaydı oluştur
+  const olustur = await sayfa.evaluate(async (yuk) => {
+    const r = await fetch('/api/lines', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ msisdn: '05559998877', iccid: '8990011122233344999', operator: yuk, status: 'aktif' }),
+    });
+    return r.status;
+  }, YUK);
+  assert.ok(olustur < 400, `test kaydı oluşturulamadı (durum ${olustur})`);
+
+  await sayfa.evaluate(() => { window.__xss_calisti = undefined; showView('lines'); });
+  await new Promise((r) => setTimeout(r, 1500));
+
+  const sonuc = await sayfa.evaluate(() => {
+    const govde = document.getElementById('linesBody');
+    return {
+      calisti: window.__xss_calisti === 1,
+      metinIcinde: (govde?.textContent || '').includes('XSSPROBE'),   // veri görünüyor
+      gercekImg: !!govde?.querySelector('img[onerror]'),              // ham <img> DOM'a girdiyse felaket
+    };
+  });
+
+  assert.equal(sonuc.calisti, false, 'XSS yükü ÇALIŞTI — kullanıcı verisi kaçırılmıyor');
+  assert.equal(sonuc.gercekImg, false, 'ham <img onerror> DOM\'a enjekte edildi');
+  assert.ok(sonuc.metinIcinde, 'veri hiç görünmüyor — test yükü yanlış yere gitti');
+});

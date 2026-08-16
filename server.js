@@ -1067,7 +1067,12 @@ app.get('/api/backup/status', (req, res) => {
   }
 });
 
-app.post('/api/backup/restore', async (req, res) => {
+/* SADECE ADMIN: denetim (audit) zincirini WORM yedeğinden geri yükler — yıkıcı
+   ve hassas bir işlem. Önceden rol koruması YOKTU: oturum açan HERHANGİ bir
+   kullanıcı (approver dahil) tetikleyebiliyordu. Arayüzde düğme admin'e gizliydi
+   ama sunucu dayatmıyordu; gizleme güvenlik değildir, asıl sınır burasıdır.
+   (Güvenlik testiyle yakalandı — test/security.test.js.) */
+app.post('/api/backup/restore', requireRole('admin'), async (req, res) => {
   try {
     res.json({ success: true, ...(await restoreAuditFromBackup()) });
   } catch (err) {
@@ -1113,7 +1118,10 @@ app.get('/api/notify/preview', rota('Özet oluşturma hatası', async (req, res)
 }));
 
 // Bildirimi şimdi gönder (zamanlayıcının da kullandığı fonksiyon). force=true → dedup atla
-app.post('/api/notify/run', rota('Bildirim gönderim hatası', async (req, res) => {
+/* it/admin: dışa bildirim (mail/Telegram, n8n webhook) GÖNDERİR — dış dünyaya
+   yansıyan bir yan etki. Önceden rol koruması yoktu; approver da bildirim
+   gönderebiliyordu (spam/taciz yüzeyi). Operasyonel bir eylem, it/admin uygun. */
+app.post('/api/notify/run', requireRole('it', 'admin'), rota('Bildirim gönderim hatası', async (req, res) => {
   const force = !!(req.body && req.body.force);
   const result = await sendDigest({ force });
   res.json(result);
