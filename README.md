@@ -9,7 +9,7 @@ Değiştirilemez audit log · çift dijital onay · gerçek AD/LDAP girişi · c
 [![Node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![Express](https://img.shields.io/badge/express-4.x-000000?logo=express&logoColor=white)](https://expressjs.com)
 [![Database](https://img.shields.io/badge/db-SQLite%20%7C%20PostgreSQL-336791?logo=postgresql&logoColor=white)](#kurulum)
-[![Tests](https://img.shields.io/badge/tests-28%2F28%20passing-22c55e)](#test)
+[![Tests](https://img.shields.io/badge/tests-70%2F70%20passing-22c55e)](#test)
 [![License](https://img.shields.io/badge/license-see%20LICENSE-blue)](./LICENSE)
 [![Status](https://img.shields.io/badge/status-active-success)]()
 
@@ -18,7 +18,7 @@ Değiştirilemez audit log · çift dijital onay · gerçek AD/LDAP girişi · c
 ---
 
 <p align="center">
-  <img src="docs/screenshots/hero-dashboard.png" alt="AssetMan — Dashboard (sıcak-modern arayüz)" width="880"/>
+  <img src="docs/screenshots/hero-dashboard.png" alt="AssetMan — Dashboard (indigo arayüz)" width="880"/>
 </p>
 
 ## Niçin AssetMan?
@@ -74,7 +74,9 @@ Piyasadaki çoğu envanter aracı (Snipe-IT, Lansweeper, GLPI) cihazın **son du
 </td>
 <td valign="top">
 
-### FinOps & AI
+### Raporlar, FinOps & AI
+- **A4 PDF rapor üreteci** — 6 rapor türü, deterministik (sayılar uydurulmaz)
+- **AI yönetici yorumu** — LLM yorumlar, çıktı denetlenir; uydurma sayı/dil reddi
 - **Gerçek döviz kuru** (ECB / frankfurter.app) — önbellekli, çevrimdışı fallback
 - 12 aylık yenileme öngörüsü (EOL + garanti birleşik)
 - Cihaz risk skoru (0-100, çok kaynaklı)
@@ -111,7 +113,7 @@ flowchart LR
     LDAP[LDAP / Active Directory]
     BR[(Envanter deposu<br/>SQL veya Baserow<br/>INVENTORY_PROVIDER)]
     N8N[n8n Webhook<br/>Mail · Telegram]
-    UI[Web Panel<br/>sıcak-modern · light/dark]
+    UI[Web Panel<br/>indigo · light/dark · responsive]
 
     PS --> N8N --> BR
     QR --> API
@@ -149,6 +151,16 @@ flowchart LR
 <td align="center" width="50%">
   <a href="docs/screenshots/settings.png"><img src="docs/screenshots/settings.png" alt="Ayarlar — eşikler ve sistem durumu" width="420"/></a>
   <br/><b>Ayarlar</b><br/>Tespit eşikleri UI'dan canlı düzenlenir (restart yok) · tema · sistem durumu
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+  <a href="docs/screenshots/reports.png"><img src="docs/screenshots/reports.png" alt="Raporlar — A4 PDF üreteci + AI yorumu" width="420"/></a>
+  <br/><b>Raporlar</b><br/>6 rapor türü · A4 PDF önizleme · deterministik sayılar + AI yönetici yorumu
+</td>
+<td align="center" width="50%">
+  <a href="docs/screenshots/lifecycle.png"><img src="docs/screenshots/lifecycle.png" alt="Yaşam döngüsü — değiştirilemez audit log" width="420"/></a>
+  <br/><b>Yaşam Döngüsü</b><br/>HMAC hash zinciri · çift onay · WORM yedek senkronu
 </td>
 </tr>
 </table>
@@ -423,6 +435,14 @@ Node'un yerleşik test runner'ı (`node:test`) — dış bağımlılık yok. Çe
 - OS Agent handshake (spoofing tespiti)
 - **Zimmet devir koruması** (zaten zimmetli cihaz force olmadan devralınamaz)
 - **Turkcell hat/SIM** (oluştur→ata→taşı→geçmiş + MSISDN normalize)
+
+Çekirdek birim testlerinin üstüne üç katman daha eklendi (toplam **70/70**):
+
+- **API entegrasyon** — sunucu alt süreçte, gerçek HTTP; oturum sınırı, tüm okuma uçları, güvenlik başlıkları/çerez bayrakları
+- **Tarayıcı duman testi** (puppeteer) — 12 görünüm gerçekten açılıyor mu, konsol/ağ temiz mi, rol bazlı arayüz, stored-XSS kaçışı
+- **Güvenlik** — kırık erişim denetimi (BAC) yetki matrisi, jeton bütünlüğü & yetki yükseltme reddi, injection ile giriş atlatma, login rate-limit kilidi
+
+> Bu testler **kendi deploymentımıza yetkili pentest** sırasında yazıldı ve yazılırken iki gerçek erişim-denetimi açığı buldu (`backup/restore`, `notify/run` rol koruması eksikti) — ikisi de kapatıldı ve teste bağlandı.
 - **Ayarlar deposu** (setSection tip-doğrulama + kalıcılık)
 - Döviz dönüşümü · SQL driver seçimi
 
@@ -474,7 +494,10 @@ Register-ScheduledTask -TaskName "AssetCollector" -Action $action -Trigger $trig
 | `POST /api/lifecycle/renew` | it / admin | Onay talebini yenile |
 | `GET /api/lifecycle/{log,conflicts,verify}` | auth | Audit log & doğrulama |
 | `GET /api/network/scan` | auth | VLAN-segmentli canlı ağ keşfi |
-| `GET /api/backup/status` · `POST /api/backup/restore` | auth | WORM yedek |
+| `GET /api/backup/status` | auth | WORM yedek durumu |
+| `POST /api/backup/restore` | admin | WORM yedekten geri yükleme (yıkıcı) |
+| `POST /api/reports/ai-comment` | auth | Rapor için AI yönetici yorumu (denetimli) |
+| `POST /api/notify/run` | it / admin | Uyarı özetini dışa gönder (mail/Telegram) |
 | `GET /api/risk-scores` · `forecast` | auth | Risk & FinOps (canlı ECB kuru) |
 | `GET /api/lines` · `POST /api/lines/import` | auth / it | Turkcell hat/SIM envanteri + CSV |
 | `POST /api/assets/:id/assign` · `release` | it / admin | Resmi zimmet devri (409 koruma) |
