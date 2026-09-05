@@ -994,84 +994,175 @@ async function loadDeviceHistory(asset) {
 }
 
 /* ─── Zimmet Teslim Tutanağı (PDF) ──────────────────────────────────────────── */
+/* Belge no seriden DETERMİNİSTİK türetilir: aynı cihaz + aynı gün → aynı numara
+   (her baskıda değişmez). Sunucuda saklanmadığı için sıra numarası uydurmuyoruz;
+   numara belgenin kendi verisinden geliyor ve alttaki QR de aynı veriyi kodluyor
+   — var olmayan bir doğrulama servisine link YOK (dürüstlük). */
+function handoverBelgeNo(asset) {
+  const yil = new Date().getFullYear();
+  const kaynak = String(asset.serial_number || asset.hostname || asset.id || '') +
+    new Date().toISOString().slice(0, 10);
+  let h = 0;
+  for (let i = 0; i < kaynak.length; i++) h = (h * 31 + kaynak.charCodeAt(i)) >>> 0;
+  return `ZMT-${yil}-${String(h % 1000).padStart(3, '0')}`;
+}
+
 function printHandoverReceipt(asset) {
   if (!asset) return;
   const now = new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
-  const g = (v) => (v === null || v === undefined || v === '') ? '—' : String(v);
+  const g = (v) => (v === null || v === undefined || v === '') ? '—' : escapeHtml(String(v));
+  const belgeNo = handoverBelgeNo(asset);
+  // QR belgenin KENDİ verisini kodlar (belge no · seri · tarih) — /api/qr aynı
+  // origin, oturumlu; img-src 'self' ile CSP'ye uygun.
+  const qrVeri = encodeURIComponent(`AssetMan Zimmet\n${belgeNo}\nSeri: ${asset.serial_number || '-'}\nTarih: ${now}`);
+
+  const ikon = {
+    kul: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    tak: '<rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/>',
+    laptop: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/>',
+    onay: '<circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
+    belge: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 14h6M9 17h4"/>',
+    kalkan: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
+  };
+  const svg = (p, w = 18) => `<svg viewBox="0 0 24 24" width="${w}" height="${w}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+  const teknik = g(asset.cpu) + (asset.ram_gb ? ' · ' + asset.ram_gb + ' GB RAM' : '') + (asset.storage_gb ? ' · ' + asset.storage_gb + ' GB Disk' : '');
+
   const win = window.open('', '_blank');
   win.document.write(`<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"/>
   <title>Zimmet Tutanağı — ${g(asset.hostname)}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
   <style>
+    :root { --indigo:#4f46e5; --indigo-2:#818cf8; --indigo-soft:#eef0fe; --ink:#14162e; --ink-2:#4b5168; --muted:#8b90a6; --line:#e6e8f0; --green:#0f9866; --green-soft:#e8f6f0; }
     * { box-sizing:border-box; margin:0; padding:0; }
-    body { font-family:"Hanken Grotesk",-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color:#1a1815; font-size:13px; line-height:1.7; padding:0; }
-    .hdr { padding:44px 48px 0; }
-    .hdr-top { display:flex; justify-content:space-between; align-items:center; padding-bottom:22px; border-bottom:1px solid #ece5da; }
-    .brand { display:flex; align-items:center; gap:11px; }
-    .brand-icon { width:34px; height:34px; background:linear-gradient(135deg,#6b5cff,#8a7dff); border-radius:9px; display:flex; align-items:center; justify-content:center; }
-    .brand-icon svg { width:19px; height:19px; stroke:#fff; fill:none; stroke-width:1.8; }
-    .brand-name { font-family:"Fraunces",Georgia,serif; font-size:17px; font-weight:600; color:#1a1815; letter-spacing:-.01em; }
-    .brand-sub { font-size:11px; color:#8a8378; }
-    .meta { text-align:right; font-size:11px; color:#8a8378; }
-    .meta strong { color:#1a1815; }
-    .title-block { padding:30px 0 4px; }
-    .chip { display:inline-flex; align-items:center; gap:6px; background:#eeecff; color:#6b5cff; font-size:10.5px; font-weight:600; padding:4px 11px; border-radius:999px; margin-bottom:14px; }
-    .chip::before { content:''; width:5px; height:5px; border-radius:50%; background:#6b5cff; }
-    .title { font-family:"Fraunces",Georgia,serif; font-size:30px; font-weight:600; letter-spacing:-.01em; color:#1a1815; }
-    .subtitle { font-size:12.5px; color:#8a8378; margin-top:6px; }
-    .body { padding:26px 48px 44px; }
-    .sec { font-size:11px; font-weight:600; color:#8a8378; text-transform:uppercase; letter-spacing:.06em; margin:22px 0 8px; }
-    table { width:100%; border-collapse:collapse; font-size:12.5px; }
-    td { padding:9px 0; border-bottom:1px solid #f0e9de; color:#5a544c; vertical-align:top; }
-    td.k { color:#8a8378; width:38%; }
-    td.v { color:#1a1815; font-weight:500; }
-    .statement { margin:24px 0; padding:16px 18px; background:#f7f2ea; border-radius:12px; font-size:12.5px; color:#5a544c; line-height:1.75; }
-    .sign-row { display:flex; gap:40px; margin-top:52px; }
-    .sign { flex:1; }
-    .sign-line { border-top:1px solid #1a1815; padding-top:8px; font-size:12px; color:#5a544c; }
-    .sign-line strong { display:block; color:#1a1815; font-size:13px; margin-bottom:2px; }
-    .footer { margin:0 48px; padding:16px 0; border-top:1px solid #ece5da; font-size:10.5px; color:#b3a89a; text-align:center; }
-    @media print { @page { margin:0; size:A4; } body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } .brand-icon,.chip,.statement{ -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
+    body { font-family:"Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color:var(--ink); font-size:13px; line-height:1.6; }
+    .page { padding:40px 44px 28px; }
+    /* Başlık */
+    .hdr { display:flex; justify-content:space-between; align-items:center; padding-bottom:20px; border-bottom:1px solid var(--line); }
+    .brand { display:flex; align-items:center; gap:12px; }
+    .brand-mark { width:38px; height:38px; }
+    .brand-name { font-size:20px; font-weight:800; letter-spacing:-.02em; }
+    .brand-sub { font-size:11px; color:var(--muted); }
+    .hdr-date { display:flex; align-items:center; gap:11px; }
+    .hdr-date-txt { text-align:right; }
+    .hdr-date-txt span { display:block; font-size:10.5px; color:var(--muted); }
+    .hdr-date-txt b { font-size:13.5px; font-weight:700; }
+    .cal { width:40px; height:40px; border-radius:11px; background:var(--indigo-soft); color:var(--indigo); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    /* Başlık bloğu */
+    .rozet { display:inline-flex; align-items:center; gap:7px; background:var(--indigo-soft); color:var(--indigo); font-size:11px; font-weight:700; padding:5px 12px; border-radius:999px; margin:26px 0 14px; }
+    .rozet i { width:6px; height:6px; border-radius:50%; background:var(--indigo); }
+    h1 { font-size:34px; font-weight:800; letter-spacing:-.025em; }
+    .alt { font-size:13px; color:var(--muted); margin-top:5px; }
+    /* Özet kartlar */
+    .ozet { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:24px 0 6px; }
+    .oz { border:1px solid var(--line); border-radius:14px; padding:14px 15px; }
+    .oz-h { display:flex; align-items:center; gap:9px; color:var(--muted); font-size:10.5px; margin-bottom:9px; }
+    .oz-ic { width:30px; height:30px; border-radius:9px; background:var(--indigo-soft); color:var(--indigo); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .oz b { font-size:15px; font-weight:700; }
+    .oz--ok { background:var(--green-soft); border-color:#bfe6d5; }
+    .oz--ok .oz-ic { background:#d3efe2; color:var(--green); }
+    .oz--ok b { color:var(--green); }
+    /* Bölüm kartları */
+    .kart { border:1px solid var(--line); border-radius:16px; overflow:hidden; margin-top:22px; }
+    .kart-h { display:flex; align-items:center; gap:10px; background:var(--indigo-soft); padding:13px 18px; font-size:14px; font-weight:700; }
+    .kart-h .oz-ic { background:#fff; }
+    .kart-b { padding:4px 18px 8px; }
+    .satir { display:flex; padding:11px 0; border-bottom:1px solid #f1f2f7; font-size:13px; }
+    .satir:last-child { border-bottom:none; }
+    .satir .k { color:var(--muted); width:42%; flex-shrink:0; }
+    .satir .v { color:var(--ink); font-weight:600; }
+    /* Taahhüt / Not */
+    .kutu { display:flex; gap:14px; border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin-top:20px; }
+    .kutu .oz-ic { width:36px; height:36px; border-radius:10px; }
+    .kutu-t { font-size:14px; font-weight:700; margin-bottom:4px; }
+    .kutu p { font-size:12.5px; color:var(--ink-2); line-height:1.7; }
+    /* İmza */
+    .imza { display:grid; grid-template-columns:1fr 1fr; gap:28px; margin-top:26px; }
+    .imza-k { border:1px solid var(--line); border-radius:14px; padding:16px 18px 40px; }
+    .imza-h { display:flex; align-items:center; gap:9px; }
+    .imza-h b { font-size:13.5px; font-weight:700; }
+    .imza-h span { font-size:11.5px; color:var(--muted); }
+    .imza-l { border-top:1.5px solid var(--ink); margin-top:32px; }
+    /* Alt bilgi */
+    .foot { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:22px 44px 0; padding:16px 0 0; border-top:1px solid var(--line); }
+    .foot-brand { display:flex; align-items:center; gap:9px; font-size:13px; font-weight:800; }
+    .foot-mid { flex:1; text-align:center; font-size:11px; color:var(--muted); }
+    .foot-qr { display:flex; align-items:center; gap:11px; }
+    .foot-qr img { width:56px; height:56px; }
+    .foot-qr-txt span { display:block; font-size:10px; color:var(--muted); }
+    .foot-qr-txt b { font-size:12.5px; font-weight:700; letter-spacing:.02em; }
+    @media print { @page { margin:0; size:A4; } body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } * { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
   </style></head><body>
-  <div class="hdr">
-    <div class="hdr-top">
+  <div class="page">
+    <div class="hdr">
       <div class="brand">
-        <div class="brand-icon"><svg viewBox="0 0 24 24" stroke-linejoin="round"><path d="M12 2l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg></div>
-        <div><div class="brand-name">AssetMan</div><div class="brand-sub">IT Varlık Yönetimi</div></div>
+        <svg class="brand-mark" viewBox="0 0 64 64" fill="none"><defs><linearGradient id="zm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#4f46e5"/></linearGradient></defs><path d="M32 7 L57 54 H49.5 L32 21 L14.5 54 H7 Z" fill="url(#zm)"/></svg>
+        <div><div class="brand-name">AssetMan</div><div class="brand-sub">IT Varlık Zekâsı Platformu</div></div>
       </div>
-      <div class="meta"><div>Düzenlenme Tarihi</div><div><strong>${now}</strong></div></div>
+      <div class="hdr-date">
+        <div class="hdr-date-txt"><span>Düzenlenme Tarihi</span><b>${now}</b></div>
+        <span class="cal">${svg(ikon.tak)}</span>
+      </div>
     </div>
-    <div class="title-block">
-      <div class="chip">Resmi Belge</div>
-      <div class="title">Zimmet Teslim Tutanağı</div>
-      <div class="subtitle">Cihaz teslim / iade kaydı</div>
+
+    <div class="rozet"><i></i>Resmi Belge</div>
+    <h1>Zimmet Teslim Tutanağı</h1>
+    <div class="alt">Cihaz teslim / iade kaydı</div>
+
+    <div class="ozet">
+      <div class="oz"><div class="oz-h"><span class="oz-ic">${svg(ikon.kul, 16)}</span>Teslim Alan Personel</div><b>${g(asset.username)}</b></div>
+      <div class="oz"><div class="oz-h"><span class="oz-ic">${svg(ikon.tak, 16)}</span>Teslim Tarihi</div><b>${now}</b></div>
+      <div class="oz"><div class="oz-h"><span class="oz-ic">${svg(ikon.laptop, 16)}</span>Kategori</div><b>${g(asset.category)}</b></div>
+      <div class="oz oz--ok"><div class="oz-h"><span class="oz-ic">${svg(ikon.onay, 16)}</span>Durum</div><b>Teslim</b></div>
+    </div>
+
+    <div class="kart">
+      <div class="kart-h"><span class="oz-ic">${svg(ikon.laptop)}</span>Cihaz Bilgileri</div>
+      <div class="kart-b">
+        <div class="satir"><span class="k">Cihaz Adı (Hostname)</span><span class="v">${g(asset.hostname)}</span></div>
+        <div class="satir"><span class="k">Kategori</span><span class="v">${g(asset.category)}</span></div>
+        <div class="satir"><span class="k">Marka / Model</span><span class="v">${g(asset.brand)} ${g(asset.model)}</span></div>
+        <div class="satir"><span class="k">Seri Numarası</span><span class="v">${g(asset.serial_number)}</span></div>
+        <div class="satir"><span class="k">Teknik Özellik</span><span class="v">${teknik}</span></div>
+        <div class="satir"><span class="k">İşletim Sistemi</span><span class="v">${g(asset.os)}</span></div>
+      </div>
+    </div>
+
+    <div class="kart">
+      <div class="kart-h"><span class="oz-ic">${svg(ikon.belge)}</span>Zimmet Bilgileri</div>
+      <div class="kart-b">
+        <div class="satir"><span class="k">Teslim Alan Personel</span><span class="v">${g(asset.username)}</span></div>
+        <div class="satir"><span class="k">Lokasyon / Departman</span><span class="v">${g(asset.location)}</span></div>
+        <div class="satir"><span class="k">Teslim Tarihi</span><span class="v">${now}</span></div>
+        <div class="satir"><span class="k">Teslim Şekli</span><span class="v">Teslim</span></div>
+        <div class="satir"><span class="k">Belge No</span><span class="v">${belgeNo}</span></div>
+      </div>
+    </div>
+
+    <div class="kutu">
+      <span class="oz-ic">${svg(ikon.kalkan)}</span>
+      <div><div class="kutu-t">Taahhüt ve Beyan</div>
+        <p>Yukarıda özellikleri belirtilen cihazı, çalışır ve eksiksiz durumda tarafıma teslim aldığımı kabul ederim. Cihazı kurumsal kullanım politikalarına uygun şekilde kullanacağımı, herhangi bir hasar, kayıp veya arıza durumunda ilgili birimlere bilgi vereceğimi ve görevimden ayrılmam halinde cihazı eksiksiz olarak iade edeceğimi taahhüt ederim.</p>
+      </div>
+    </div>
+
+    <div class="kutu">
+      <span class="oz-ic">${svg(ikon.belge)}</span>
+      <div><div class="kutu-t">Not</div><p>Varsa ek notlar bu alanda belirtilebilir.</p></div>
+    </div>
+
+    <div class="imza">
+      <div class="imza-k"><div class="imza-h"><span class="oz-ic">${svg(ikon.kul, 16)}</span><div><b>Teslim Eden (IT)</b><br/><span>Ad Soyad · İmza · Tarih</span></div></div><div class="imza-l"></div></div>
+      <div class="imza-k"><div class="imza-h"><span class="oz-ic">${svg(ikon.kul, 16)}</span><div><b>Teslim Alan (Personel)</b><br/><span>${g(asset.username)} · İmza · Tarih</span></div></div><div class="imza-l"></div></div>
     </div>
   </div>
-  <div class="body">
-    <div class="sec">Cihaz Bilgileri</div>
-    <table>
-      <tr><td class="k">Cihaz Adı (Hostname)</td><td class="v">${g(asset.hostname)}</td></tr>
-      <tr><td class="k">Kategori</td><td class="v">${g(asset.category)}</td></tr>
-      <tr><td class="k">Marka / Model</td><td class="v">${g(asset.brand)} ${g(asset.model)}</td></tr>
-      <tr><td class="k">Seri Numarası</td><td class="v">${g(asset.serial_number)}</td></tr>
-      <tr><td class="k">Teknik Özellik</td><td class="v">${g(asset.cpu)}${asset.ram_gb ? ' · ' + asset.ram_gb + ' GB RAM' : ''}${asset.storage_gb ? ' · ' + asset.storage_gb + ' GB Disk' : ''}</td></tr>
-      <tr><td class="k">İşletim Sistemi</td><td class="v">${g(asset.os)}</td></tr>
-    </table>
-    <div class="sec">Zimmet Bilgileri</div>
-    <table>
-      <tr><td class="k">Teslim Alan Personel</td><td class="v">${g(asset.username)}</td></tr>
-      <tr><td class="k">Lokasyon / Departman</td><td class="v">${g(asset.location)}</td></tr>
-      <tr><td class="k">Teslim Tarihi</td><td class="v">${now}</td></tr>
-    </table>
-    <div class="statement">Yukarıda özellikleri belirtilen cihaz, çalışır ve eksiksiz durumda tarafıma teslim edilmiştir. Cihazı kurumsal kullanım politikalarına uygun kullanacağımı, hasar/kayıp durumunda bilgi vereceğimi ve görevimden ayrılmam halinde eksiksiz iade edeceğimi kabul ederim.</div>
-    <div class="sign-row">
-      <div class="sign"><div class="sign-line"><strong>Teslim Eden (IT)</strong>Ad Soyad · İmza · Tarih</div></div>
-      <div class="sign"><div class="sign-line"><strong>Teslim Alan (Personel)</strong>${g(asset.username)} · İmza · Tarih</div></div>
-    </div>
+
+  <div class="foot">
+    <div class="foot-brand"><svg width="26" height="26" viewBox="0 0 64 64" fill="none"><path d="M32 7 L57 54 H49.5 L32 21 L14.5 54 H7 Z" fill="url(#zm)"/></svg>AssetMan</div>
+    <div class="foot-mid">AssetMan — Bu belge sistem tarafından otomatik oluşturulmuştur.</div>
+    <div class="foot-qr"><img src="/api/qr?data=${qrVeri}" alt="Belge QR"/><div class="foot-qr-txt"><span>Belge Doğrulama Kodu</span><b>${belgeNo}</b></div></div>
   </div>
-  <div class="footer">AssetMan — Bu belge sistem tarafından otomatik oluşturulmuştur.</div>
-  <script>window.onload=()=>window.print();<\/script>
+  <script>window.onload=()=>setTimeout(()=>window.print(),350);<\/script>
   </body></html>`);
   win.document.close();
 }
