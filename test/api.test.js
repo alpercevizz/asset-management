@@ -361,3 +361,31 @@ test('API: Shadow IT gerçek besleme yokken uydurma bulgu döndürmez', async ()
   assert.equal(r.json?.shadow?.count, 0, 'yapılandırılmamışken shadow cihazı UYDURULMAMALI');
   assert.deepEqual(r.json?.shadow?.items, [], 'shadow items boş olmalı');
 });
+
+/* Yedek/Restore UÇTAN UCA (HTTP) — audit log kurtarmanın gerçekten çalıştığını
+   ENDPOINT seviyesinde kanıtlar. Modül testi (core.test.js) veri kaybı+restore
+   içeriğini kanıtlıyor; bu test admin'in gerçek HTTP ucundan restore'u
+   çalıştırabildiğini ve zincirin geçerli döndüğünü doğrular.
+   ("Restore tatbikatını gönül rahatlığıyla yap" güvenini veren kilit.) */
+test('API: audit yedek/restore uçtan uca çalışır (admin, zincir geçerli)', async () => {
+  // Önce zincir bütünlüğü
+  const dogrula = await istek('/api/lifecycle/verify');
+  assert.equal(dogrula.durum, 200);
+  assert.equal(dogrula.json?.valid, true, 'başlangıç zinciri geçerli olmalı');
+
+  // Yedek durumu makul (senkron)
+  const durum = await istek('/api/backup/status');
+  assert.equal(durum.durum, 200);
+  assert.ok('in_sync' in (durum.json || {}) || 'backup_count' in (durum.json || {}),
+    'backup/status beklenen alanları döndürmeli');
+
+  // Restore (admin) — seed WORM ile senkron olduğu için idempotent, güvenli
+  const restore = await istek('/api/backup/restore', { method: 'POST', body: {} });
+  assert.equal(restore.durum, 200, 'admin restore 200 dönmeli');
+  assert.equal(restore.json?.success, true);
+  assert.equal(restore.json?.chain?.valid, true, 'restore sonrası zincir geçerli olmalı');
+
+  // Restore sonrası zincir hâlâ geçerli
+  const sonra = await istek('/api/lifecycle/verify');
+  assert.equal(sonra.json?.valid, true, 'restore sonrası doğrulama geçerli olmalı');
+});

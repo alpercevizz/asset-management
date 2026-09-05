@@ -242,20 +242,35 @@ test('sameDevice: asset_id rename dayanıklı + yanlış eşleşme yok', async (
 });
 
 // ── WORM yedek ─────────────────────────────────────────────────────────────────
-test('WORM: her kayıt yedeklenir, yerel silinince geri yüklenir', async () => {
+test('WORM: her kayıt yedeklenir, yerel silinince AYNI İÇERİKLE geri yüklenir', async () => {
   await resetAll();
-  for (let i = 0; i < 5; i++) await lc.recordEvent({ hostname: 'W' + i, asset_id: 100 + i, to_status: 'Satın Alındı', actor: 'admin' });
+  for (let i = 0; i < 5; i++) await lc.recordEvent({ hostname: 'W' + i, asset_id: 100 + i, to_status: 'Satın Alındı', actor: 'admin' + i });
   let st = lc.auditBackupStatus();
   assert.equal(st.in_sync, true);
   assert.equal(st.backup_count, 5);
-  // Yerel DB'yi boşalt (art niyetli silme simülasyonu)
+
+  /* İçerik parmak izi — restore'un yalnız SAYIYI değil AYNI VERİYİ getirdiğini
+     kanıtlar. 5 kayıt geri gelip içeriği yanlış olsaydı (yeniden hesaplanmış
+     geçerli zincirle) sadece count kontrolü bunu KAÇIRIRDI. */
+  const parmakIzi = (log) => log.events
+    .map((e) => `${e.asset_id}|${e.hostname}|${e.to_status}|${e.actor}|${e.timestamp}`)
+    .sort().join('\n');
+  const oncesi = parmakIzi(lc.getLog({ limit: 0 }));
+
+  // Yerel DB'yi boşalt (art niyetli silme / disk kaybı simülasyonu; WORM off-site sağ kalır)
   await dbLayer.db()('lifecycle_events').del();
   await lc.init();
   st = lc.auditBackupStatus();
   assert.equal(st.recovery_needed, true, 'yerel boş, yedek 5 → kurtarma gerekli');
+
   const rec = await lc.restoreAuditFromBackup();
   assert.equal(rec.restored, 5);
-  assert.equal(lc.verifyChain().valid, true);
+  assert.equal(lc.verifyChain().valid, true, 'restore sonrası zincir geçerli olmalı');
+  assert.equal(parmakIzi(lc.getLog({ limit: 0 })), oncesi,
+    'restore edilen olaylar kayıptan ÖNCEKİ ile birebir aynı olmalı (içerik + sıra)');
+
+  // Restore sonrası artık senkron, kurtarma gerekmiyor
+  assert.equal(lc.auditBackupStatus().recovery_needed, false, 'restore sonrası senkron olmalı');
 });
 
 test('WORM: AES şifreleme roundtrip + atomik write-once', async () => {
