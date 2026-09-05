@@ -54,8 +54,3 @@ sen.js
 
 # Shadow IT DEMO beslemesi — müşteri imajına GİTMEMELİ (sahte cihaz gösterir)
 data/active-devices.json
-
-# Collector dağıtım paketi — içinde damgalanmış AGENT_SECRET var, ASLA commit edilmez
-# (paketle.ps1 üretir; ayar.ornek.ps1 şablonu commit edilir, gerçek ayar.ps1 edilmez)
-client-scripts/windows/dagitim/
-client-scripts/windows/ayar.ps1
