@@ -226,7 +226,11 @@ module.exports = function kayitRouter({
     return { count: created.length, prefix: plan.prefix, items: created };
   }
 
-  r.post('/register/bulk', async (req, res) => {
+  /* it/admin: önizleme ucu (/register/bulk/preview) zaten bu rolü istiyor;
+     oluşturma ucu korumasız kalırsa approver de 200 taslak üretebilirdi
+     (envanteri kirletir). Panelde düğme zaten yalnız IT/admin'e görünür ama
+     asıl sınır burada — arayüz gizlemek güvenlik değildir. */
+  r.post('/register/bulk', requireRole('it', 'admin'), async (req, res) => {
     try {
       const { category = 'Diğer', location = '', quantity, prefix } = req.body || {};
       const r = await bulkOlustur({ category, location, quantity, prefix, kaynak: 'panel' });

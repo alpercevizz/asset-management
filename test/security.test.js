@@ -122,6 +122,7 @@ const IT_ADMIN = [
   ['POST', '/api/lifecycle/event'],
   ['POST', '/api/register/token'],
   ['POST', '/api/notify/run'],       // dışa bildirim gönderir (mail/Telegram)
+  ['POST', '/api/register/bulk'],    // toplu taslak üretir — önizleme ucu it/admin, oluşturma da öyle olmalı
 ];
 
 test('BAC: admin-only uçlar it ve approver rollerine 403 döner', async () => {
@@ -152,6 +153,25 @@ test('BAC: admin yönetim uçlarına erişebilir (yetki matrisi doğru yönde)',
   assert.equal(s.durum, 200, 'admin Ayarları okuyamıyor — matris ters kurulmuş olabilir');
   const u = await istek('/api/users', { cookie: cerez.admin });
   assert.equal(u.durum, 200, 'admin Kullanıcıları okuyamıyor');
+});
+
+/* ── Oturumsuz erişim ─────────────────────────────────────────────────────────
+   Korunan uçlar çerezsiz istekte 401 dönmeli. Bir mutasyon ucunun yanlışlıkla
+   PUBLIC_API listesine düşmesi (ya da guard'ın hiç bağlanmaması) tam da böyle
+   yakalanır: /api/register/bulk oturumlu panele ait, anonim erişime KAPALI. */
+test('AUTH: korunan uçlar çerezsiz 401 döner (kazara public değil)', async () => {
+  const korunan = [
+    ['GET', '/api/assets'],
+    ['GET', '/api/users'],
+    ['POST', '/api/register/bulk'],
+    ['POST', '/api/lines'],
+  ];
+  const ihlal = [];
+  for (const [m, yol] of korunan) {
+    const r = await istek(yol, { method: m, body: m === 'GET' ? null : {} });
+    if (r.durum !== 401) ihlal.push(`${m} ${yol} -> ${r.durum} (401 bekleniyordu)`);
+  }
+  assert.deepEqual(ihlal, [], 'çerezsiz erişilebilen korunan uçlar');
 });
 
 /* ── Jeton bütünlüğü & yetki yükseltme ───────────────────────────────────────
