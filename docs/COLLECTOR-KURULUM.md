@@ -15,9 +15,51 @@ Güncellemesi satırları **"bilinmiyor"** kalır — yanlış değil, ama eksik
 
 ---
 
+## Kolay dağıtım — birkaç iş arkadaşı (önerilen)
+
+Teknik olmayan bir iş arkadaşının hiçbir komut yazmadan, sadece **çift tıklayarak**
+kurabilmesi için hazır paket üretilir. Anahtar depoya (git) **hiç** girmez; paketi
+sen üretir, güvenli bir kanaldan (kurumsal mesajlaşma, elden USB) gönderirsin.
+
+### 1. Sen paketi hazırla (bir kez)
+
+Repo'nun bulunduğu makinede, yönetici olmana gerek yok:
+
+```powershell
+cd <repo>\client-scripts\windows
+powershell -ExecutionPolicy Bypass -File .\paketle.ps1
+```
+
+`paketle.ps1` şunları yapar:
+- `AGENT_SECRET`'i yerelde bulur (`data/secrets.json` → `.env` → sorar; ekrana **yazdırmaz**),
+- `dagitim\AssetMan-Collector.zip` üretir: `KUR.bat`, `KUR.ps1`,
+  `install-collector.ps1`, `collect-assets.ps1`, damgalanmış `ayar.ps1`, `OKUBENI.txt`.
+
+> Bu zip'in içinde paylaşılan kayıt anahtarı vardır. Ortak sürücüye / mail listesine
+> koyma; kişiye özel, güvenli kanaldan gönder. (`dagitim/` ve gerçek `ayar.ps1`
+> `.gitignore`'dadır — kazara commit edilmez.)
+
+Farklı sunucu adresi için: `... .\paketle.ps1 -WebhookUrl "https://ornek/api/webhook"`
+
+### 2. İş arkadaşı kursun (10 saniye)
+
+1. Gönderdiğin zip'i açsın,
+2. **`KUR.bat`** dosyasına çift tıklasın,
+3. Yönetici izni penceresinde **Evet** desin.
+
+Kurulum 2-4 dakika sürer, "KURULUM TAMAMLANDI" yazınca pencere kapatılır. Başka
+hiçbir şey gerekmez — cihaz saatte bir envantere otomatik rapor verir. Sorun olursa
+`KUR.bat` ekranındaki hatanın görüntüsünü sana gönderir.
+
+Kaldırma (iş arkadaşında): yönetici PowerShell'de
+`C:\ProgramData\AssetMan` klasöründeki kurulumu geri almak için paketteki
+`install-collector.ps1 -Uninstall` çalıştırılır.
+
+---
+
 ## Tek makine (test / pilot)
 
-Yönetici PowerShell'de:
+Elle, tek komutla kurmak istersen — yönetici PowerShell'de:
 
 ```powershell
 cd <repo>\client-scripts\windows
