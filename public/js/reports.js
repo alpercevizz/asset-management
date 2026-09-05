@@ -511,17 +511,27 @@ function rpUret(rapor) {
   } else if (rapor.id === 'shadow') {
     const sh = v.shadow || {};
     const bilinmeyen = sh.shadow?.items || [];
-    bloklar.push(rpKapak(rapor) + `
-      <h2 class="rd-h2">AĞ TARAMA ÖZETİ</h2>
-      <div class="rd-kpiler">
-        <div class="rd-kpi"><span class="rd-k-et">Ağda Görülen</span><b class="rd-k-deger">${rpSayi(sh.total_active)}</b></div>
-        <div class="rd-kpi"><span class="rd-k-et">Envanterde Eşleşen</span><b class="rd-k-deger">${rpSayi(sh.matched)}</b></div>
-        <div class="rd-kpi rd-kpi--uyari"><span class="rd-k-et">Bilinmeyen Cihaz</span><b class="rd-k-deger">${rpSayi(bilinmeyen.length)}</b></div>
-        <div class="rd-kpi"><span class="rd-k-et">Envanter Toplamı</span><b class="rd-k-deger">${rpSayi(v.stats?.total)}</b></div>
-      </div>
-      <p class="rd-not">Kaynak: ağ keşif kaydı. Kayıt yoksa bu bölüm boş görünür — tarama yapılmadığı anlamına gelir, "temiz" anlamına gelmez.</p>`);
-    bloklar.push(...rpTabloSayfalari('BİLİNMEYEN CİHAZLAR', ['IP', 'MAC', 'Ad', 'İlk Görülme'],
-      bilinmeyen.map((d) => [d.ip, d.mac, d.hostname || d.name, d.first_seen || d.seen])));
+    if (sh.configured === false) {
+      // Ağ taraması yoksa sahte "0 bilinmeyen / hepsi eşleşti" gösterme — dürüst durum
+      bloklar.push(rpKapak(rapor) + `
+        <h2 class="rd-h2">AĞ TARAMA DURUMU</h2>
+        <div class="rd-kutu rd-kutu--genis">
+          <p class="rd-bos">Ağ taraması yapılandırılmamış.</p>
+          <p class="rd-not">Shadow IT tespiti için bir ağ keşif beslemesi (SNMP keşfi veya güvenlik duvarı export'u) gereklidir. Besleme bağlanana kadar bu rapor kayıt dışı cihaz tespiti yapamaz.</p>
+        </div>`);
+    } else {
+      bloklar.push(rpKapak(rapor) + `
+        <h2 class="rd-h2">AĞ TARAMA ÖZETİ</h2>
+        <div class="rd-kpiler">
+          <div class="rd-kpi"><span class="rd-k-et">Ağda Görülen</span><b class="rd-k-deger">${rpSayi(sh.total_active)}</b></div>
+          <div class="rd-kpi"><span class="rd-k-et">Envanterde Eşleşen</span><b class="rd-k-deger">${rpSayi(sh.matched)}</b></div>
+          <div class="rd-kpi rd-kpi--uyari"><span class="rd-k-et">Bilinmeyen Cihaz</span><b class="rd-k-deger">${rpSayi(bilinmeyen.length)}</b></div>
+          <div class="rd-kpi"><span class="rd-k-et">Envanter Toplamı</span><b class="rd-k-deger">${rpSayi(v.stats?.total)}</b></div>
+        </div>
+        <p class="rd-not">Kaynak: ağ keşif kaydı.</p>`);
+      bloklar.push(...rpTabloSayfalari('BİLİNMEYEN CİHAZLAR', ['IP', 'MAC', 'Ad', 'İlk Görülme'],
+        bilinmeyen.map((d) => [d.ip, d.mac, d.hostname || d.name, d.first_seen || d.seen])));
+    }
   } else if (rapor.id === 'eol') {
     const eol = v.eol || {};
     const eolListe = eol.eol?.items || [];

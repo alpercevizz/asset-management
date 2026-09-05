@@ -226,6 +226,11 @@ function shadowItReportHtml(data) {
   const items = (data.shadow && data.shadow.items) || [];
   const count = (data.shadow && data.shadow.count) || 0;
   let html = '<h2>Ağ Güvenliği — Shadow IT Taraması</h2>';
+  // Gerçek besleme yoksa "temiz" DEME — "yapılandırılmamış" de (taranmadı ≠ temiz)
+  if (data.configured === false) {
+    html += `<p style="color:var(--text-muted);">Ağ taraması yapılandırılmamış. Shadow IT tespiti için ağ keşif beslemesi (SNMP/güvenlik duvarı export'u) gereklidir.</p>`;
+    return html;
+  }
   if (count === 0) {
     html += `<p style="color:var(--green);">Ağda resmi envanter kaydı bulunmayan cihaz tespit edilmedi. (${data.total_active || 0} aktif cihaz tarandı)</p>`;
     return html;

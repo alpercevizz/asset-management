@@ -51,3 +51,6 @@ clk.js
 deck.js
 rep.js
 sen.js
+
+# Shadow IT DEMO beslemesi — müşteri imajına GİTMEMELİ (sahte cihaz gösterir)
+data/active-devices.json

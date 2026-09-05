@@ -214,6 +214,29 @@ async function detectShadowIT(orgId) {
   }
 
   const feed = getActiveNetworkDevices();
+
+  /* DÜRÜSTLÜK: "gerçek ağ taraması" ile "demo örnek verisi / tarama yok" ayrı.
+     Müşteri kurulumunda gerçek bir ağ beslemesi olmadan, örnek/sahte cihazları
+     GERÇEK shadow IT bulgusu gibi göstermek yanıltıcı olurdu — hem "kayıt dışı
+     cihaz yok ✓" demek de yanlış (taranmadı ≠ temiz). Bu, projenin başka
+     yerlerdeki "ölçüm yok" ≠ "sorun yok" kararıyla aynı ilke.
+     Gerçek entegrasyon (SNMP keşfi, Sophos/Zabbix export) source alanını
+     'sample-feed'/'unavailable' DIŞINDA bir değere ayarlar → configured=true. */
+  const gercekTarama = feed.source && feed.source !== 'sample-feed' && feed.source !== 'unavailable';
+
+  if (!gercekTarama) {
+    return {
+      configured: false,
+      is_demo: feed.source === 'sample-feed',
+      reason: feed.source === 'sample-feed' ? 'demo_verisi' : 'tarama_yok',
+      total_active: 0,
+      matched: 0,
+      source: feed.source,
+      captured_at: feed.captured_at,
+      shadow: { count: 0, items: [] },   // UYDURMA YOK
+    };
+  }
+
   const shadow = [];
   let matched = 0;
 
@@ -237,6 +260,8 @@ async function detectShadowIT(orgId) {
   }
 
   return {
+    configured: true,
+    is_demo: false,
     total_active: feed.devices.length,
     matched,
     source: feed.source,

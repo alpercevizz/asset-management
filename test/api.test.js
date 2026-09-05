@@ -347,3 +347,17 @@ test('API: QR jeton uçları yetkisiz kullanıcıya kapalı', async () => {
   const r = await istek('/api/register/token', { method: 'POST', body: { hours: 1 }, cookie: '' });
   assert.equal(r.durum, 401, 'oturumsuz jeton üretilebiliyor');
 });
+
+/* Shadow IT DÜRÜSTLÜĞÜ — gerçek ağ taraması yokken sahte bulgu ÜRETMEMELİ.
+   Demo/örnek besleme (sample-feed) müşteride "kayıt dışı cihaz" gibi
+   gösterilemez; "taranmadı" ile "temiz" AYRI şeydir. Bu, müşteriye yanıltıcı
+   veri gitmesini engelleyen regresyon kilidi. */
+test('API: Shadow IT gerçek besleme yokken uydurma bulgu döndürmez', async () => {
+  const r = await istek('/api/shadow-it');
+  assert.equal(r.durum, 200);
+  // Test/CI ortamında gerçek ağ beslemesi yok → configured=false beklenir
+  assert.equal(r.json?.configured, false,
+    'gerçek besleme yokken configured=false olmalı (sample-feed/unavailable)');
+  assert.equal(r.json?.shadow?.count, 0, 'yapılandırılmamışken shadow cihazı UYDURULMAMALI');
+  assert.deepEqual(r.json?.shadow?.items, [], 'shadow items boş olmalı');
+});

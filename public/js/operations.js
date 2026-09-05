@@ -350,17 +350,23 @@ async function loadAlerts(showLoading = true) {
     }
 
     // ── Shadow IT / Kayıt dışı cihazlar ──
+    // "Ağ taraması yok" ile "tarandı, temiz" AYRI: gerçek besleme yoksa yeşil
+    // "yok ✓" göstermek yanıltıcı olur (taranmadı ≠ güvenli).
     const shadowItems = shadow.shadow?.items || [];
-    setPill('shadowPill', shadowItems.length);
+    setPill('shadowPill', shadow.configured === false ? 0 : shadowItems.length);
     const shadowBody = $(`#shadowBody`);
     if (shadowBody) {
-      shadowBody.innerHTML = shadowItems.length ? shadowItems.map(d => `
+      if (shadow.configured === false) {
+        shadowBody.innerHTML = `<tr><td colspan="4" class="loading-cell" style="color:var(--text-muted)">Ağ taraması yapılandırılmamış — Shadow IT tespiti için ağ keşif beslemesi gerekir</td></tr>`;
+      } else {
+        shadowBody.innerHTML = shadowItems.length ? shadowItems.map(d => `
         <tr>
           <td class="serial-cell">${fmt(d.ip)}</td>
           <td class="serial-cell">${fmt(d.mac)}</td>
           <td class="hostname-cell">${d.hostname ? fmt(d.hostname) : '—'}</td>
           <td>${d.vendor ? fmt(d.vendor) : '—'}</td>
         </tr>`).join('') : `<tr><td colspan="4" class="loading-cell" style="color:var(--green,#22c55e)">Kayıt dışı cihaz yok ✓</td></tr>`;
+      }
     }
 
     // ── EOL / Eski işletim sistemi ──
