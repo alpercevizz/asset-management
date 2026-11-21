@@ -809,13 +809,13 @@ async function editAssetDetail(asset, mevcut, odak) {
     const j = await r.json();
     if (!r.ok) throw new Error(j.detail || j.error);
     openDeviceModal(asset);      // tazele
-  } catch (err) { alert('Kaydedilemedi: ' + err.message); }
+  } catch (err) { toast('Kaydedilemedi: ' + err.message, 'hata'); }
 }
 
 /* QR etiketi yazdır — yerel üretim */
 function printAssetLabel(a) {
   const w = window.open('', '_blank', 'width=420,height=520');
-  if (!w) { alert('Açılır pencere engellendi.'); return; }
+  if (!w) { toast('Açılır pencere engellendi.', 'hata'); return; }
   const kod = a.serial_number || a.hostname || '';
   w.document.write(`<!doctype html><meta charset="utf-8"><title>Etiket — ${escapeHtml(kod)}</title>
   <style>body{font-family:system-ui,sans-serif;text-align:center;padding:24px}
@@ -878,7 +878,7 @@ async function loadDeviceLocation(asset) {
 function setExpectedLocationPrompt(asset, current) {
   const v = prompt('Cihazın ait olduğu (resmi) lokasyon:', current || asset.location || '');
   if (v === null) return;
-  if (!v.trim()) { alert('Lokasyon boş olamaz.'); return; }
+  if (!v.trim()) { toast('Lokasyon boş olamaz.', 'hata'); return; }
   saveExpectedLocation(asset, v.trim());
 }
 
@@ -892,7 +892,7 @@ async function saveExpectedLocation(asset, location) {
     if (!res.ok) throw new Error(j.detail || j.error);
     state.locGeo = null;
     loadDeviceLocation(asset);
-  } catch (err) { alert('Kaydedilemedi: ' + err.message); }
+  } catch (err) { toast('Kaydedilemedi: ' + err.message, 'hata'); }
 }
 
 async function loadDeviceAssignment(asset) {
@@ -934,7 +934,7 @@ async function assignDevicePrompt(asset, currentOwner) {
     }
     if (!res.ok) throw new Error((await res.json()).detail || 'Hata');
     loadDeviceAssignment(asset);
-  } catch (err) { alert('Zimmet hatası: ' + err.message); }
+  } catch (err) { toast('Zimmet hatası: ' + err.message, 'hata'); }
 }
 
 async function releaseDevice(asset) {
@@ -943,7 +943,7 @@ async function releaseDevice(asset) {
     const res = await fetch(`/api/assets/${asset.id}/release`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
     if (!res.ok) throw new Error('Hata');
     loadDeviceAssignment(asset);
-  } catch (err) { alert('İade hatası: ' + err.message); }
+  } catch (err) { toast('İade hatası: ' + err.message, 'hata'); }
 }
 
 async function loadDeviceLine(assetId) {

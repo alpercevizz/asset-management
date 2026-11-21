@@ -70,7 +70,7 @@ async function agentRevoke(deviceId) {
     const r = await fetch('/api/agents/' + encodeURIComponent(deviceId), { method: 'DELETE' });
     if (!r.ok) throw new Error((await r.json()).detail || 'silinemedi');
     loadAgents();
-  } catch (err) { alert('Silinemedi: ' + err.message); }
+  } catch (err) { toast('Silinemedi: ' + err.message, 'hata'); }
 }
 
 /* ═══ Cihaz model görselleri (Ayarlar) ════════════════════════════════════
@@ -159,7 +159,7 @@ async function imageDelete(id) {
     if (!r.ok) throw new Error((await r.json()).detail || 'silinemedi');
     loadImageTable();
     loadAgents();
-  } catch (err) { alert('Silinemedi: ' + err.message); }
+  } catch (err) { toast('Silinemedi: ' + err.message, 'hata'); }
 }
 
 /* ═══ Lokasyon koordinatları (Ayarlar) ════════════════════════════════════ */
@@ -201,9 +201,9 @@ function geoPrompt(ad, mevcut) {
     mevcut ? `${mevcut.lat}, ${mevcut.lon}` : '');
   if (v === null) return;
   const parca = String(v).split(/[,;\s]+/).filter(Boolean);
-  if (parca.length < 2) { alert('İki sayı girin: enlem, boylam'); return; }
+  if (parca.length < 2) { toast('İki sayı girin: enlem, boylam', 'hata'); return; }
   const lat = Number(parca[0].replace(',', '.')), lon = Number(parca[1].replace(',', '.'));
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) { alert('Geçersiz sayı.'); return; }
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) { toast('Geçersiz sayı.', 'hata'); return; }
   const label = prompt('Haritada görünecek kısa ad (boş bırakılabilir):', mevcut?.label || ad) ?? null;
   geoSave(ad, lat, lon, label);
 }
@@ -220,7 +220,7 @@ async function geoSave(location, lat, lon, label) {
     loadGeoTable();
     loadImageTable();
     loadAgents();
-  } catch (err) { alert('Kaydedilemedi: ' + err.message); }
+  } catch (err) { toast('Kaydedilemedi: ' + err.message, 'hata'); }
 }
 
 async function geoDelete(location) {
@@ -232,7 +232,7 @@ async function geoDelete(location) {
     loadGeoTable();
     loadImageTable();
     loadAgents();
-  } catch (err) { alert('Silinemedi: ' + err.message); }
+  } catch (err) { toast('Silinemedi: ' + err.message, 'hata'); }
 }
 
 async function geoSeed() {
@@ -339,66 +339,140 @@ async function loadUsersView() {
       </tr>`).join('') || '<tr><td colspan="5" class="loading-cell">Hesap yok</td></tr>';
 
     body.querySelectorAll('[data-edit]').forEach(b =>
-      b.addEventListener('click', () => editUserPrompt(users.find(x => x.username === b.dataset.edit))));
+      b.addEventListener('click', () => openUserModal(users.find(x => x.username === b.dataset.edit))));
     body.querySelectorAll('[data-del]').forEach(b =>
-      b.addEventListener('click', () => deleteUserPrompt(b.dataset.del)));
+      b.addEventListener('click', () => openUserDeleteModal(users.find(x => x.username === b.dataset.del))));
   } catch (err) {
     body.innerHTML = `<tr><td colspan="5" class="loading-cell" style="color:var(--red)">${escapeHtml(err.message)}</td></tr>`;
   }
 }
 
-function roleFromPrompt(current) {
-  const v = prompt(`Rol (${ROLE_OPTS.map(r => r[0]).join(' / ')}):`, current || 'it');
-  if (v === null) return null;
-  const r = String(v).trim().toLowerCase();
-  if (!ROLE_OPTS.some(x => x[0] === r)) { alert('Geçersiz rol.'); return null; }
-  return r;
+/* ─── Kullanıcı modalları (ekle / düzenle / sil) — tarayıcı prompt/confirm
+   kutuları yerine tema uyumlu modallar. Partial'lar: parts/modals/user.html,
+   userDelete.html. Alanlar: kullanıcı adı, ad soyad, rol (seçim), parola
+   (yalnız eklemede). Kullanıcı adı düzenlemede kilitli. ─────────────────────*/
+let _umMode = 'add';   // 'add' | 'edit'
+let _umUser = null;    // düzenlenen kullanıcı nesnesi
+let _udUser = null;    // silinecek kullanıcı nesnesi
+
+function _umEl(id) { return document.getElementById(id); }
+function _umErr(msg) { const e = _umEl('umError'); if (!e) return; if (!msg) { e.hidden = true; return; } e.textContent = msg; e.hidden = false; }
+
+function openUserModal(user) {
+  const ov = _umEl('userModalOverlay'); if (!ov) return;
+  _umMode = user ? 'edit' : 'add';
+  _umUser = user || null;
+  _umErr('');
+  _umEl('userModalTitle').textContent = user ? 'Kullanıcı Düzenle' : 'Kullanıcı Ekle';
+  _umEl('userModalDesc').innerHTML = user
+    ? `<b>${escapeHtml(user.username)}</b> hesabını düzenliyorsunuz.`
+    : 'Yeni bir yerel hesap oluşturun.';
+  _umEl('umIcoAdd').style.display = user ? 'none' : '';
+  _umEl('umIcoEdit').style.display = user ? '' : 'none';
+
+  const un = _umEl('umUsername');
+  un.value = user ? user.username : '';
+  un.disabled = !!user;                                  // kullanıcı adı düzenlenemez
+  _umEl('umUserField').classList.toggle('um-field--ro', !!user);
+  _umEl('umUserLock').style.display = user ? '' : 'none';
+
+  _umEl('umDisplay').value = user ? (user.display || '') : '';
+  _umEl('umRole').value = user ? user.role : 'it';
+
+  const pill = _umEl('umRolePill');
+  if (user) { pill.style.display = ''; pill.querySelector('b').textContent = ROLE_LABEL[user.role] || user.role; }
+  else pill.style.display = 'none';
+
+  _umEl('umPassRow').style.display = user ? 'none' : '';    // parola yalnız eklemede
+  const pw = _umEl('umPassword'); pw.value = ''; pw.type = 'password';
+
+  _umEl('umSaveLbl').textContent = user ? 'Kaydet' : 'Oluştur';
+  ov.classList.add('open');
+  setTimeout(() => (user ? _umEl('umDisplay') : un).focus(), 40);
 }
 
-async function createUserPrompt() {
-  const username = prompt('Kullanıcı adı:');
-  if (!username || !username.trim()) return;
-  const display = prompt('Ad Soyad (opsiyonel):') || '';
-  const role = roleFromPrompt('it');
-  if (!role) return;
-  const password = prompt('Parola (en az 8 karakter):');
-  if (!password) return;
+function _umClose() { _umEl('userModalOverlay')?.classList.remove('open'); }
+
+async function _umSave() {
+  const username = _umEl('umUsername').value.trim();
+  const display = _umEl('umDisplay').value.trim();
+  const role = _umEl('umRole').value;
+  const password = _umEl('umPassword').value;
+  if (_umMode === 'add') {
+    if (!username) return _umErr('Kullanıcı adı zorunludur.');
+    if (!password || password.length < 8) return _umErr('Parola en az 8 karakter olmalı.');
+  }
+  const btn = _umEl('umSave'); btn.disabled = true;
   try {
-    const res = await fetch('/api/users', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: username.trim(), display, role, password }),
-    });
+    const res = _umMode === 'add'
+      ? await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, display, role, password }) })
+      : await fetch(`/api/users/${encodeURIComponent(_umUser.username)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role, display }) });
     const j = await res.json();
-    if (!res.ok) throw new Error(j.detail || j.error);
+    if (!res.ok) throw new Error(j.detail || j.error || 'İşlem başarısız');
+    _umClose();
+    toast(_umMode === 'add' ? `"${username}" kullanıcısı oluşturuldu.` : 'Kullanıcı güncellendi.', 'ok');
+    if (j.warning) toast(j.warning, 'info', 6500);          // LDAP modu uyarısı (nadir)
     loadUsersView();
-  } catch (err) { alert('Oluşturulamadı: ' + err.message); }
+  } catch (err) {
+    _umErr(err.message);
+  } finally { btn.disabled = false; }
 }
 
-async function editUserPrompt(u) {
-  if (!u) return;
-  const role = roleFromPrompt(u.role);
-  if (!role) return;
-  const display = prompt('Ad Soyad:', u.display || '') ?? u.display;
-  try {
-    const res = await fetch(`/api/users/${encodeURIComponent(u.username)}`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role, display }),
-    });
-    const j = await res.json();
-    if (!res.ok) throw new Error(j.detail || j.error);
-    if (j.warning) alert(j.warning);
-    loadUsersView();
-  } catch (err) { alert('Güncellenemedi: ' + err.message); }
+function openUserDeleteModal(user) {
+  if (!user) return;
+  const ov = _umEl('userDeleteOverlay'); if (!ov) return;
+  _udUser = user;
+  const ad = (user.display || user.username || '').trim();
+  _umEl('udAvatar').textContent = (ad[0] || '?').toLocaleUpperCase('tr-TR');
+  _umEl('udName').textContent = user.display || user.username;
+  _umEl('udUser').textContent = user.username + (user.upn ? ' · ' + user.upn : '');
+  const e = _umEl('udError'); if (e) e.hidden = true;
+  ov.classList.add('open');
 }
 
-async function deleteUserPrompt(username) {
-  if (!confirm(`"${username}" hesabı KALICI olarak silinecek. Emin misiniz?`)) return;
+function _udClose() { _umEl('userDeleteOverlay')?.classList.remove('open'); }
+
+async function _udConfirm() {
+  if (!_udUser) return;
+  const btn = _umEl('udConfirm'); btn.disabled = true;
   try {
-    const res = await fetch(`/api/users/${encodeURIComponent(username)}`, { method: 'DELETE' });
+    const res = await fetch(`/api/users/${encodeURIComponent(_udUser.username)}`, { method: 'DELETE' });
     const j = await res.json();
-    if (!res.ok) throw new Error(j.detail || j.error);
+    if (!res.ok) throw new Error(j.detail || j.error || 'Silinemedi');
+    _udClose();
+    toast(`"${_udUser.username}" hesabı silindi.`, 'ok');
     loadUsersView();
-  } catch (err) { alert('Silinemedi: ' + err.message); }
+  } catch (err) {
+    const e = _umEl('udError'); if (e) { e.textContent = err.message; e.hidden = false; }
+  } finally { btn.disabled = false; }
+}
+
+/* Statik modal düğmelerini bir kez bağla (init.js çağırır — DOM hazır). */
+function bindUserModals() {
+  const ov = _umEl('userModalOverlay');
+  if (ov && !ov.dataset.bound) {
+    ov.dataset.bound = '1';
+    _umEl('umCancel')?.addEventListener('click', _umClose);
+    _umEl('userModalClose')?.addEventListener('click', _umClose);
+    _umEl('umSave')?.addEventListener('click', _umSave);
+    ov.addEventListener('click', (e) => { if (e.target === ov) _umClose(); });
+    _umEl('umEye')?.addEventListener('click', () => { const pw = _umEl('umPassword'); pw.type = pw.type === 'password' ? 'text' : 'password'; });
+    ['umUsername', 'umDisplay', 'umPassword'].forEach((id) =>
+      _umEl(id)?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); _umSave(); } }));
+  }
+  const dov = _umEl('userDeleteOverlay');
+  if (dov && !dov.dataset.bound) {
+    dov.dataset.bound = '1';
+    _umEl('udCancel')?.addEventListener('click', _udClose);
+    _umEl('userDeleteClose')?.addEventListener('click', _udClose);
+    _umEl('udConfirm')?.addEventListener('click', _udConfirm);
+    dov.addEventListener('click', (e) => { if (e.target === dov) _udClose(); });
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (_umEl('userModalOverlay')?.classList.contains('open')) _umClose();
+    if (_umEl('userDeleteOverlay')?.classList.contains('open')) _udClose();
+  });
 }
 
 /* ─── Excel/CSV Export ──────────────────────────────────────────────────────── */
@@ -407,7 +481,7 @@ function exportAssetsCSV(secilenler) {
   // Toplu seçim çubuğu yalnız seçilenleri gönderir.
   const assets = Array.isArray(secilenler) ? secilenler
     : (state.renderedAssets || state.assets || []);
-  if (!assets.length) { alert('Dışa aktarılacak kayıt yok.'); return; }
+  if (!assets.length) { toast('Dışa aktarılacak kayıt yok.', 'hata'); return; }
 
   const cols = [
     ['hostname', 'Hostname'], ['location', 'Lokasyon'], ['category', 'Kategori'],

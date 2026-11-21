@@ -86,7 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $(`#menuSettings`)?.addEventListener('click', () => {
     userMenu?.classList.remove('open');
     if (state.role === 'admin') showView('settings');
-    else alert('Ayarlar yalnızca yönetici rolündeki kullanıcılara açıktır.');
+    else toast('Ayarlar yalnızca yönetici rolündeki kullanıcılara açıktır.', 'hata');
   });
 
   // Hızlı İşlemler
@@ -113,7 +113,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   $(`#opLifecycle`)?.addEventListener('click', () => showView('lifecycle'));
   $(`#opReport`)?.addEventListener('click', () => showView('reports'));
-  $(`#openUserModal`)?.addEventListener('click', createUserPrompt);
+  $(`#openUserModal`)?.addEventListener('click', () => openUserModal());
+  bindUserModals();
 
   // KPI kartından duruma göre filtrelenmiş Varlıklar görünümü
   $$('.kpi[data-status]').forEach((card) => {
@@ -611,7 +612,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!r.ok) throw new Error(j.detail || j.error || 'jeton üretilemedi');
       jeton = j;
     } catch (err) {
-      alert('QR üretilemedi: ' + err.message);
+      toast('QR üretilemedi: ' + err.message, 'hata');
       if (btn) btn.disabled = false;
       return;
     }
@@ -799,7 +800,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   $(`#blkQrUret`)?.addEventListener('click', async () => {
     const a = blkAlanlar();
-    if (!a.quantity || a.quantity < 1) { alert('Önce adet girin.'); return; }
+    if (!a.quantity || a.quantity < 1) { toast('Önce adet girin.', 'hata'); return; }
     const btn = $(`#blkQrUret`);
     if (btn) btn.disabled = true;
     try {
@@ -822,7 +823,7 @@ document.addEventListener('DOMContentLoaded', () => {
       blkQrDurdur();
       _blkQrTimer = setInterval(blkQrYokla, 2500);
     } catch (err) {
-      alert('Onay kodu üretilemedi: ' + err.message);
+      toast('Onay kodu üretilemedi: ' + err.message, 'hata');
     } finally {
       if (btn) btn.disabled = false;
     }

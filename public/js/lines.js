@@ -248,7 +248,7 @@ function renderLinesTable() {
    kullanıcı bir filtre kurup dışa aktardığında tüm listeyi almak şaşırtıcı olur. */
 function exportLinesCsv() {
   const liste = lineFiltrele();
-  if (!liste.length) { alert('Dışa aktarılacak hat yok.'); return; }
+  if (!liste.length) { toast('Dışa aktarılacak hat yok.', 'hata'); return; }
   const cols = [
     ['msisdn', 'Telefon No'], ['iccid', 'SIM No (ICCID)'], ['operator', 'Operatör'],
     ['tariff', 'Tarife'], ['status', 'Durum'], ['assigned_hostname', 'Bağlı Telefon'],
@@ -501,7 +501,7 @@ async function lineScanBaslat() {
       } catch { /* kare okunamadı: bir sonrakini dene */ }
     }, 400);
   } catch (err) {
-    alert('Kamera açılamadı: ' + err.message);
+    toast('Kamera açılamadı: ' + err.message, 'hata');
     lineScanDurdur();
   }
 }
@@ -517,7 +517,7 @@ async function saveLine() {
      sessizce başka bir operatöre kaydedilir. Kullanıcıya sorulur. */
   const operator = lineOperatorDegeri();
   if (!operator) {
-    alert('Operatör seçin; "Diğer" seçtiyseniz operatör adını yazın.');
+    toast('Operatör seçin; "Diğer" seçtiyseniz operatör adını yazın.', 'hata');
     $(`#lineOperatorDiger`)?.focus();
     return;
   }
@@ -528,14 +528,14 @@ async function saveLine() {
     tariff: $(`#lineTariff`)?.value.trim(),
     status: $(`#lineStatus`)?.value || 'aktif',
   };
-  if (!body.msisdn || !body.iccid) { alert('Telefon no ve SIM no zorunludur.'); return; }
+  if (!body.msisdn || !body.iccid) { toast('Telefon no ve SIM no zorunludur.', 'hata'); return; }
   try {
     const res = await fetch('/api/lines', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const j = await res.json();
     if (!res.ok) throw new Error(j.detail || j.error || 'Hata');
     $(`#lineModalOverlay`)?.classList.remove('open');
     loadLines();
-  } catch (err) { alert('Hat kaydedilemedi: ' + err.message); }
+  } catch (err) { toast('Hat kaydedilemedi: ' + err.message, 'hata'); }
 }
 
 async function assignLinePrompt(lineId) {
@@ -547,14 +547,14 @@ async function assignLinePrompt(lineId) {
   if (!pick) return;
   const idx = parseInt(pick, 10) - 1;
   const phone = phones[idx];
-  if (!phone) { alert('Geçersiz seçim.'); return; }
+  if (!phone) { toast('Geçersiz seçim.', 'hata'); return; }
   try {
     const res = await fetch(`/api/lines/${lineId}/assign`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ asset_id: phone.id, hostname: phone.hostname }) });
     const j = await res.json();
     if (!res.ok) throw new Error(j.detail || j.error);
     loadLines();
-  } catch (err) { alert('Atanamadı: ' + err.message); }
+  } catch (err) { toast('Atanamadı: ' + err.message, 'hata'); }
 }
 
 async function releaseLineAction(lineId) {
@@ -564,7 +564,7 @@ async function releaseLineAction(lineId) {
     const j = await res.json();
     if (!res.ok) throw new Error(j.detail || j.error);
     loadLines();
-  } catch (err) { alert('İade edilemedi: ' + err.message); }
+  } catch (err) { toast('İade edilemedi: ' + err.message, 'hata'); }
 }
 
 async function showLineHistory(lineId) {
@@ -587,13 +587,13 @@ async function showLineHistory(lineId) {
   $(`#handoverPdfBtn`).style.display = 'none';
   _deviceModalAsset = null;
   $(`#deviceModalOverlay`)?.classList.add('open');
-  } catch (err) { alert('Geçmiş alınamadı: ' + err.message); }
+  } catch (err) { toast('Geçmiş alınamadı: ' + err.message, 'hata'); }
 }
 
 // CSV import: başlık satırı iccid,msisdn,operator,tariff,status bekler (esnek eşleme)
 function importLinesCsv(text) {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
-  if (lines.length < 2) { alert('CSV boş veya sadece başlık var.'); return; }
+  if (lines.length < 2) { toast('CSV boş veya sadece başlık var.', 'hata'); return; }
   const delim = lines[0].includes(';') ? ';' : ',';
   const headers = lines[0].split(delim).map(h => h.trim().toLowerCase().replace(/^﻿/, ''));
   const idx = (names) => headers.findIndex(h => names.includes(h));
@@ -602,7 +602,7 @@ function importLinesCsv(text) {
   const iOp = idx(['operator', 'operatör']);
   const iTariff = idx(['tariff', 'tarife', 'paket']);
   const iStatus = idx(['status', 'durum']);
-  if (iIccid < 0 || iMsisdn < 0) { alert('CSV başlığında iccid ve msisdn sütunları bulunmalı.'); return; }
+  if (iIccid < 0 || iMsisdn < 0) { toast('CSV başlığında iccid ve msisdn sütunları bulunmalı.', 'hata'); return; }
   const rows = lines.slice(1).map(line => {
     const c = line.split(delim);
     return {
@@ -612,15 +612,15 @@ function importLinesCsv(text) {
       status: iStatus >= 0 ? (c[iStatus] || '').trim() || 'aktif' : 'aktif',
     };
   }).filter(r => r.iccid && r.msisdn);
-  if (!rows.length) { alert('Geçerli satır bulunamadı.'); return; }
+  if (!rows.length) { toast('Geçerli satır bulunamadı.', 'hata'); return; }
   fetch('/api/lines/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows }) })
     .then(r => r.json())
     .then(j => {
       if (j.error) throw new Error(j.detail || j.error);
-      alert(`İçe aktarma tamam: ${j.created} yeni, ${j.updated} güncellendi${j.errors?.length ? `, ${j.errors.length} hata` : ''}.`);
+      toast(`İçe aktarma tamam: ${j.created} yeni, ${j.updated} güncellendi${j.errors?.length ? `, ${j.errors.length} hata` : ''}.`, 'hata');
       loadLines();
     })
-    .catch(err => alert('İçe aktarma hatası: ' + err.message));
+    .catch(err => toast('İçe aktarma hatası: ' + err.message, 'hata'));
 }
 
 /* ─── Ayarlar (admin) ───────────────────────────────────────────────────────── */

@@ -519,3 +519,27 @@ async function loadInsights() {
   }
 }
 
+/* ── Toast bildirimi ───────────────────────────────────────────────────────
+   Tarayıcının toast(, 'hata') kutusu temayı bozuyordu; yerine sağ-altta yığılan,
+   kendi kapanan temalı bildirim. tip: 'info' | 'ok' | 'hata'. Mesaj
+   textContent ile yazılır (XSS güvenli). */
+function toast(mesaj, tip = 'info', sure = 3800) {
+  let kap = document.getElementById('toastWrap');
+  if (!kap) { kap = document.createElement('div'); kap.id = 'toastWrap'; document.body.appendChild(kap); }
+  const ikon = tip === 'ok'
+    ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'
+    : tip === 'hata'
+      ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 8v5M12 16h.01"/></svg>'
+      : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>';
+  const t = document.createElement('div');
+  t.className = 'toast toast--' + tip;
+  t.innerHTML = `<span class="toast-ico">${ikon}</span><span class="toast-msg"></span><button class="toast-x" type="button" aria-label="Kapat">&times;</button>`;
+  t.querySelector('.toast-msg').textContent = mesaj;
+  kap.appendChild(t);
+  requestAnimationFrame(() => t.classList.add('toast--in'));
+  const kapat = () => { t.classList.remove('toast--in'); setTimeout(() => t.remove(), 220); };
+  t.querySelector('.toast-x').addEventListener('click', kapat);
+  if (sure > 0) setTimeout(kapat, sure);
+  return t;
+}
+

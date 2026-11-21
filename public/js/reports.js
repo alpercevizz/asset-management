@@ -766,7 +766,7 @@ function rpKur() {
     document.body.classList.toggle('rp-tam-acik', p.classList.contains('rp-tam'));
   });
   $(`#rpGecmis`)?.addEventListener('click', () => {
-    alert('Rapor geçmişi henüz tutulmuyor. Oluşturulan raporlar kaydedilmediği için listelenecek bir geçmiş yok.');
+    toast('Rapor geçmişi henüz tutulmuyor. Oluşturulan raporlar kaydedilmediği için listelenecek bir geçmiş yok.', 'hata');
   });
   // Kaydırdıkça sayfa numarası takip etsin
   $(`#rpBelgeAlan`)?.addEventListener('scroll', () => {

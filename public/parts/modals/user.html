@@ -1,0 +1,73 @@
+  <!-- Kullanıcı Ekle / Düzenle Modalı (tarayıcı prompt'u yerine) -->
+  <div class="modal-overlay" id="userModalOverlay">
+    <div class="modal um-modal">
+      <div class="um-head">
+        <span class="um-ico">
+          <svg id="umIcoAdd" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
+          <svg id="umIcoEdit" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+        </span>
+        <div class="um-htxt">
+          <h3 id="userModalTitle">Kullanıcı Ekle</h3>
+          <p class="um-desc" id="userModalDesc">Yeni bir yerel hesap oluşturun.</p>
+        </div>
+        <button class="um-x" id="userModalClose" type="button" aria-label="Kapat">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="um-body">
+        <div class="um-f">
+          <label for="umUsername">Kullanıcı Adı<span class="um-req">*</span></label>
+          <div class="um-field" id="umUserField">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <input id="umUsername" placeholder="kullanici.adi" autocomplete="off" spellcheck="false">
+            <svg id="umUserLock" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
+        </div>
+
+        <div class="um-f">
+          <label for="umDisplay">Ad Soyad <span class="um-opt">· opsiyonel</span></label>
+          <div class="um-field">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M15 8h3M15 12h3M7 16h10"/></svg>
+            <input id="umDisplay" placeholder="Ad Soyad" autocomplete="off">
+          </div>
+        </div>
+
+        <div class="um-f">
+          <label for="umRole">Rol <span class="um-pill" id="umRolePill" style="display:none"><i></i>Şu an: <b></b></span></label>
+          <div class="um-field">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6z"/></svg>
+            <select id="umRole">
+              <option value="it">BT Ekibi</option>
+              <option value="admin">Yönetici</option>
+              <option value="approver">Onaylayıcı</option>
+            </select>
+            <svg class="um-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </div>
+          <p class="um-hint"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>BT Ekibi envanteri yönetir, Onaylayıcı yalnız onay verir.</p>
+        </div>
+
+        <div class="um-f" id="umPassRow">
+          <label for="umPassword">Parola<span class="um-req">*</span></label>
+          <div class="um-field">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <input id="umPassword" type="password" placeholder="••••••••" autocomplete="new-password">
+            <button class="um-eye" id="umEye" type="button" aria-label="Parolayı göster/gizle">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <p class="um-hint"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>En az 8 karakter.</p>
+        </div>
+
+        <p class="um-err" id="umError" hidden></p>
+      </div>
+
+      <div class="um-foot">
+        <button class="btn-pdf" id="umCancel" type="button">İptal</button>
+        <button class="btn-add" id="umSave" type="button">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>
+          <span id="umSaveLbl">Oluştur</span>
+        </button>
+      </div>
+    </div>
+  </div>
