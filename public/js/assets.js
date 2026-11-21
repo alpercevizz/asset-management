@@ -1277,7 +1277,13 @@ async function renderAssetsTable() {
 }
 
 function populateAssetFilters(assets) {
-  const cats = [...new Set(assets.map(a => a.category || 'Diğer'))].sort((a, b) => a.localeCompare(b, 'tr'));
+  /* Kategori filtresi SABİT tam liste: envanterde o kategoriden cihaz olmasa
+     bile sistemin DESTEKLEDİĞİ tüm kategoriler görünür — sistemin kapsamını
+     gösterir (demo/satış için önemli). Kaynak CAT_CLASS (core.js), 'Diğer'
+     sınıflanmamışlar için sona eklenir. Boş kategori seçilirse tablo "sonuç
+     yok" gösterir, bu normal. Lokasyon DİNAMİK kalır: sabit bir küme değil,
+     her kuruluma göre değişir, boş lokasyon filtresi anlamsız olurdu. */
+  const cats = [...Object.keys(CAT_CLASS), 'Diğer'];
   const locs = [...new Set(assets.map(a => (a.location || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr'));
   const fill = (id, items, hepsi) => {
     const el = $('#' + id); if (!el) return;

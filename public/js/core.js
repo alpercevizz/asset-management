@@ -74,15 +74,18 @@ function fmtDay(iso) {
   return d.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+/* Desteklenen kategoriler — TEK KAYNAK. Hem rozet rengi hem Varlıklar
+   kategori filtresi (sabit tam liste) buradan türetilir; sıra = filtredeki
+   görünüm sırası. 'Diğer' burada yok, sınıflanmamışlar için fallback. */
 const CAT_CLASS = {
   'Bilgisayar': 'bilgisayar',
   'Sunucu': 'sunucu',
   'Telefon': 'telefon',
+  'Tablet': 'tablet',
   'El Terminali': 'terminal',
   'Yazıcı': 'yazici',
   'Ağ Aygıtı': 'ag',
   'Çevre Aygıtı': 'cevre',
-  'Tablet': 'tablet',
 };
 
 function categoryBadge(cat) {
