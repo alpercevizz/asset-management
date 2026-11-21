@@ -109,11 +109,32 @@ async function scanSegment(seg, activeByMac, activeByIp) {
 }
 
 // ── Ana tarama: segmentlere ayır → kuyruğa al → sınırlı eşzamanlılıkla asenkron tara ──
-async function scanNetwork(orgId) {
+async function scanNetwork(orgId, feedOverride) {
   // Baserow tek sayfa 200 döner; getAllAssets iç sayfalama ile binleri toplar (max BASEROW_MAX_PAGES).
   const data = await getAllAssets({ orgId, size: 2000 });
   const assets = data.results || [];
-  const feed = getActiveNetworkDevices();
+  // feedOverride: yalnız test içindir; üretimde her zaman dosyadan okunur.
+  const feed = feedOverride || getActiveNetworkDevices();
+
+  /* DÜRÜSTLÜK: beslemenin kaynağı 'sample-feed' (demo) veya 'unavailable'
+     (hiç yapılandırılmamış) ise GERÇEK alarm ÜRETME. Aksi halde demo cihazlar
+     "karantina/spoofing" diye Telegram/mail bildirimine düşüyordu — müşteriye
+     sahte uyarı gider. Gerçek entegrasyon active-devices.json'a source'u
+     'sample-feed'/'unavailable' DIŞINDA bir değere yazar. (detectShadowIT ile
+     aynı ilke.) */
+  const gercekTarama = feed.source && feed.source !== 'sample-feed' && feed.source !== 'unavailable';
+  if (!gercekTarama) {
+    return {
+      configured: false,
+      is_demo: feed.source === 'sample-feed',
+      reason: feed.source === 'sample-feed' ? 'demo_verisi' : 'tarama_yapilandirilmamis',
+      scanned: assets.length, active_total: feed.devices.length,
+      segments: [], concurrency: 0, batch_size: 0, scan_ms: 0,
+      source: feed.source, captured_at: feed.captured_at,
+      alarm: false, spoofing_count: 0, quarantine_count: 0,
+      findings: { count: 0, items: [] },
+    };
+  }
 
   const activeByMac = new Map();
   const activeByIp = new Map();
