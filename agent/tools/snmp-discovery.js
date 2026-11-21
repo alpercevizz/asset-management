@@ -39,6 +39,9 @@ function brandFrom(descr, oid) {
 }
 function categoryFrom(descr) {
   const d = String(descr || '');
+  // El terminali: SNMP'yi nadiren konuşur (asıl keşif yolu collector/MDM), ama
+  // konuşursa "Ağ Aygıtı" yedeğine düşmesin. Dar kural: açıkça "handheld" diyen.
+  if (/handheld|el termina/i.test(d)) return 'El Terminali';
   if (/printer|laserjet|officejet|imageclass|kyocera|ricoh|lexmark|brother|epson|mfp|print/i.test(d)) return 'Yazıcı';
   if (/access point|\bap\b|wireless|wifi|unifi\s|wlan/i.test(d)) return 'Ağ Aygıtı';
   if (/firewall|fortigate|sophos|palo alto|sonicwall|utm|xg\b/i.test(d)) return 'Ağ Aygıtı';
@@ -99,14 +102,23 @@ function snmpGet(session, oids) {
     } catch (_) { resolve(null); }
   });
 }
-function snmpFirstOfSubtree(session, baseOid) {
+function snmpFirstOfSubtree(session, baseOid, timeout) {
   return new Promise((resolve) => {
-    let found = null;
+    let found = null, bitti = false;
+    // net-snmp'nin subtree yürüyüşü EŞZAMANLI taramada (çok cihaz aynı anda)
+    // zaman zaman 'done' geri çağrısını hiç tetiklemeden askıda kalıyor — bu
+    // Promise'i sonsuza kilitler, dolayısıyla probe() ve tüm runDiscovery()
+    // donar: TEK arızalı/yavaş cihaz bütün ağ taramasını dondurabilir.
+    // Bağımsız zaman aşımı bunu keser. İlk varbind zaten erken geldiği için
+    // seri/model çoğu durumda yine yakalanır; gelmezse null'a düşülür (probe
+    // yedek seri/model üretir), ama tarama ASLA kilitlenmez.
+    const bitir = () => { if (bitti) return; bitti = true; clearTimeout(zl); resolve(found); };
+    const zl = setTimeout(bitir, (timeout || 1000) + 1500);
     try {
       session.subtree(baseOid, 20,
         (vbs) => { for (const vb of (vbs || [])) { if (!snmp.isVarbindError(vb)) { const v = String(val(vb.value) || '').trim(); if (v) { found = found || v; } } } },
-        () => resolve(found));
-    } catch (_) { resolve(null); }
+        () => bitir());
+    } catch (_) { bitir(); }
   });
 }
 
@@ -137,8 +149,8 @@ async function probe(ip, cred, timeout) {
   try {
     const sys = await snmpGet(session, [OID.sysDescr, OID.sysObjectID, OID.sysUpTime, OID.sysName, OID.sysLocation]);
     if (!sys || sys[OID.sysDescr] == null) return null;   // SNMP yok / cevap yok
-    const serial = await snmpFirstOfSubtree(session, OID.entSerial).catch(() => null);
-    const model = await snmpFirstOfSubtree(session, OID.entModel).catch(() => null);
+    const serial = await snmpFirstOfSubtree(session, OID.entSerial, timeout).catch(() => null);
+    const model = await snmpFirstOfSubtree(session, OID.entModel, timeout).catch(() => null);
     return parseDevice(ip, sys, serial, model);
   } finally { try { session.close(); } catch (_) {} }
 }
@@ -216,4 +228,4 @@ function startSnmpScheduler() {
   _timer = setInterval(tick, cfg.intervalMs);
 }
 
-module.exports = { runDiscovery, startSnmpScheduler, probe, parseDevice, expandCidr, brandFrom, categoryFrom, readConfig, OID };
+module.exports = { runDiscovery, startSnmpScheduler, probe, parseDevice, expandCidr, brandFrom, categoryFrom, readConfig, OID, snmpFirstOfSubtree };
