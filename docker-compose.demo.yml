@@ -1,0 +1,66 @@
+# ════════════════════════════════════════════════════════════════════════════
+# AssetMan — AYRI DEMO INSTANCE (assetmandemo.alperceviz.com)
+# Gerçek ortamdan TAMAMEN izole: kendi SQLite DB'si, kendi volume'u.
+# Her açılışta scripts/seed-demo.js önce TEMİZLER sonra zengin demo veriyle
+# doldurur → demo ziyaretçilerinin değişiklikleri restart'ta sıfırlanır.
+#
+# Çalıştırma (AssetMan VPS'inde, repo kökünde):
+#   docker compose -f docker-compose.demo.yml up -d --build
+#
+# ⚠️ SENİN TRAEFIK KURULUMUNA GÖRE AYARLA (3 yer, aşağıda <...> ile işaretli):
+#   1) networks: <traefik-ağ-adı>  → mevcut Traefik'inin external ağ adı
+#   2) traefik...certresolver=<certresolver> → Traefik'indeki resolver adı
+#   3) traefik...entrypoints → genelde "websecure" (443)
+# Ollama ile gerçek AI için demo, Ollama container'ına ERİŞEBİLMELİ (aynı ağda).
+# Erişemezse AI yorumu kural tabanlıya düşer — demo yine çalışır.
+# ════════════════════════════════════════════════════════════════════════════
+services:
+  app-demo:
+    build: .
+    image: assetman:latest
+    container_name: assetman-demo
+    restart: unless-stopped
+    # Ollama URL gibi ortak ayarlar ana .env'den gelir; aşağıdaki environment
+    # onları EZER (demo kendi DB'si, kendi parolası, SEED_DEMO vb.).
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      INVENTORY_PROVIDER: sql
+      DATABASE_URL: "sqlite:/app/data/demo.db"   # KENDİ ayrı DB'si (prod'a dokunmaz)
+      AUTH_PROVIDER: local
+      AI_PROVIDER: ollama                          # gerçek AI (Ollama erişilebilirse)
+      SEED_DEMO: "true"                            # yaşam döngüsü + zimmet boot seed'i açık
+      APP_PASSWORD: "${DEMO_PASSWORD:-AssetManDemo2026}"   # demo giriş parolası (admin)
+      NOTIFY_ENABLED: "false"                      # demo dışarı bildirim ATMAZ
+      SNMP_ENABLED: "false"                        # demo ağ taraması YAPMAZ
+    # Her açılışta: TEMİZLE + SEED, sonra sunucu. (taze demo garantisi)
+    command: ["sh", "-c", "node scripts/seed-demo.js && node server.js"]
+    volumes:
+      - assetman-demo-data:/app/data               # prod volume'undan AYRI
+    expose:
+      - "3000"
+    networks:
+      - demo-proxy        # ← 1) BURAYI Traefik ağınla değiştir (ör: web / proxy / traefik)
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.assetman-demo.rule=Host(`assetmandemo.alperceviz.com`)"
+      - "traefik.http.routers.assetman-demo.entrypoints=websecure"              # ← 3)
+      - "traefik.http.routers.assetman-demo.tls=true"
+      - "traefik.http.routers.assetman-demo.tls.certresolver=myresolver"        # ← 2) resolver adın
+      - "traefik.http.services.assetman-demo.loadbalancer.server.port=3000"
+
+volumes:
+  assetman-demo-data:
+
+networks:
+  # ← 1) Mevcut Traefik'inin external ağ adıyla değiştir.
+  demo-proxy:
+    external: true
+    name: demo-proxy
