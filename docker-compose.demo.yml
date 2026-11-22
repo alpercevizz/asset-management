@@ -7,13 +7,15 @@
 # Çalıştırma (AssetMan VPS'inde, repo kökünde):
 #   docker compose -f docker-compose.demo.yml up -d --build
 #
-# ⚠️ SENİN TRAEFIK KURULUMUNA GÖRE AYARLA (3 yer, aşağıda <...> ile işaretli):
-#   1) networks: <traefik-ağ-adı>  → mevcut Traefik'inin external ağ adı
-#   2) traefik...certresolver=<certresolver> → Traefik'indeki resolver adı
-#   3) traefik...entrypoints → genelde "websecure" (443)
-# Ollama ile gerçek AI için demo, Ollama container'ına ERİŞEBİLMELİ (aynı ağda).
-# Erişemezse AI yorumu kural tabanlıya düşer — demo yine çalışır.
+# Traefik HOST ağ modunda (certresolver=letsencrypt, entrypoints web/websecure).
+# Host modunda Traefik, demo'yu docker soketinden görüp kendi bridge IP'sine
+# yönlendirir — ayrı bir paylaşılan ağa GEREK YOK (prod app da böyle çalışıyor).
+# Ollama ile gerçek AI için: demo OLLAMA_URL'e (.env'den) erişebilmeli; erişemezse
+# AI yorumu kural tabanlıya düşer, demo yine çalışır.
 # ════════════════════════════════════════════════════════════════════════════
+# AYRI proje adı: ana app ile çakışmasın, kendi ağı/volume'u olsun.
+name: assetman-demo
+
 services:
   app-demo:
     build: .
@@ -40,8 +42,6 @@ services:
       - assetman-demo-data:/app/data               # prod volume'undan AYRI
     expose:
       - "3000"
-    networks:
-      - demo-proxy        # ← 1) BURAYI Traefik ağınla değiştir (ör: web / proxy / traefik)
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
       interval: 30s
@@ -51,16 +51,10 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.assetman-demo.rule=Host(`assetmandemo.alperceviz.com`)"
-      - "traefik.http.routers.assetman-demo.entrypoints=websecure"              # ← 3)
+      - "traefik.http.routers.assetman-demo.entrypoints=websecure"
       - "traefik.http.routers.assetman-demo.tls=true"
-      - "traefik.http.routers.assetman-demo.tls.certresolver=myresolver"        # ← 2) resolver adın
+      - "traefik.http.routers.assetman-demo.tls.certresolver=letsencrypt"
       - "traefik.http.services.assetman-demo.loadbalancer.server.port=3000"
 
 volumes:
   assetman-demo-data:
-
-networks:
-  # ← 1) Mevcut Traefik'inin external ağ adıyla değiştir.
-  demo-proxy:
-    external: true
-    name: demo-proxy

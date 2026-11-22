@@ -15,20 +15,18 @@ Döngüsü, Risk & Öngörü ve Raporlar **hepsi dolu** görünür.
 
 ## Deploy (AssetMan VPS'inde — srv1711334)
 
+Compose, mevcut Traefik'ine göre **hazır** (host modu, `certresolver=letsencrypt`,
+`entrypoints=websecure`, ayrı proje adı `assetman-demo`). Ekstra ayara gerek yok:
+
 ```bash
 cd /opt/asset-management
 git pull --ff-only origin main
 docker compose -f docker-compose.demo.yml up -d --build
 ```
 
-### Önce `docker-compose.demo.yml`'de 3 yeri KENDİ Traefik'ine göre ayarla
-Dosyada `<...>` ile işaretli:
-1. **Ağ adı** (`networks:` + `name:`) → mevcut Traefik'inin external ağ adı (ör. `web`, `proxy`, `traefik`).
-2. **certresolver** (`tls.certresolver=myresolver`) → Traefik'indeki Let's Encrypt resolver adın.
-3. **entrypoints** → genelde `websecure` (443).
-
-> Envanter (prod) servisin zaten Traefik'e bağlı; oradaki ağ ve resolver adını
-> `docker inspect assetman-app` ya da prod compose'undan görebilirsin, aynısını kullan.
+İlk istekte Let's Encrypt sertifikasını Traefik otomatik alır (DNS zaten hazır).
+Yönlendirme olmazsa (host-modu Traefik bazen ağ IP'sini seçemez) tek satır eklenir:
+`traefik.docker.network=assetman-demo_default` — gerekirse söyle, eklerim.
 
 ## Giriş
 - **URL:** https://assetmandemo.alperceviz.com
