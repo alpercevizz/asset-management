@@ -49,7 +49,9 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     # Her açılışta: TEMİZLE + SEED, sonra sunucu. (taze demo garantisi)
-    command: ["sh", "-c", "node scripts/seed-demo.js && node server.js"]
+    # Ollama ısıtma ARKA PLANDA: modeli RAM'e yükler, sunucuyu bloklamaz →
+    # ilk ziyaretçi bile soğuk-başlangıç yaşamaz, gerçek AI yorumu gelir.
+    command: ["sh", "-c", "node scripts/seed-demo.js && (node scripts/warm-ollama.js & node server.js)"]
     volumes:
       - assetman-demo-data:/app/data               # prod volume'undan AYRI
     expose:

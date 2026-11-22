@@ -1014,6 +1014,12 @@ test('rapor yorumu: uydurma sayı, yabancı dil ve yer tutucu reddedilir', () =>
   // İstem verilse bile istemde DE olmayan sayı yine RED (gerçek uydurma yakalanır)
   assert.equal(ai.denetle('Envanterde 29 cihaz var ama 777 tanesi arızalı.', bulgular, istem).ok, false);
 
+  // 9) "İşte yorumum:" girişi ve çok satırlılık REDDEDİLMEZ, TEMİZLENİR (küçük model alışkanlığı)
+  const kirli = ai.denetle('İşte yorumum:\n\nEnvanterdeki 29 cihazın 4 tanesi kritik seviyede.\n\nAyrıca 6 cihazın garantisi bitmiş.', bulgular);
+  assert.equal(kirli.ok, true, 'giriş cümlesi ve satır sonları temizlenip kabul edilmeli');
+  assert.ok(!/işte yorumum/i.test(kirli.metin), '"İşte yorumum:" girişi ayıklanmalı');
+  assert.ok(!/\n/.test(kirli.metin), 'düz paragrafa indirilmeli (satır sonu kalmamalı)');
+
   // 7) Model yoksa/başarısızsa yedek metin HER ZAMAN üretilir (rapor yorumsuz kalmaz)
   assert.ok(ai.kuralMetni(bulgular).length > 20);
 });

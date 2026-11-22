@@ -68,8 +68,17 @@ function cumleKirp(t, adet = 4) {
   return c.slice(0, adet).join('').trim();
 }
 
+/* Küçük modeller yönergeye rağmen metni "İşte yorumum:" gibi bir girişle açıyor
+   ve çok satıra bölüyor. REDDETMEK yerine temizliyoruz: bilgi değişmez, yalnızca
+   kozmetik fazlalık gider. (Rapor yorumsuz kalmasın diye reddi minimumda tutuyoruz.) */
+function girisTemizle(t) {
+  let s = String(t).replace(/\s+/g, ' ').trim();               // düz paragraf
+  s = s.replace(/^\s*(işte\b[^:]{0,40}:|yorum(?:um)?\s*:)\s*/i, '').trim(); // giriş ayıkla
+  return s;
+}
+
 function denetle(metin, bulgular, istem) {
-  let t = String(metin || '').trim();
+  let t = girisTemizle(metin);
   if (t.length < 40) return { ok: false, sebep: 'çok kısa' };
   t = cumleKirp(t);
   if (t.length > 1200) return { ok: false, sebep: 'çok uzun' };
