@@ -3943,16 +3943,21 @@ body.rp-tam-acik { overflow: hidden; }
 /* ═══ Temalı açılır liste (native <select> popup'ı yerine) ══════════════════ */
 .tsel { position: relative; }
 .tsel > select { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
-.tsel-trigger { cursor: pointer; user-select: none; }
-.tsel-trigger .tsel-val { flex: 1; font-size: 14px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Tetikleyici orijinal select'in class'ını alır (select-sm/um-field…); flex +
+   işaretçi davranışını buradan ekliyoruz. */
+.tsel-trigger { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.tsel-trigger .tsel-val { flex: 1; font-size: inherit; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.um-field.tsel-trigger .tsel-val { font-size: 14px; }
+.tsel-trigger .tsel-chev { margin-left: auto; flex: none; color: var(--text-muted); transition: transform .15s ease; }
 .tsel.open .tsel-trigger { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
-.tsel-trigger .um-chev { transition: transform .15s ease; }
-.tsel.open .tsel-trigger .um-chev { transform: rotate(180deg); }
+.tsel.open .tsel-trigger .tsel-chev { transform: rotate(180deg); }
 .tsel-list {
-  position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 30;
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 1100;
   background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm);
   box-shadow: var(--shadow-lg); padding: 5px; display: none; max-height: 260px; overflow-y: auto;
+  min-width: 100%; width: max-content; max-width: 280px;
 }
+.tsel.up .tsel-list { top: auto; bottom: calc(100% + 6px); }
 .tsel.open .tsel-list { display: block; }
 .tsel-opt {
   padding: 9px 11px; border-radius: 8px; font-size: 14px; color: var(--text);

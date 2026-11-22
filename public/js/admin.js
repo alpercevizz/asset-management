@@ -463,46 +463,59 @@ const _TSEL_IKON = {
   shield: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6z"/></svg>',
 };
 function temaliSelect(sel) {
-  if (!sel || sel.dataset.tsel) return;
+  if (!sel || sel.dataset.tsel || sel.multiple) return;
   sel.dataset.tsel = '1';
+  sel.tabIndex = -1;                                  // tab sırasından çıkar (tetikleyici alıyor)
   const wrap = document.createElement('div');
   wrap.className = 'tsel';
   sel.parentNode.insertBefore(wrap, sel);
 
   const trigger = document.createElement('div');
-  trigger.className = 'um-field tsel-trigger';
+  // Orijinal select'in class'ını KOPYALA → boyut/stil (select-sm, um-field…) otomatik eşleşir.
+  const temelCls = sel.dataset.tselClass || sel.className || '';
+  trigger.className = (temelCls + ' tsel-trigger').trim();
   trigger.tabIndex = 0;
   trigger.setAttribute('role', 'combobox');
   trigger.setAttribute('aria-haspopup', 'listbox');
   trigger.setAttribute('aria-expanded', 'false');
-  trigger.innerHTML = (_TSEL_IKON[sel.dataset.tselIkon] || '') +
-    '<span class="tsel-val"></span>' +
-    '<svg class="um-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>';
 
   const list = document.createElement('div');
   list.className = 'tsel-list';
   list.setAttribute('role', 'listbox');
-  [...sel.options].forEach((o) => {
-    const it = document.createElement('div');
-    it.className = 'tsel-opt';
-    it.textContent = o.textContent;
-    it.dataset.val = o.value;
-    it.setAttribute('role', 'option');
-    it.addEventListener('click', () => { sel.value = o.value; senk(); kapat(); sel.dispatchEvent(new Event('change', { bubbles: true })); });
-    list.appendChild(it);
-  });
 
   wrap.appendChild(trigger);
   wrap.appendChild(list);
-  wrap.appendChild(sel);   // gizli kaynak
-  const valEl = trigger.querySelector('.tsel-val');
+  wrap.appendChild(sel);                              // gizli kaynak (value burada)
 
+  const ikon = _TSEL_IKON[sel.dataset.tselIkon] || '';
+  const chev = '<svg class="um-chev tsel-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>';
+
+  function kur() {   // tetikleyici içeriği + seçenek listesini (yeniden) kur
+    trigger.innerHTML = ikon + '<span class="tsel-val"></span>' + chev;
+    list.innerHTML = '';
+    [...sel.options].forEach((o) => {
+      const it = document.createElement('div');
+      it.className = 'tsel-opt';
+      it.textContent = o.textContent;
+      it.dataset.val = o.value;
+      it.setAttribute('role', 'option');
+      it.addEventListener('click', () => { sel.value = o.value; senk(); kapat(); sel.dispatchEvent(new Event('change', { bubbles: true })); });
+      list.appendChild(it);
+    });
+    senk();
+  }
   function senk() {
     const o = sel.options[sel.selectedIndex];
-    valEl.textContent = o ? o.textContent : '';
+    const v = trigger.querySelector('.tsel-val'); if (v) v.textContent = o ? o.textContent : '';
     [...list.children].forEach((c) => c.classList.toggle('sel', c.dataset.val === sel.value));
   }
-  function ac() { wrap.classList.add('open'); trigger.setAttribute('aria-expanded', 'true'); }
+  function ac() {
+    document.querySelectorAll('.tsel.open').forEach((t) => { if (t !== wrap) t.classList.remove('open'); });
+    // Alt boşluk azsa yukarı aç (sayfalama en altta olabiliyor).
+    const r = trigger.getBoundingClientRect();
+    wrap.classList.toggle('up', window.innerHeight - r.bottom < 260 && r.top > 260);
+    wrap.classList.add('open'); trigger.setAttribute('aria-expanded', 'true');
+  }
   function kapat() { wrap.classList.remove('open'); trigger.setAttribute('aria-expanded', 'false'); }
   trigger.addEventListener('click', (e) => { e.stopPropagation(); wrap.classList.contains('open') ? kapat() : ac(); });
   trigger.addEventListener('keydown', (e) => {
@@ -510,8 +523,18 @@ function temaliSelect(sel) {
     else if (e.key === 'Escape') kapat();
   });
   document.addEventListener('click', (e) => { if (!wrap.contains(e.target)) kapat(); });
-  sel.addEventListener('change', senk);   // dışarıdan value değişince (openUserModal) senkronla
-  senk();
+  sel.addEventListener('change', senk);               // dışarıdan value değişince senkronla
+  // Seçenekler JS ile değişince (filtre doldurma vb.) listeyi yeniden kur.
+  new MutationObserver(() => kur()).observe(sel, { childList: true });
+  kur();
+}
+
+/* Sayfadaki tüm temalanabilir select'leri bir kez geçir (idempotent).
+   Hedef: .select-sm (tüm filtreler/sayfalama) + data-tsel-ikon/class işaretliler.
+   Hat modalı select'leri (.hm-alan) BİLEREK hariç — kendi özel layout'u var. */
+function temaliSelectHepsi(kok) {
+  (kok || document).querySelectorAll('select.select-sm, select[data-tsel-ikon], select[data-tsel-class]')
+    .forEach(temaliSelect);
 }
 
 /* Statik modal düğmelerini bir kez bağla (init.js çağırır — DOM hazır). */

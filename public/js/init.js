@@ -115,6 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $(`#opReport`)?.addEventListener('click', () => showView('reports'));
   $(`#openUserModal`)?.addEventListener('click', () => openUserModal());
   bindUserModals();
+  temaliSelectHepsi();   // tüm .select-sm dropdown'larını tema uyumlu yap (native popup yerine)
 
   // KPI kartından duruma göre filtrelenmiş Varlıklar görünümü
   $$('.kpi[data-status]').forEach((card) => {
