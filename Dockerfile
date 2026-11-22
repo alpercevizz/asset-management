@@ -21,6 +21,11 @@ RUN addgroup -S assetman && adduser -S -G assetman assetman
 COPY --chown=assetman:assetman --from=deps /app/node_modules ./node_modules
 COPY --chown=assetman:assetman . .
 
+# /app/data assetman'a ait OLMALI: aksi halde TAZE bir named/anonymous volume
+# root'a ait oluşuyor ve non-root kullanıcı DB/secrets yazamıyor
+# ("unable to open database file"). Bu satır sayesinde taze volume de yazılabilir.
+RUN mkdir -p /app/data/worm-repository && chown -R assetman:assetman /app/data
+
 # Volume noktaları (docker-compose'da mount edilir)
 # /app/data     → users.json, lifecycle-log.json, os-agents.json vs.
 # /app/data/worm-repository → WORM şifreli halkalar (ayrı volume olabilir)
