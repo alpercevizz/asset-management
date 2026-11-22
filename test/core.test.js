@@ -1020,6 +1020,11 @@ test('rapor yorumu: uydurma sayı, yabancı dil ve yer tutucu reddedilir', () =>
   assert.ok(!/işte yorumum/i.test(kirli.metin), '"İşte yorumum:" girişi ayıklanmalı');
   assert.ok(!/\n/.test(kirli.metin), 'düz paragrafa indirilmeli (satır sonu kalmamalı)');
 
+  // 9b) Türkçe büyük İ ile başlayan giriş de ayıklanmalı (JS /i bayrağı İ'yi katlamaz)
+  const trI = ai.denetle('İşte yorumum: Envanterdeki 29 cihazın 4 tanesi kritik seviyede ve öncelikli.', bulgular);
+  assert.equal(trI.ok, true);
+  assert.ok(/^Envanterdeki/.test(trI.metin), '"İşte yorumum:" (büyük İ) girişi de ayıklanmalı');
+
   // 7) Model yoksa/başarısızsa yedek metin HER ZAMAN üretilir (rapor yorumsuz kalmaz)
   assert.ok(ai.kuralMetni(bulgular).length > 20);
 });

@@ -73,7 +73,10 @@ function cumleKirp(t, adet = 4) {
    kozmetik fazlalık gider. (Rapor yorumsuz kalmasın diye reddi minimumda tutuyoruz.) */
 function girisTemizle(t) {
   let s = String(t).replace(/\s+/g, ' ').trim();               // düz paragraf
-  s = s.replace(/^\s*(işte\b[^:]{0,40}:|yorum(?:um)?\s*:)\s*/i, '').trim(); // giriş ayıkla
+  // Giriş ayıkla: "İşte yorumum:", "Yorum:" vb. NOT: JS /i bayrağı Türkçe büyük
+  // İ'yi (U+0130) ASCII i'ye katlamaz → "İşte" kaçıyordu; ilk harfi açıkça
+  // [Iİiı] ile yakalıyoruz (küçük model çıktısı bu girişi sıkça ekliyor).
+  s = s.replace(/^\s*([Iİiı]şte[^:]{0,40}:|yorum(?:um)?\s*:)\s*/i, '').trim();
   return s;
 }
 
