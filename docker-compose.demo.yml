@@ -36,6 +36,10 @@ services:
       # İÇİNDEN host'un kendi public IP'sine erişim hairpin-NAT yüzünden çalışmaz.
       # host-gateway ile aynı yayınlanmış porta host üzerinden ulaşırız (bkz. extra_hosts).
       OLLAMA_URL: "http://host.docker.internal:32768"
+      # qwen2.5:3b bu VPS'te (az RAM) soğuk çağrıda 25sn'yi aşıyordu → zaman aşımı.
+      # Demo'da cömert timeout + modeli 30dk yüklü tut (keep_alive).
+      REPORT_AI_TIMEOUT_MS: "90000"
+      OLLAMA_KEEP_ALIVE: "30m"
       SEED_DEMO: "true"                            # yaşam döngüsü + zimmet boot seed'i açık
       APP_PASSWORD: "${DEMO_PASSWORD:-AssetManDemo2026}"   # demo giriş parolası (admin)
       NOTIFY_ENABLED: "false"                      # demo dışarı bildirim ATMAZ

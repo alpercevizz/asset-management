@@ -93,6 +93,9 @@ async function ollamaCagir(istem) {
   const res = await axios.post(`${OLLAMA_URL}/api/chat`, {
     model: OLLAMA_MODEL,
     stream: false,
+    // Modeli RAM'de tut: ilk (soğuk) çağrı modeli yükler ve yavaştır; keep_alive
+    // ile sonraki çağrılar hızlanır (küçük VPS'te soğuk yük zaman aşımını zorluyor).
+    keep_alive: process.env.OLLAMA_KEEP_ALIVE || '30m',
     options: { temperature: 0.2, num_predict: 220 },
     messages: [
       { role: 'system', content: YONERGE },
