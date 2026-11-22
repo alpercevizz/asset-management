@@ -68,7 +68,7 @@ function cumleKirp(t, adet = 4) {
   return c.slice(0, adet).join('').trim();
 }
 
-function denetle(metin, bulgular) {
+function denetle(metin, bulgular, istem) {
   let t = String(metin || '').trim();
   if (t.length < 40) return { ok: false, sebep: 'çok kısa' };
   t = cumleKirp(t);
@@ -77,7 +77,12 @@ function denetle(metin, bulgular) {
   if (INGILIZCE_IPUCU.test(t)) return { ok: false, sebep: 'Türkçe değil' };
   if (/^\s*[-*•#]/m.test(t)) return { ok: false, sebep: 'madde/başlık biçimi' };
 
+  // İzin verilen sayılar: bulgu değerleri + istemde geçen sayılar (eşikler:
+  // "8 GB altı RAM", "30 günden uzun", "100 üzerinden puan"…). Modele
+  // gösterdiğimiz bir sayıyı tekrar etmesi uydurma değildir; yalnızca HİÇ
+  // göstermediğimiz bir sayı uydurmadır. İstem verilmezse eski (katı) davranış.
   const izinli = izinliSayilar(bulgular);
+  if (istem) sayilariAyikla(istem).forEach((s) => izinli.add(s));
   const uydurma = sayilariAyikla(t).filter((s) => !izinli.has(s));
   if (uydurma.length) return { ok: false, sebep: `bulgularda olmayan sayı: ${uydurma.join(', ')}` };
 
@@ -154,7 +159,7 @@ async function raporYorumu(bulgular) {
   try {
     const istem = istemKur(bulgular);
     const ham = AI_PROVIDER === 'ollama' ? await ollamaCagir(istem) : await anthropicCagir(istem);
-    const sonuc = denetle(ham, bulgular);
+    const sonuc = denetle(ham, bulgular, istem);
     if (!sonuc.ok) {
       console.warn('[rapor-ai] model çıktısı reddedildi:', sonuc.sebep);
       return { ...yedek, red_sebebi: sonuc.sebep };

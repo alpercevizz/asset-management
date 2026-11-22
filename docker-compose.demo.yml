@@ -32,10 +32,18 @@ services:
       DATABASE_URL: "sqlite:/app/data/demo.db"   # KENDİ ayrı DB'si (prod'a dokunmaz)
       AUTH_PROVIDER: local
       AI_PROVIDER: ollama                          # gerçek AI (Ollama erişilebilirse)
+      # .env'deki OLLAMA_URL public IP'yi (187.124.35.214:32768) gösterir; container
+      # İÇİNDEN host'un kendi public IP'sine erişim hairpin-NAT yüzünden çalışmaz.
+      # host-gateway ile aynı yayınlanmış porta host üzerinden ulaşırız (bkz. extra_hosts).
+      OLLAMA_URL: "http://host.docker.internal:32768"
       SEED_DEMO: "true"                            # yaşam döngüsü + zimmet boot seed'i açık
       APP_PASSWORD: "${DEMO_PASSWORD:-AssetManDemo2026}"   # demo giriş parolası (admin)
       NOTIFY_ENABLED: "false"                      # demo dışarı bildirim ATMAZ
       SNMP_ENABLED: "false"                        # demo ağ taraması YAPMAZ
+    # host.docker.internal → host makinenin gateway IP'si (Linux Docker).
+    # Böylece OLLAMA_URL host üzerinden Ollama'nın yayınlanmış portuna (32768) ulaşır.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     # Her açılışta: TEMİZLE + SEED, sonra sunucu. (taze demo garantisi)
     command: ["sh", "-c", "node scripts/seed-demo.js && node server.js"]
     volumes:

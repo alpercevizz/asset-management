@@ -45,8 +45,21 @@ docker compose -f docker-compose.demo.yml restart app-demo
 
 ## AI yorumu (Ollama)
 Demo `AI_PROVIDER=ollama` ile çalışır. Raporlardaki **gerçek AI yorumu** için demo
-container'ının Ollama'ya erişmesi gerekir (aynı Docker ağında olmalı). Erişemezse
-yorum **kural tabanlıya** düşer — demo yine sorunsuz çalışır, sadece yorum AI olmaz.
+container'ının Ollama'ya erişmesi gerekir.
+
+Compose, `OLLAMA_URL`'i `http://host.docker.internal:32768` olarak ezer ve
+`extra_hosts: host.docker.internal:host-gateway` ekler. Böylece container, host'un
+yayınlanmış Ollama portuna (32768) host gateway'i üzerinden ulaşır — `.env`'deki
+public IP (`187.124.35.214:32768`) container İÇİNDEN hairpin-NAT yüzünden çalışmaz.
+
+**Doğrulama** (deploy sonrası, VPS'te): demo container'ı Ollama'yı görüyor mu?
+```bash
+docker exec assetman-demo wget -qO- --timeout=10 http://host.docker.internal:32768/api/tags
+```
+Model listesi (JSON) dönerse erişim var. Erişemezse yorum **kural tabanlıya** düşer
+— demo yine sorunsuz çalışır, sadece yorum AI olmaz. (Ollama portu 0.0.0.0'da değil
+de 127.0.0.1'de yayınlıysa host-gateway de ulaşamaz; o durumda demo'yu Ollama
+container'ının ağına bağlarız — söyle, tek satır eklerim.)
 
 ## Güvenlik notu
 Demo şu an **yazılabilir + restart'ta sıfırlanır** (admin hesabı). Ziyaretçiler

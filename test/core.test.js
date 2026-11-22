@@ -1006,6 +1006,14 @@ test('rapor yorumu: uydurma sayı, yabancı dil ve yer tutucu reddedilir', () =>
   assert.equal(uzun.ok, true);
   assert.equal(uzun.metin.split(/[.!?]/).filter((x) => x.trim()).length, 4);
 
+  // 8) İstem verilince, istemde GEÇEN sayılar kabul edilir (eşikler: "8 GB", "100 üzerinden").
+  //    Modele gösterdiğimiz bir sayıyı tekrarlaması uydurma değildir.
+  const istem = 'Bulgular:\n- Toplam varlık: 29\n- 8 GB altı RAM cihaz: 4\n- Ortalama risk puanı (100 üzerinden): 55';
+  const esikli = ai.denetle('Envanterde 29 cihaz var; 4 cihazda 8 GB altı RAM mevcut ve 100 üzerinden ortalama risk 55 seviyesinde.', bulgular, istem);
+  assert.equal(esikli.ok, true, 'istemdeki eşik sayıları (8, 100, 55) kabul edilmeli');
+  // İstem verilse bile istemde DE olmayan sayı yine RED (gerçek uydurma yakalanır)
+  assert.equal(ai.denetle('Envanterde 29 cihaz var ama 777 tanesi arızalı.', bulgular, istem).ok, false);
+
   // 7) Model yoksa/başarısızsa yedek metin HER ZAMAN üretilir (rapor yorumsuz kalmaz)
   assert.ok(ai.kuralMetni(bulgular).length > 20);
 });
