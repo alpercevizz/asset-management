@@ -34,16 +34,14 @@
         </div>
 
         <div class="um-f">
-          <label for="umRole">Rol <span class="um-pill" id="umRolePill" style="display:none"><i></i>Şu an: <b></b></span></label>
-          <div class="um-field">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6z"/></svg>
-            <select id="umRole">
-              <option value="it">BT Ekibi</option>
-              <option value="admin">Yönetici</option>
-              <option value="approver">Onaylayıcı</option>
-            </select>
-            <svg class="um-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
-          </div>
+          <label>Rol <span class="um-pill" id="umRolePill" style="display:none"><i></i>Şu an: <b></b></span></label>
+          <!-- temaliSelect() bunu gizli KAYNAK olarak tutar, üstüne tema uyumlu
+               özel açılır liste kurar (native option popup'ı Windows mavisi çıkıyordu). -->
+          <select id="umRole" data-tsel-ikon="shield">
+            <option value="it">BT Ekibi</option>
+            <option value="admin">Yönetici</option>
+            <option value="approver">Onaylayıcı</option>
+          </select>
           <p class="um-hint"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>BT Ekibi envanteri yönetir, Onaylayıcı yalnız onay verir.</p>
         </div>
 

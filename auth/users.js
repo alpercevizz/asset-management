@@ -231,7 +231,10 @@ async function createUser({ username, password, role = 'it', display, upn }) {
     password: hashPassword(password),
     role,
     display: (display && String(display).trim()) || un,
-    upn: (upn && String(upn).trim()) || `${un}@${AD_DOMAIN}`,
+    // UPN yalnız AD/LDAP kavramı. Yerel hesaba sahte "kullanici@kurumsal.local"
+    // uydurmak kafa karıştırıyordu (arayüzde AD'den gelmiş gibi görünüyor).
+    // Yalnız açıkça verilirse yazılır; yoksa null.
+    upn: (upn && String(upn).trim()) || null,
     groups: JSON.stringify([]),
     mfa_enabled: true,
     created_at: new Date().toISOString(),
