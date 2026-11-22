@@ -3959,6 +3959,15 @@ body.rp-tam-acik { overflow: hidden; }
 }
 .tsel.up .tsel-list { top: auto; bottom: calc(100% + 6px); }
 .tsel.open .tsel-list { display: block; }
+
+/* Hat modalı varyantı: select zaten .hm-alan kutusunun İÇİNDE. Tetikleyici
+   ÇIPLAK olur (kutu border/bg/oku veriyor), liste .hm-alan genişliğinde açılır. */
+.hm-alan .tsel { position: static; flex: 1; min-width: 0; }
+.tsel-hm.tsel-trigger { flex: 1; min-width: 0; background: transparent; border: none; box-shadow: none; padding: 6px 0; gap: 0; }
+.tsel-hm .tsel-chev { display: none; }                   /* .hm-alan--sec::after zaten ok çiziyor */
+.tsel-hm .tsel-val { font-size: 16px; }
+.tsel.open .tsel-hm.tsel-trigger { box-shadow: none; }   /* vurgu halkası kutuda (focus-within) */
+.hm-alan--sec .tsel-list { top: calc(100% + 8px); }
 .tsel-opt {
   padding: 9px 11px; border-radius: 8px; font-size: 14px; color: var(--text);
   cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background .12s;
