@@ -1096,7 +1096,7 @@ function printHandoverReceipt(asset) {
   <div class="page">
     <div class="hdr">
       <div class="brand">
-        <svg class="brand-mark" viewBox="0 0 64 64" fill="none"><defs><linearGradient id="zm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#4f46e5"/></linearGradient></defs><path d="M32 7 L57 54 H49.5 L32 21 L14.5 54 H7 Z" fill="url(#zm)"/></svg>
+        <svg class="brand-mark" viewBox="0 0 64 64" fill="none"><defs><linearGradient id="zm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c74ff"/><stop offset="1" stop-color="#4f46e5"/></linearGradient></defs><path d="M32 7 L57 54 H49.5 L32 21 L14.5 54 H7 Z" fill="url(#zm)"/><path d="M32 30 L44 54 H36.5 L32 44.5 L27.5 54 H20 Z" fill="url(#zm)" opacity=".55"/></svg>
         <div><div class="brand-name">AssetMan</div><div class="brand-sub">IT Varlık Zekâsı Platformu</div></div>
       </div>
       <div class="hdr-date">
@@ -1158,7 +1158,7 @@ function printHandoverReceipt(asset) {
   </div>
 
   <div class="foot">
-    <div class="foot-brand"><svg width="26" height="26" viewBox="0 0 64 64" fill="none"><path d="M32 7 L57 54 H49.5 L32 21 L14.5 54 H7 Z" fill="url(#zm)"/></svg>AssetMan</div>
+    <div class="foot-brand"><svg width="26" height="26" viewBox="0 0 64 64" fill="none"><path d="M32 7 L57 54 H49.5 L32 21 L14.5 54 H7 Z" fill="url(#zm)"/><path d="M32 30 L44 54 H36.5 L32 44.5 L27.5 54 H20 Z" fill="url(#zm)" opacity=".55"/></svg>AssetMan</div>
     <div class="foot-mid">AssetMan — Bu belge sistem tarafından otomatik oluşturulmuştur.</div>
     <div class="foot-qr"><img src="/api/qr?data=${qrVeri}" alt="Belge QR"/><div class="foot-qr-txt"><span>Belge Doğrulama Kodu</span><b>${belgeNo}</b></div></div>
   </div>

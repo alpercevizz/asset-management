@@ -216,12 +216,13 @@ function rpKapak(rapor) {
       <span class="rd-logo"><svg viewBox="0 0 64 64" width="30" height="30" fill="none" aria-hidden="true">
         <defs>
           <linearGradient id="rdLogoG" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#4f46e5"/>
+            <stop offset="0" stop-color="#7c74ff"/><stop offset="1" stop-color="#4f46e5"/>
           </linearGradient>
         </defs>
         <path d="M32 7 L57 54 H49.5 L32 21 L14.5 54 H7 Z" fill="url(#rdLogoG)"/>
+        <path d="M32 30 L44 54 H36.5 L32 44.5 L27.5 54 H20 Z" fill="url(#rdLogoG)" opacity=".55"/>
       </svg></span>
-      <div><b>AssetMan</b><span>IT Asset Intelligence Report</span></div>
+      <div><b>AssetMan</b><span>IT Varlık Zekâsı Platformu</span></div>
     </div>
     <div class="rd-tarih"><span>Oluşturulma Tarihi</span><b>${escapeHtml(tarih)}</b></div>
   </div>

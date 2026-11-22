@@ -9,10 +9,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     /* Panel ve login ile AYNI tasarım dili: indigo + Plus Jakarta Sans.
-       Token ADLARI korundu, yalnız DEĞERLERİ değişti — aşağıdaki kuralların
-       hiçbirine dokunmadan tema döndü (panelde de bu yol izlenmişti).
-       Tek yazı ailesi var; --font-display ve --font-body aynı aileyi
-       gösteriyor ki mevcut kurallar kırılmasın. */
+       RESPONSIVE: mobilde tek sütun (telefon ana hedef — QR ile açılır),
+       tablet/laptop'ta login gibi split (indigo hero + 2 sütunlu form). */
     :root {
       --font-display: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       --font-body: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -21,7 +19,6 @@
       --text: #14162e; --text-dim: #4b5168; --text-muted: #8b90a6;
       --accent: #4f46e5; --accent-soft: rgba(79,70,229,0.10); --green: #0f9866; --red: #d64545;
     }
-    /* Telefonda açılıyor: tema tercihi cihazdan gelir, sayfada anahtar yok. */
     @media (prefers-color-scheme: dark) {
       :root {
         --bg: #0e1022; --card: #171a33; --field: #1e2240;
@@ -40,20 +37,37 @@
       color: var(--text); min-height: 100vh; font-size: 15px; line-height: 1.55;
       letter-spacing: -0.006em; -webkit-font-smoothing: antialiased;
     }
-    .wrap { max-width: 460px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
 
-    .hdr { padding: 34px 24px 22px; border-bottom: 1px solid var(--border); }
-    .hdr-brand { display: flex; align-items: center; gap: 11px; }
-    /* Marka simgesi panel ve login ile AYNI: dolgulu üçgen "A". Dolgu ön
-       plandır — kutu zemini olmadığı için baskıda/koyu temada kaybolmaz. */
-    .hdr-icon { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; }
-    .hdr-icon svg { width: 32px; height: 32px; }
-    .hdr-name { font-family: var(--font-display); font-size: 20px; font-weight: 800; letter-spacing: -0.01em; color: var(--text); }
-    .hdr-sub { font-size: 11px; color: var(--text-muted); }
-    .hdr-title { font-family: var(--font-display); font-size: 26px; font-weight: 800; margin-top: 20px; letter-spacing: -0.01em; color: var(--text); }
-    .hdr-desc { font-size: 13px; color: var(--text-muted); margin-top: 5px; }
+    .page { min-height: 100vh; display: flex; flex-direction: column; }
 
-    form { padding: 22px 24px 34px; display: flex; flex-direction: column; gap: 15px; flex: 1; }
+    /* ── HERO (indigo) — mobilde üstte kompakt, masaüstünde solda tam yükseklik ── */
+    .hero {
+      background:
+        radial-gradient(620px 320px at 18% 0%, rgba(255,255,255,0.14), transparent 60%),
+        linear-gradient(158deg, #4f46e5 0%, #6366f1 58%, #4338ca 100%);
+      color: #fff; padding: 26px 24px; display: flex; flex-direction: column; gap: 16px;
+    }
+    .hero-brand { display: flex; align-items: center; gap: 11px; }
+    .hero-icon { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; }
+    .hero-icon svg { width: 32px; height: 32px; }
+    .hero-name { font-family: var(--font-display); font-size: 20px; font-weight: 800; letter-spacing: -0.01em; color: #fff; }
+    .hero-sub { font-size: 11px; color: rgba(255,255,255,0.72); }
+    .hero-title { font-family: var(--font-display); font-size: 26px; font-weight: 800; letter-spacing: -0.015em; }
+    .hero-desc { font-size: 13.5px; color: rgba(255,255,255,0.88); line-height: 1.6; max-width: 46ch; }
+    .hero-points { list-style: none; display: none; flex-direction: column; gap: 11px; margin-top: 4px; }
+    .hero-points li { display: flex; align-items: center; gap: 10px; font-size: 14px; color: rgba(255,255,255,0.94); }
+    .hero-points li svg { flex: none; width: 20px; height: 20px; opacity: 0.95; }
+    .hero-foot { display: none; font-size: 12px; color: rgba(255,255,255,0.6); }
+
+    /* ── PANEL (form) ── */
+    .panel { flex: 1; padding: 22px 20px 34px; display: flex; justify-content: center; }
+    .panel-inner { width: 100%; max-width: 460px; display: flex; flex-direction: column; }
+    .panel-head { display: none; margin-bottom: 20px; }
+    .panel-title { font-family: var(--font-display); font-size: 22px; font-weight: 800; letter-spacing: -0.01em; }
+    .panel-sub { font-size: 12.5px; color: var(--text-muted); margin-top: 4px; }
+
+    form { display: flex; flex-direction: column; gap: 15px; }
+    .form-grid { display: flex; flex-direction: column; gap: 15px; }
     .field { display: flex; flex-direction: column; gap: 6px; }
     .field label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
     .field label .req { color: var(--red); }
@@ -76,7 +90,7 @@
     .btn:hover { opacity: 0.9; }
     .btn:disabled { opacity: 0.55; }
 
-    .ok-screen { display: none; flex-direction: column; align-items: center; justify-content: center; flex: 1; padding: 40px 24px; text-align: center; gap: 16px; }
+    .ok-screen { display: none; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh; padding: 40px 24px; text-align: center; gap: 16px; }
     .ok-circle { width: 76px; height: 76px; border-radius: 50%; background: rgba(15,152,102,0.12); display: flex; align-items: center; justify-content: center; }
     .ok-circle svg { width: 38px; height: 38px; stroke: var(--green); fill: none; stroke-width: 2.5; }
     .ok-title { font-family: var(--font-display); font-size: 24px; font-weight: 800; color: var(--text); }
@@ -97,100 +111,158 @@
     .scan-frame { position: absolute; top: 34%; left: 8%; right: 8%; height: 24%; border: 3px solid var(--accent); border-radius: 12px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.35); pointer-events: none; }
     .scan-hint { color: #fff; text-align: center; margin-top: 16px; font-size: 14px; opacity: 0.9; }
     .scan-close { display: block; margin: 18px auto 0; background: #fff; color: #14162e; border: none; border-radius: 11px; padding: 12px 30px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; }
+
+    /* ── TABLET+ : alanlar 2 sütuna ── */
+    @media (min-width: 640px) {
+      .panel { padding: 34px 28px 44px; }
+      .panel-inner { max-width: 600px; }
+      .panel-head { display: block; }
+      .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 18px; }
+      .field.full { grid-column: 1 / -1; }
+      .btn { grid-column: 1 / -1; }
+    }
+
+    /* ── LAPTOP+ : split ORTALANMIŞ KART (indigo hero + form). Büyük ekranda
+       (monitör/TV) tam ekrana yayılıp seyrek durmaması için kart max-width ile
+       sınırlanır ve ortalanır; etrafı sayfa gradyanı. ── */
+    @media (min-width: 940px) {
+      body { display: flex; align-items: center; justify-content: center; padding: 48px 32px; }
+      .page {
+        flex-direction: row; width: 100%; max-width: 1080px; min-height: auto;
+        background: var(--card); border: 1px solid var(--border); border-radius: 26px; overflow: hidden;
+        box-shadow: 0 50px 110px -45px rgba(20,22,46,0.42), 0 4px 16px rgba(20,22,46,0.05);
+      }
+      .hero {
+        width: 42%; min-height: 560px; padding: 48px 42px;
+        justify-content: space-between; gap: 22px;
+      }
+      .hero-title { font-size: 32px; margin-top: 8px; }
+      .hero-desc { font-size: 14.5px; }
+      .hero-points { display: flex; }
+      .hero-foot { display: block; }
+      .panel { flex: 1; padding: 52px 52px; align-items: stretch; background: var(--card); }
+      .panel-inner { max-width: none; }
+      .ok-screen { min-height: 440px; }
+    }
+    /* Çok geniş ekranlarda (TV) kart biraz büyüsün ama hâlâ sınırlı kalsın. */
+    @media (min-width: 1500px) {
+      .page { max-width: 1180px; }
+    }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="hdr">
-      <div class="hdr-brand">
-        <div class="hdr-icon">
+  <div class="page">
+    <!-- ── HERO (indigo) ── -->
+    <aside class="hero">
+      <div class="hero-brand">
+        <div class="hero-icon">
+          <!-- Ana sayfa (login/panel) ile BİREBİR aynı işaret: dış A + içteki
+               %55 opak A. İndigo hero üstünde göründüğü için beyaz dolgu. -->
           <svg viewBox="0 0 64 64" fill="none" aria-hidden="true">
-            <defs>
-              <linearGradient id="regMark" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#4f46e5"/>
-              </linearGradient>
-            </defs>
-            <path d="M32 7 L57 54 H49.5 L32 21 L14.5 54 H7 Z" fill="url(#regMark)"/>
+            <path d="M32 7 L57 54 H49.5 L32 21 L14.5 54 H7 Z" fill="#ffffff"/>
+            <path d="M32 30 L44 54 H36.5 L32 44.5 L27.5 54 H20 Z" fill="#ffffff" opacity=".55"/>
           </svg>
         </div>
         <div>
-          <div class="hdr-name">AssetMan</div>
-          <div class="hdr-sub">IT Asset Management</div>
+          <div class="hero-name">AssetMan</div>
+          <div class="hero-sub">IT Varlık Zekâsı Platformu</div>
         </div>
       </div>
-      <div class="hdr-title">Cihaz Kaydı</div>
-      <div class="hdr-desc">Bu cihazı envantere eklemek için bilgileri doldurun.</div>
-    </div>
 
-    <form id="regForm">
-      <div class="err-box" id="errBox"></div>
-
-      <div class="field">
-        <label>Cihaz Kategorisi <span class="req">*</span><span class="auto-tag" id="catAuto" style="display:none">otomatik</span></label>
-        <select id="category" required>
-          <option value="Telefon">📱 Telefon</option>
-          <option value="Tablet">📲 Tablet</option>
-          <option value="El Terminali">📟 El Terminali</option>
-          <option value="Bilgisayar">💻 Bilgisayar</option>
-          <option value="Sunucu">🖥️ Sunucu</option>
-          <option value="Yazıcı">🖨️ Yazıcı</option>
-          <option value="Ağ Aygıtı">🌐 Ağ Aygıtı</option>
-          <option value="Çevre Aygıtı">🖱️ Çevre Aygıtı</option>
-          <option value="Diğer">Diğer</option>
-        </select>
+      <div>
+        <div class="hero-title">Cihaz Kaydı</div>
+        <p class="hero-desc">Bu cihazı birkaç saniyede envantere ekleyin. Tip, marka ve işletim sistemi otomatik tespit edilir; seri/IMEI'yi kamerayla okutabilirsiniz.</p>
+        <ul class="hero-points">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Cihaz tipi ve işletim sistemi otomatik tespit</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Seri / IMEI barkodunu kamerayla okuma</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Anında ve güvenli envanter kaydı</li>
+        </ul>
       </div>
 
-      <div class="field">
-        <label>Cihaz Adı <span class="req">*</span></label>
-        <input type="text" id="hostname" placeholder="Örn: SATIS-TELEFON-01" required />
-        <span class="hint">Cihazı tanımlayan benzersiz bir ad.</span>
-      </div>
+      <div class="hero-foot">AssetMan · Güvenli self-servis kayıt</div>
+    </aside>
 
-      <div class="field">
-        <label>Marka <span class="auto-tag" id="brandAuto" style="display:none">otomatik</span></label>
-        <input type="text" id="brand" placeholder="Örn: Apple, Samsung, Zebra" />
-      </div>
-
-      <div class="field">
-        <label>Model <span class="auto-tag" id="modelAuto" style="display:none">otomatik</span></label>
-        <input type="text" id="model" placeholder="Örn: iPhone 15, Galaxy Tab S9" />
-      </div>
-
-      <div class="field">
-        <label>Seri No / IMEI <span class="auto-tag" id="serialAuto" style="display:none">tarandı</span></label>
-        <div class="serial-row">
-          <input type="text" id="serial_number" placeholder="Cihazın seri numarası" />
-          <button type="button" class="scan-btn" id="scanBtn" style="display:none">📷 Tara</button>
+    <!-- ── FORM PANELİ ── -->
+    <main class="panel">
+      <div class="panel-inner">
+        <div class="panel-head">
+          <div class="panel-title">Cihaz Bilgileri</div>
+          <div class="panel-sub">* işaretli alanlar zorunludur.</div>
         </div>
-        <span class="hint" id="scanHint" style="display:none">Seri/IMEI barkodunu kamerayla okutabilirsiniz.</span>
-      </div>
 
-      <div class="field">
-        <label>İşletim Sistemi <span class="auto-tag" id="osAuto" style="display:none">otomatik</span></label>
-        <input type="text" id="os" placeholder="Örn: iOS 17, Android 14" />
-      </div>
+        <form id="regForm">
+          <div class="err-box" id="errBox"></div>
 
-      <div class="field">
-        <label>Kullanıcı</label>
-        <input type="text" id="username" placeholder="Cihazı kullanan kişi" />
-      </div>
+          <div class="form-grid">
+            <div class="field full">
+              <label>Cihaz Kategorisi <span class="req">*</span><span class="auto-tag" id="catAuto" style="display:none">otomatik</span></label>
+              <select id="category" required>
+                <option value="Telefon">📱 Telefon</option>
+                <option value="Tablet">📲 Tablet</option>
+                <option value="El Terminali">📟 El Terminali</option>
+                <option value="Bilgisayar">💻 Bilgisayar</option>
+                <option value="Sunucu">🖥️ Sunucu</option>
+                <option value="Yazıcı">🖨️ Yazıcı</option>
+                <option value="Ağ Aygıtı">🌐 Ağ Aygıtı</option>
+                <option value="Çevre Aygıtı">🖱️ Çevre Aygıtı</option>
+                <option value="Diğer">Diğer</option>
+              </select>
+            </div>
 
-      <div class="field">
-        <label>Lokasyon</label>
-        <input type="text" id="location" placeholder="Örn: Depo, Satış, Merkez Ofis" />
-      </div>
+            <div class="field full">
+              <label>Cihaz Adı <span class="req">*</span></label>
+              <input type="text" id="hostname" placeholder="Örn: SATIS-TELEFON-01" required />
+              <span class="hint">Cihazı tanımlayan benzersiz bir ad.</span>
+            </div>
 
-      <button type="submit" class="btn" id="submitBtn">Cihazı Kaydet</button>
-    </form>
+            <div class="field">
+              <label>Marka <span class="auto-tag" id="brandAuto" style="display:none">otomatik</span></label>
+              <input type="text" id="brand" placeholder="Örn: Apple, Samsung, Zebra" />
+            </div>
 
-    <div class="ok-screen" id="okScreen">
-      <div class="ok-circle">
-        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+            <div class="field">
+              <label>Model <span class="auto-tag" id="modelAuto" style="display:none">otomatik</span></label>
+              <input type="text" id="model" placeholder="Örn: iPhone 15, Galaxy Tab S9" />
+            </div>
+
+            <div class="field full">
+              <label>Seri No / IMEI <span class="auto-tag" id="serialAuto" style="display:none">tarandı</span></label>
+              <div class="serial-row">
+                <input type="text" id="serial_number" placeholder="Cihazın seri numarası" />
+                <button type="button" class="scan-btn" id="scanBtn" style="display:none">📷 Tara</button>
+              </div>
+              <span class="hint" id="scanHint" style="display:none">Seri/IMEI barkodunu kamerayla okutabilirsiniz.</span>
+            </div>
+
+            <div class="field">
+              <label>İşletim Sistemi <span class="auto-tag" id="osAuto" style="display:none">otomatik</span></label>
+              <input type="text" id="os" placeholder="Örn: iOS 17, Android 14" />
+            </div>
+
+            <div class="field">
+              <label>Kullanıcı</label>
+              <input type="text" id="username" placeholder="Cihazı kullanan kişi" />
+            </div>
+
+            <div class="field full">
+              <label>Lokasyon</label>
+              <input type="text" id="location" placeholder="Örn: Depo, Satış, Merkez Ofis" />
+            </div>
+          </div>
+
+          <button type="submit" class="btn" id="submitBtn">Cihazı Kaydet</button>
+        </form>
+
+        <div class="ok-screen" id="okScreen">
+          <div class="ok-circle">
+            <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="ok-title">Cihaz Kaydedildi</div>
+          <div class="ok-desc" id="okDesc">Cihaz başarıyla envantere eklendi.</div>
+          <button class="ok-add" id="addAnother">Başka Cihaz Ekle</button>
+        </div>
       </div>
-      <div class="ok-title">Cihaz Kaydedildi</div>
-      <div class="ok-desc" id="okDesc">Cihaz başarıyla envantere eklendi.</div>
-      <button class="ok-add" id="addAnother">Başka Cihaz Ekle</button>
-    </div>
+    </main>
   </div>
 
   <!-- Kamera-barkod okuyucu (seri/IMEI) -->
