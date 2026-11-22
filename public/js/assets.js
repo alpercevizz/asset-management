@@ -812,19 +812,39 @@ async function editAssetDetail(asset, mevcut, odak) {
   } catch (err) { toast('Kaydedilemedi: ' + err.message, 'hata'); }
 }
 
-/* QR etiketi yazdır — yerel üretim */
+/* QR etiketi yazdır — yerel üretim. Marka/font panel ile tutarlı (logo ana
+   sayfayla birebir 2-path A, Plus Jakarta). QR taranabilirliği için metin
+   koyu tutulur; etiket yazıcısında logo gri basar, sorun değil. */
 function printAssetLabel(a) {
-  const w = window.open('', '_blank', 'width=420,height=520');
+  const w = window.open('', '_blank', 'width=420,height=560');
   if (!w) { toast('Açılır pencere engellendi.', 'hata'); return; }
   const kod = a.serial_number || a.hostname || '';
-  w.document.write(`<!doctype html><meta charset="utf-8"><title>Etiket — ${escapeHtml(kod)}</title>
-  <style>body{font-family:system-ui,sans-serif;text-align:center;padding:24px}
-  img{width:190px;height:190px}h2{font-size:16px;margin:12px 0 2px}p{font-size:12px;color:#555;margin:0}
-  @media print{@page{margin:8mm}}</style>
-  <img src="/api/qr?data=${encodeURIComponent(kod)}">
-  <h2>${escapeHtml(a.hostname || '')}</h2>
-  <p>${escapeHtml(kod)}</p><p>${escapeHtml(a.category || '')} · ${escapeHtml((a.location || '').trim())}</p>
-  <script>window.onload=()=>{window.print();}<\/script>`);
+  const loc = (a.location || '').trim();
+  w.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Etiket — ${escapeHtml(kod)}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&display=swap" rel="stylesheet">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:"Plus Jakarta Sans",system-ui,sans-serif;text-align:center;padding:22px 20px;color:#14162e}
+    .brand{display:flex;align-items:center;justify-content:center;gap:7px;margin-bottom:14px}
+    .brand svg{width:22px;height:22px}
+    .brand b{font-size:15px;font-weight:800;letter-spacing:-.01em}
+    .qr{width:196px;height:196px;border:1px solid #e6e8f0;border-radius:12px;padding:8px}
+    h2{font-size:16px;font-weight:800;margin:14px 0 3px;letter-spacing:-.01em}
+    .sn{font-size:12px;color:#5b6079;font-weight:600;letter-spacing:.02em}
+    .meta{font-size:11.5px;color:#8b90a6;margin-top:3px}
+    @media print{@page{margin:6mm}body{padding:4px}}
+  </style></head><body>
+    <div class="brand">
+      <svg viewBox="0 0 64 64" fill="none" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c74ff"/><stop offset="1" stop-color="#4f46e5"/></linearGradient></defs><path d="M32 7 L57 54 H49.5 L32 21 L14.5 54 H7 Z" fill="url(#lg)"/><path d="M32 30 L44 54 H36.5 L32 44.5 L27.5 54 H20 Z" fill="url(#lg)" opacity=".55"/></svg>
+      <b>AssetMan</b>
+    </div>
+    <img class="qr" src="/api/qr?data=${encodeURIComponent(kod)}" alt="QR">
+    <h2>${escapeHtml(a.hostname || '')}</h2>
+    <p class="sn">${escapeHtml(kod)}</p>
+    <p class="meta">${escapeHtml(a.category || '')}${loc ? ' · ' + escapeHtml(loc) : ''}</p>
+    <script>window.onload=()=>{window.print();}<\/script>
+  </body></html>`);
   w.document.close();
 }
 
