@@ -538,33 +538,107 @@ async function saveLine() {
   } catch (err) { toast('Hat kaydedilemedi: ' + err.message, 'hata'); }
 }
 
+/* ── Hat atama / çıkarma modalları ───────────────────────────────────────────
+   Native prompt()/confirm() yerine tema uyumlu modallar (parts/modals/lineAssign.html).
+   Butonlar ilk açılışta bir kez bağlanır (idempotent). */
+let _laLineId = null, _lrLineId = null, _laPhones = [];
+
+function _elx(id) { return document.getElementById(id); }
+function _laClose() { _elx('lineAssignOverlay')?.classList.remove('open'); }
+function _lrClose() { _elx('lineReleaseOverlay')?.classList.remove('open'); }
+
+function _lineDlgBind() {
+  const a = _elx('lineAssignOverlay');
+  if (a && !a.dataset.bound) {
+    a.dataset.bound = '1';
+    _elx('laCancel')?.addEventListener('click', _laClose);
+    _elx('lineAssignClose')?.addEventListener('click', _laClose);
+    _elx('laConfirm')?.addEventListener('click', _laConfirm);
+    a.addEventListener('click', (e) => { if (e.target === a) _laClose(); });
+    if (typeof temaliSelect === 'function') temaliSelect(_elx('laPhone'));   // tema uyumlu açılır liste
+  }
+  const r = _elx('lineReleaseOverlay');
+  if (r && !r.dataset.bound) {
+    r.dataset.bound = '1';
+    _elx('lrCancel')?.addEventListener('click', _lrClose);
+    _elx('lineReleaseClose')?.addEventListener('click', _lrClose);
+    _elx('lrConfirm')?.addEventListener('click', _lrConfirm);
+    r.addEventListener('click', (e) => { if (e.target === r) _lrClose(); });
+  }
+  if (!document._lineDlgEsc) {
+    document._lineDlgEsc = true;
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (_elx('lineAssignOverlay')?.classList.contains('open')) _laClose();
+      if (_elx('lineReleaseOverlay')?.classList.contains('open')) _lrClose();
+    });
+  }
+}
+
 async function assignLinePrompt(lineId) {
+  _lineDlgBind();
   // Telefon kategorisindeki cihazlardan seç (state.assets veya taze çek)
   let phones = (state.assets || []).filter(a => a.category === 'Telefon');
   if (!phones.length) { try { const d = await fetchAssets({ size: 200 }); phones = (d.results || []).filter(a => a.category === 'Telefon'); } catch {} }
-  const opts = phones.map((p, i) => `${i + 1}) ${p.hostname} (${p.username || 'zimmetsiz'})`).join('\n');
-  const pick = prompt(`Hangi telefona atansın? Numara girin:\n\n${opts}`);
-  if (!pick) return;
-  const idx = parseInt(pick, 10) - 1;
-  const phone = phones[idx];
-  if (!phone) { toast('Geçersiz seçim.', 'hata'); return; }
+  _laPhones = phones;
+  _laLineId = lineId;
+  const line = _lines.find(l => l.id === lineId);
+  const desc = _elx('laDesc');
+  if (desc) desc.innerHTML = line ? `<b>${escapeHtml(line.msisdn)}</b> hattını bir telefona bağlayın.` : 'Hattı bir telefona bağlayın.';
+
+  const sel = _elx('laPhone'), field = _elx('laField'), empty = _elx('laEmpty'), conf = _elx('laConfirm'), err = _elx('laError');
+  if (err) err.hidden = true;
+  if (sel) sel.innerHTML = phones.map(p =>
+    `<option value="${p.id}">${escapeHtml(p.hostname)} · ${escapeHtml(p.username || 'zimmetsiz')}</option>`).join('');
+  const bos = phones.length === 0;
+  if (field) field.style.display = bos ? 'none' : '';
+  if (empty) empty.hidden = !bos;
+  if (conf) conf.disabled = bos;
+  _elx('lineAssignOverlay')?.classList.add('open');
+}
+
+async function _laConfirm() {
+  const sel = _elx('laPhone'), err = _elx('laError');
+  const id = sel && sel.value;
+  const phone = _laPhones.find(p => String(p.id) === String(id));
+  if (!phone) { if (err) { err.textContent = 'Lütfen bir telefon seçin.'; err.hidden = false; } return; }
+  const btn = _elx('laConfirm'); btn.disabled = true;
   try {
-    const res = await fetch(`/api/lines/${lineId}/assign`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    const res = await fetch(`/api/lines/${_laLineId}/assign`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ asset_id: phone.id, hostname: phone.hostname }) });
     const j = await res.json();
-    if (!res.ok) throw new Error(j.detail || j.error);
+    if (!res.ok) throw new Error(j.detail || j.error || 'Atanamadı');
+    _laClose();
+    toast(`Hat "${phone.hostname}" telefonuna atandı.`, 'ok');
     loadLines();
-  } catch (err) { toast('Atanamadı: ' + err.message, 'hata'); }
+  } catch (e) { if (err) { err.textContent = e.message; err.hidden = false; } }
+  finally { btn.disabled = false; }
 }
 
 async function releaseLineAction(lineId) {
-  if (!confirm('Bu hat telefondan çıkarılsın (boşa alınsın) mı?')) return;
+  _lineDlgBind();
+  _lrLineId = lineId;
+  const line = _lines.find(l => l.id === lineId);
+  const d = _elx('lrDesc');
+  if (d) d.innerHTML = line && line.assigned_hostname
+    ? `<b>${escapeHtml(line.msisdn)}</b> hattı <b>${escapeHtml(line.assigned_hostname)}</b> telefonundan çıkarılsın mı?`
+    : 'Bu hat telefondan çıkarılsın (boşa alınsın) mı?';
+  const err = _elx('lrError'); if (err) err.hidden = true;
+  _elx('lineReleaseOverlay')?.classList.add('open');
+}
+
+async function _lrConfirm() {
+  const err = _elx('lrError');
+  const btn = _elx('lrConfirm'); btn.disabled = true;
   try {
-    const res = await fetch(`/api/lines/${lineId}/release`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const res = await fetch(`/api/lines/${_lrLineId}/release`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
     const j = await res.json();
-    if (!res.ok) throw new Error(j.detail || j.error);
+    if (!res.ok) throw new Error(j.detail || j.error || 'İşlem başarısız');
+    _lrClose();
+    toast('Hat telefondan çıkarıldı.', 'ok');
     loadLines();
-  } catch (err) { toast('İade edilemedi: ' + err.message, 'hata'); }
+  } catch (e) { if (err) { err.textContent = e.message; err.hidden = false; } }
+  finally { btn.disabled = false; }
 }
 
 async function showLineHistory(lineId) {

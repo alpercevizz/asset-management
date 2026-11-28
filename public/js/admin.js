@@ -461,6 +461,7 @@ async function _udConfirm() {
    tek satırla uygulanabilir. İkonlar data-tsel-ikon ile. */
 const _TSEL_IKON = {
   shield: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6z"/></svg>',
+  phone: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2.5"/><path d="M11 18h2"/></svg>',
 };
 function temaliSelect(sel) {
   if (!sel || sel.dataset.tsel || sel.multiple) return;

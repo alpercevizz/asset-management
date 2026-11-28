@@ -3939,6 +3939,9 @@ body.rp-tam-acik { overflow: hidden; }
 .um-acct-un { font-size: 12px; color: var(--text-muted); }
 .um-warn { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: var(--red-bg); color: var(--red); font-size: 12.5px; font-weight: 600; }
 .um-warn svg { flex: none; }
+/* display:flex, [hidden] attribute'unun display:none'unu EZİYORDU → açıkça geri ver
+   (hat atama modalında "telefon yok" uyarısı gizlenemiyordu). */
+.um-warn[hidden] { display: none; }
 
 /* ═══ Temalı açılır liste (native <select> popup'ı yerine) ══════════════════ */
 .tsel { position: relative; }
